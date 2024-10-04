@@ -1,9 +1,10 @@
 # 😺 felico 😻
  
-A fun, hobby language experiment
+A fun, hobby programming language experiment
 
-This is an experimental language project, mostly inspired by Rust and Zig, mostly intended to try out some ideas 
-about programming language design. 
+This is an experimental programming language project,
+mostly inspired by Rust and Zig,
+mostly intended to try out some ideas about programming language design. 
 
 ## Goals
 
@@ -14,7 +15,7 @@ In order:
 Programming should be fun.
 
 Both using and creating the language and infrastructure should be fun.
-Fun comes in all shapes and sizes: it may be humour, whimsy or a challenging problem to solve.
+Fun comes in all shapes and sizes: it may be humour, whimsy, a challenging problem to solve or a job well done.
 
 ### 2. Friendly
 
