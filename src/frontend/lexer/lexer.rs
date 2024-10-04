@@ -12,6 +12,7 @@ use ouroboros::self_referencing;
 struct OwningCharIter {
     source_file: SourceFileHandle,
     #[borrows(source_file)]
+
     #[covariant]
     chars: Chars<'this>,
 }
@@ -58,7 +59,7 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "if" => TokenType::If,
     "return" => TokenType::Return,
     "true" => TokenType::True,
-    "var" => TokenType::Var,
+    "let" => TokenType::Let,
     "while" => TokenType::While,
 };
 
@@ -561,8 +562,8 @@ mod tests {
             EOF        '' 4+0
         "#]];
 
-        keyword_var: "var" => expect![[r#"
-            Var        'var' 0+3
+        keyword_let: "let" => expect![[r#"
+            Let        'let' 0+3
             EOF        '' 3+0
         "#]];
 

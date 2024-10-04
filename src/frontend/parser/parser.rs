@@ -60,8 +60,8 @@ impl Parser {
 
     fn parse_decl(&mut self) -> FelicoResult<AstNode<Stmt>> {
         match self.current_token.token_type {
-            TokenType::Var => {
-                let node = self.parse_var_stmt()?;
+            TokenType::Let => {
+                let node = self.parse_let_stmt()?;
                 self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
                 Ok(node)
             }
@@ -75,12 +75,12 @@ impl Parser {
         }
     }
 
-    fn parse_var_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_let_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         let start_location = self.current_location();
-        self.consume(TokenType::Var, "var expected")?;
+        self.consume(TokenType::Let, "let expected")?;
         let name = self.current_token.clone();
-        self.consume(TokenType::Identifier, "Expected identifier after var")?;
-        self.consume(TokenType::Equal, "Expected '=' in var declaration")?;
+        self.consume(TokenType::Identifier, "Expected identifier after let")?;
+        self.consume(TokenType::Equal, "Expected '=' in let declaration")?;
         let expression = self.parse_expr()?;
         self.create_node(start_location, Stmt::Var(VarStmt {
             name,
@@ -193,8 +193,8 @@ impl Parser {
         self.consume(TokenType::For, "Expected 'for'")?;
         self.consume(TokenType::LeftParen, "Expected '(' after for")?;
         let initializer = match self.current_token.token_type {
-            TokenType::Var => {
-                Some(self.parse_var_stmt()?)
+            TokenType::Let => {
+                Some(self.parse_let_stmt()?)
             }
             TokenType::Semicolon => {
                 None
@@ -768,16 +768,16 @@ mod tests {
                         ├── String("Hello ")     [0+8]
                         └── Number(3.0)     [11+1]
                 "#]];
-                program_var_decl: "var a = false;" => expect![[r#"
+                program_let_decl: "let a = false;" => expect![[r#"
                     Program
-                    └── Declare var ''a' (Identifier)'     [0+14]
+                    └── Let ''a' (Identifier)'     [0+14]
                         └── Bool(false)     [8+5]
                 "#]];
-                program_program: "var a = 1;var b = a+a;b;" => expect![[r#"
+                program_program: "let a = 1;let b = a+a;b;" => expect![[r#"
                     Program
-                    ├── Declare var ''a' (Identifier)'     [0+10]
+                    ├── Let ''a' (Identifier)'     [0+10]
                     │   └── Number(1.0)     [8+1]
-                    ├── Declare var ''b' (Identifier)'     [10+12]
+                    ├── Let ''b' (Identifier)'     [10+12]
                     │   └── +     [18+4]
                     │       ├── Read 'a'     [18+1]
                     │       └── Read 'a'     [20+1]
@@ -827,10 +827,10 @@ mod tests {
                        └── Read 'b'     [9+1]     [9+2]
                "#]];
 
-               program_for_var: "for(var i = 1; i < 3; i = i + 1) i;" => expect![[r#"
+               program_for_let: "for(let i = 1; i < 3; i = i + 1) i;" => expect![[r#"
                    Program
                    └── Block     [0+35]
-                       ├── Declare var ''i' (Identifier)'     [4+10]
+                       ├── Let ''i' (Identifier)'     [4+10]
                        │   └── Number(1.0)     [12+1]
                        └── While     [0+35]
                            ├── <     [15+6]
