@@ -1,14 +1,15 @@
 use error_stack::Report;
 use std::fmt::{Debug, Display, Formatter};
+use crate::infra::diagnostic::InterpreterDiagnostic;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FelicoError {
     #[error("IO Error: {cause}")]
     Io { #[from] cause: std::io::Error },
-    /*
-        #[error("{0:#?}")]
-        Diagnostic(#[from] InterpreterDiagnostic),
-    */
+
+    #[error("{0:#?}")]
+    Diagnostic(#[from] InterpreterDiagnostic),
+
     #[error("{message}")]
     Message { message: String },
 
@@ -63,6 +64,52 @@ impl <'a> From<&'a str> for FelicoError {
     }
 }
 
+
+pub trait FelicoResultExt<T, E>: Sized {
+    #[track_caller]
+    fn whatever_context(self, message: &str) -> FelicoResult<T>;
+    #[track_caller]
+    fn with_whatever_context(self, f: impl FnOnce(&E) -> String) -> FelicoResult<T>;
+}
+
+impl <T, E: Into<FelicoReport>> FelicoResultExt<T, E> for Result<T, E> {
+    fn whatever_context(self, message: &str) -> FelicoResult<T> {
+        self.with_whatever_context(|_| message.to_string())
+    }
+
+    #[track_caller]
+    fn with_whatever_context(self, f: impl FnOnce(&E) -> String) -> FelicoResult<T> {
+        match self {
+            Ok(result) => {
+                Ok(result)
+            }
+            Err(e) => {
+                let message = f(&e);
+                let stack = e.into();
+                let stack = FelicoReport {report: stack.report.change_context(FelicoError::Message {message})};
+                Err(stack)
+            }
+        }
+    }
+
+
+}
+
+#[track_caller]
+pub fn failed<T: Into<String>>(message: T) -> FelicoReport {
+    FelicoError::Message {
+        message: message.into(),
+    }.into()
+}
+
+#[allow(unused)]
+macro_rules! bail {
+    ($($t:tt)*) => {{
+        let message = format!($($t)*);
+        return Err(crate::infra::result::failed(message));
+    }};
+}
+pub(crate) use bail;
 
 #[cfg(test)]
 mod tests {
