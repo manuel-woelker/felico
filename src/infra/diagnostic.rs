@@ -2,7 +2,6 @@ use crate::infra::source_file::SourceFileHandle;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ReportHandler, Severity, SourceCode};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use expect_test::Expect;
 use crate::infra::result::{FelicoResult, FelicoError};
 use crate::infra::location::Location;
 
@@ -108,7 +107,7 @@ pub fn unwrap_diagnostic_to_string<T>(result: &FelicoResult<T>) -> String {
 }
 
 #[cfg(test)]
-pub fn assert_diagnostic<T>(result: &FelicoResult<T>, expected: Expect) {
+pub fn assert_diagnostic<T>(result: &FelicoResult<T>, expected: expect_test::Expect) {
     expected.assert_eq(&unwrap_diagnostic_to_string(result));
 }
 

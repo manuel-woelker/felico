@@ -567,198 +567,198 @@ mod tests {
 
     test_expr!(
         bool_true: "true" => expect![[r#"
-            Bool(true)     [1:1 (0+4)]
+            Bool(true)     [0+4]
         "#]];
         bool_false: "false" => expect![[r#"
-            Bool(false)     [1:1 (0+5)]
+            Bool(false)     [0+5]
         "#]];
 
         nil: "nil" => expect![[r#"
-            Nil     [1:1 (0+3)]
+            Nil     [0+3]
         "#]];
 
         string_empty: "\"\"" => expect![[r#"
-            String("")     [1:1 (0+2)]
+            String("")     [0+2]
         "#]];
         string_space: "\" \"" => expect![[r#"
-            String(" ")     [1:1 (0+3)]
+            String(" ")     [0+3]
         "#]];
         string_newline: "\"\n\"" => expect![[r#"
-            String("\n")     [1:1 (0+3)]
+            String("\n")     [0+3]
         "#]];
         string_foo: "\"foo\"" => expect![[r#"
-            String("foo")     [1:1 (0+5)]
+            String("foo")     [0+5]
         "#]];
         string_unicode: "\"😶‍🌫️\"" => expect![[r#"
-            String("😶\u{200d}🌫\u{fe0f}")     [1:1 (0+16)]
+            String("😶\u{200d}🌫\u{fe0f}")     [0+16]
         "#]];
 
         identifier_foo: "foo" => expect![[r#"
-            Read 'foo'     [1:1 (0+3)]
+            Read 'foo'     [0+3]
         "#]];
         identifier_underscore_foo: "_foo" => expect![[r#"
-            Read '_foo'     [1:1 (0+4)]
+            Read '_foo'     [0+4]
         "#]];
         identifier_uppercase: "Uppercase" => expect![[r#"
-            Read 'Uppercase'     [1:1 (0+9)]
+            Read 'Uppercase'     [0+9]
         "#]];
         identifier_allcaps: "ALL_CAPS_" => expect![[r#"
-            Read 'ALL_CAPS_'     [1:1 (0+9)]
+            Read 'ALL_CAPS_'     [0+9]
         "#]];
 
 
         number_literal_0: "0" => expect![[r#"
-            Number(0.0)     [1:1 (0+1)]
+            Number(0.0)     [0+1]
         "#]];
         number_literal_123: "123" => expect![[r#"
-            Number(123.0)     [1:1 (0+3)]
+            Number(123.0)     [0+3]
         "#]];
         number_literal_3_141: "3.141" => expect![[r#"
-            Number(3.141)     [1:1 (0+5)]
+            Number(3.141)     [0+5]
         "#]];
         number_literal_minus_1: "-1.0" => expect![[r#"
-            -     [1:1 (0+4)]
-            └── Number(1.0)     [1:2 (1+3)]
+            -     [0+4]
+            └── Number(1.0)     [1+3]
         "#]];
         expression_equal_equal: "1.0==2.0" => expect![[r#"
-            ==     [1:1 (0+8)]
-            ├── Number(1.0)     [1:1 (0+3)]
-            └── Number(2.0)     [1:6 (5+3)]
+            ==     [0+8]
+            ├── Number(1.0)     [0+3]
+            └── Number(2.0)     [5+3]
         "#]];
         bang_equal_equal: "-1 == - 10" => expect![[r#"
-            ==     [1:1 (0+10)]
-            ├── -     [1:1 (0+5)]
-            │   └── Number(1.0)     [1:2 (1+1)]
-            └── -     [1:7 (6+4)]
-                └── Number(10.0)     [1:9 (8+2)]
+            ==     [0+10]
+            ├── -     [0+5]
+            │   └── Number(1.0)     [1+1]
+            └── -     [6+4]
+                └── Number(10.0)     [8+2]
         "#]];
         expression_less: "1<2" => expect![[r#"
-            <     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            <     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_less_equal: "1<=2" => expect![[r#"
-            <=     [1:1 (0+4)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:4 (3+1)]
+            <=     [0+4]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [3+1]
         "#]];
         expression_greater: "1>2" => expect![[r#"
-            >     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            >     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_greater_equal: "1>=2" => expect![[r#"
-            >=     [1:1 (0+4)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:4 (3+1)]
+            >=     [0+4]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [3+1]
         "#]];
         expression_precedence: "true == 1>=2" => expect![[r#"
-            ==     [1:1 (0+12)]
-            ├── Bool(true)     [1:1 (0+4)]
-            └── >=     [1:9 (8+4)]
-                ├── Number(1.0)     [1:9 (8+1)]
-                └── Number(2.0)     [1:12 (11+1)]
+            ==     [0+12]
+            ├── Bool(true)     [0+4]
+            └── >=     [8+4]
+                ├── Number(1.0)     [8+1]
+                └── Number(2.0)     [11+1]
         "#]];
         expression_plus: "1+2" => expect![[r#"
-            +     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            +     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_minus: "1-2" => expect![[r#"
-            -     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            -     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_times: "1*2" => expect![[r#"
-            *     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            *     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_division: "1/2" => expect![[r#"
-            /     [1:1 (0+3)]
-            ├── Number(1.0)     [1:1 (0+1)]
-            └── Number(2.0)     [1:3 (2+1)]
+            /     [0+3]
+            ├── Number(1.0)     [0+1]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_precedence_math: "4==1+2*-3" => expect![[r#"
-            ==     [1:1 (0+9)]
-            ├── Number(4.0)     [1:1 (0+1)]
-            └── +     [1:4 (3+6)]
-                ├── Number(1.0)     [1:4 (3+1)]
-                └── *     [1:6 (5+4)]
-                    ├── Number(2.0)     [1:6 (5+1)]
-                    └── -     [1:8 (7+2)]
-                        └── Number(3.0)     [1:9 (8+1)]
+            ==     [0+9]
+            ├── Number(4.0)     [0+1]
+            └── +     [3+6]
+                ├── Number(1.0)     [3+1]
+                └── *     [5+4]
+                    ├── Number(2.0)     [5+1]
+                    └── -     [7+2]
+                        └── Number(3.0)     [8+1]
         "#]];
         expression_paren_simple: "(1)" => expect![[r#"
-            Number(1.0)     [1:2 (1+1)]
+            Number(1.0)     [1+1]
         "#]];
         expression_paren_nexted: "((1))" => expect![[r#"
-            Number(1.0)     [1:3 (2+1)]
+            Number(1.0)     [2+1]
         "#]];
         expression_paren_complex: "3*(1+2)" => expect![[r#"
-            *     [1:1 (0+7)]
-            ├── Number(3.0)     [1:1 (0+1)]
-            └── +     [1:4 (3+4)]
-                ├── Number(1.0)     [1:4 (3+1)]
-                └── Number(2.0)     [1:6 (5+1)]
+            *     [0+7]
+            ├── Number(3.0)     [0+1]
+            └── +     [3+4]
+                ├── Number(1.0)     [3+1]
+                └── Number(2.0)     [5+1]
         "#]];
         expression_assign: "a=2" => expect![[r#"
-            'a' (Identifier) =      [1:1 (0+3)]
-            └── Number(2.0)     [1:3 (2+1)]
+            'a' (Identifier) =      [0+3]
+            └── Number(2.0)     [2+1]
         "#]];
         expression_assign_twice: "a=b=3" => expect![[r#"
-            'a' (Identifier) =      [1:1 (0+5)]
-            └── 'b' (Identifier) =      [1:3 (2+3)]
-                └── Number(3.0)     [1:5 (4+1)]
+            'a' (Identifier) =      [0+5]
+            └── 'b' (Identifier) =      [2+3]
+                └── Number(3.0)     [4+1]
         "#]];
         expression_assign_twice2: "a=b=3" => expect![[r#"
-            'a' (Identifier) =      [1:1 (0+5)]
-            └── 'b' (Identifier) =      [1:3 (2+3)]
-                └── Number(3.0)     [1:5 (4+1)]
+            'a' (Identifier) =      [0+5]
+            └── 'b' (Identifier) =      [2+3]
+                └── Number(3.0)     [4+1]
         "#]];
         expression_and: "a and b" => expect![[r#"
-            and     [1:1 (0+7)]
-            ├── Read 'a'     [1:1 (0+1)]
-            └── Read 'b'     [1:7 (6+1)]
+            and     [0+7]
+            ├── Read 'a'     [0+1]
+            └── Read 'b'     [6+1]
         "#]];
         expression_or: "a or b" => expect![[r#"
-            or     [1:1 (0+6)]
-            ├── Read 'a'     [1:1 (0+1)]
-            └── Read 'b'     [1:6 (5+1)]
+            or     [0+6]
+            ├── Read 'a'     [0+1]
+            └── Read 'b'     [5+1]
         "#]];
         expression_and_or: "a and b or c" => expect![[r#"
-            or     [1:1 (0+12)]
-            ├── and     [1:1 (0+10)]
-            │   ├── Read 'a'     [1:1 (0+1)]
-            │   └── Read 'b'     [1:7 (6+1)]
-            └── Read 'c'     [1:12 (11+1)]
+            or     [0+12]
+            ├── and     [0+10]
+            │   ├── Read 'a'     [0+1]
+            │   └── Read 'b'     [6+1]
+            └── Read 'c'     [11+1]
         "#]];
         expression_or_and: "a or b and c" => expect![[r#"
-            or     [1:1 (0+12)]
-            ├── Read 'a'     [1:1 (0+1)]
-            └── and     [1:6 (5+7)]
-                ├── Read 'b'     [1:6 (5+1)]
-                └── Read 'c'     [1:12 (11+1)]
+            or     [0+12]
+            ├── Read 'a'     [0+1]
+            └── and     [5+7]
+                ├── Read 'b'     [5+1]
+                └── Read 'c'     [11+1]
         "#]];
         expression_call_empty: "foo()" => expect![[r#"
-            Call     [1:4 (3+2)]
-            └── Read 'foo'     [1:1 (0+3)]
+            Call     [3+2]
+            └── Read 'foo'     [0+3]
         "#]];
         expression_call_one_arg: "foo(bar)" => expect![[r#"
-            Call     [1:4 (3+5)]
-            ├── Read 'foo'     [1:1 (0+3)]
-            └── Read 'bar'     [1:5 (4+3)]
+            Call     [3+5]
+            ├── Read 'foo'     [0+3]
+            └── Read 'bar'     [4+3]
         "#]];
         expression_call_two_args: "foo(bar,baz)" => expect![[r#"
-            Call     [1:4 (3+9)]
-            ├── Read 'foo'     [1:1 (0+3)]
-            ├── Read 'bar'     [1:5 (4+3)]
-            └── Read 'baz'     [1:9 (8+3)]
+            Call     [3+9]
+            ├── Read 'foo'     [0+3]
+            ├── Read 'bar'     [4+3]
+            └── Read 'baz'     [8+3]
         "#]];
         expression_call_twice: "foo()()" => expect![[r#"
-            Call     [1:4 (3+4)]
-            └── Call     [1:4 (3+3)]
-                └── Read 'foo'     [1:1 (0+3)]
+            Call     [3+4]
+            └── Call     [3+3]
+                └── Read 'foo'     [0+3]
         "#]];
     );
 
@@ -790,176 +790,176 @@ mod tests {
                 "#]];
                 program_bool_true: "true;" => expect![[r#"
                     Program
-                    └── Bool(true)     [1:1 (0+4)]     [1:1 (0+5)]
+                    └── Bool(true)     [0+4]     [0+5]
                 "#]];
                 program_addition: "1+2;" => expect![[r#"
                     Program
-                    └── +     [1:1 (0+4)]     [1:1 (0+4)]
-                        ├── Number(1.0)     [1:1 (0+1)]
-                        └── Number(2.0)     [1:3 (2+1)]
+                    └── +     [0+4]     [0+4]
+                        ├── Number(1.0)     [0+1]
+                        └── Number(2.0)     [2+1]
                 "#]];
                 program_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
                     Program
-                    ├── String("Hello")     [1:1 (0+7)]     [1:1 (0+8)]
-                    └── String("World")     [2:1 (9+7)]     [2:1 (9+8)]
+                    ├── String("Hello")     [0+7]     [0+8]
+                    └── String("World")     [9+7]     [9+8]
                 "#]];
 
                 program_print_true: "print true;" => expect![[r#"
                     Program
-                    └── Print     [1:1 (0+11)]
-                        └── Bool(true)     [1:7 (6+4)]
+                    └── Print     [0+11]
+                        └── Bool(true)     [6+4]
                 "#]];
                 program_print_string_addition: "print \"Hello \" + 3;" => expect![[r#"
                     Program
-                    └── Print     [1:1 (0+19)]
-                        └── +     [1:7 (6+13)]
-                            ├── String("Hello ")     [1:7 (6+8)]
-                            └── Number(3.0)     [1:18 (17+1)]
+                    └── Print     [0+19]
+                        └── +     [6+13]
+                            ├── String("Hello ")     [6+8]
+                            └── Number(3.0)     [17+1]
                 "#]];
                 program_var_decl: "var a = false;" => expect![[r#"
                     Program
-                    └── Declare var ''a' (Identifier)'     [1:1 (0+14)]
-                        └── Bool(false)     [1:9 (8+5)]
+                    └── Declare var ''a' (Identifier)'     [0+14]
+                        └── Bool(false)     [8+5]
                 "#]];
                 program_program: "var a = 1;var b = a+a;print b;" => expect![[r#"
                     Program
-                    ├── Declare var ''a' (Identifier)'     [1:1 (0+10)]
-                    │   └── Number(1.0)     [1:9 (8+1)]
-                    ├── Declare var ''b' (Identifier)'     [1:11 (10+12)]
-                    │   └── +     [1:19 (18+4)]
-                    │       ├── Read 'a'     [1:19 (18+1)]
-                    │       └── Read 'a'     [1:21 (20+1)]
-                    └── Print     [1:23 (22+8)]
-                        └── Read 'b'     [1:29 (28+1)]
+                    ├── Declare var ''a' (Identifier)'     [0+10]
+                    │   └── Number(1.0)     [8+1]
+                    ├── Declare var ''b' (Identifier)'     [10+12]
+                    │   └── +     [18+4]
+                    │       ├── Read 'a'     [18+1]
+                    │       └── Read 'a'     [20+1]
+                    └── Print     [22+8]
+                        └── Read 'b'     [28+1]
                 "#]];
 
                 program_assign: "a=1;" => expect![[r#"
                     Program
-                    └── 'a' (Identifier) =      [1:1 (0+4)]     [1:1 (0+4)]
-                        └── Number(1.0)     [1:3 (2+1)]
+                    └── 'a' (Identifier) =      [0+4]     [0+4]
+                        └── Number(1.0)     [2+1]
                 "#]];
                 program_assign_twice2: "a=b=3;" => expect![[r#"
                     Program
-                    └── 'a' (Identifier) =      [1:1 (0+6)]     [1:1 (0+6)]
-                        └── 'b' (Identifier) =      [1:3 (2+4)]
-                            └── Number(3.0)     [1:5 (4+1)]
+                    └── 'a' (Identifier) =      [0+6]     [0+6]
+                        └── 'b' (Identifier) =      [2+4]
+                            └── Number(3.0)     [4+1]
                 "#]];
                 program_block_empty: "{}" => expect![[r#"
                     Program
-                    └── Block     [1:1 (0+2)]
+                    └── Block     [0+2]
                 "#]];
                 program_nested_block: "{{print foo;}}" => expect![[r#"
                     Program
-                    └── Block     [1:1 (0+14)]
-                        └── Block     [1:2 (1+13)]
-                            └── Print     [1:3 (2+11)]
-                                └── Read 'foo'     [1:9 (8+3)]
+                    └── Block     [0+14]
+                        └── Block     [1+13]
+                            └── Print     [2+11]
+                                └── Read 'foo'     [8+3]
                 "#]];
 
                program_if: "if(c) a;" => expect![[r#"
                    Program
-                   └── If     [1:1 (0+8)]
-                       ├── Read 'c'     [1:4 (3+1)]
-                       └── Read 'a'     [1:7 (6+1)]     [1:7 (6+2)]
+                   └── If     [0+8]
+                       ├── Read 'c'     [3+1]
+                       └── Read 'a'     [6+1]     [6+2]
                "#]];
                program_if_else: "if(c) a; else b;" => expect![[r#"
                    Program
-                   └── If     [1:1 (0+16)]
-                       ├── Read 'c'     [1:4 (3+1)]
-                       ├── Read 'a'     [1:7 (6+1)]     [1:7 (6+2)]
-                       └── Read 'b'     [1:15 (14+1)]     [1:15 (14+2)]
+                   └── If     [0+16]
+                       ├── Read 'c'     [3+1]
+                       ├── Read 'a'     [6+1]     [6+2]
+                       └── Read 'b'     [14+1]     [14+2]
                "#]];
 
                program_while: "while(a) b;" => expect![[r#"
                    Program
-                   └── While     [1:1 (0+11)]
-                       ├── Read 'a'     [1:7 (6+1)]
-                       └── Read 'b'     [1:10 (9+1)]     [1:10 (9+2)]
+                   └── While     [0+11]
+                       ├── Read 'a'     [6+1]
+                       └── Read 'b'     [9+1]     [9+2]
                "#]];
 
                program_for_var: "for(var i = 1; i < 3; i = i + 1) print i;" => expect![[r#"
                    Program
-                   └── Block     [1:1 (0+41)]
-                       ├── Declare var ''i' (Identifier)'     [1:5 (4+10)]
-                       │   └── Number(1.0)     [1:13 (12+1)]
-                       └── While     [1:1 (0+41)]
-                           ├── <     [1:16 (15+6)]
-                           │   ├── Read 'i'     [1:16 (15+1)]
-                           │   └── Number(3.0)     [1:20 (19+1)]
-                           └── Block     [1:34 (33+8)]
-                               ├── Print     [1:34 (33+8)]
-                               │   └── Read 'i'     [1:40 (39+1)]
-                               └── 'i' (Identifier) =      [1:23 (22+10)]     [1:23 (22+19)]
-                                   └── +     [1:27 (26+6)]
-                                       ├── Read 'i'     [1:27 (26+1)]
-                                       └── Number(1.0)     [1:31 (30+1)]
+                   └── Block     [0+41]
+                       ├── Declare var ''i' (Identifier)'     [4+10]
+                       │   └── Number(1.0)     [12+1]
+                       └── While     [0+41]
+                           ├── <     [15+6]
+                           │   ├── Read 'i'     [15+1]
+                           │   └── Number(3.0)     [19+1]
+                           └── Block     [33+8]
+                               ├── Print     [33+8]
+                               │   └── Read 'i'     [39+1]
+                               └── 'i' (Identifier) =      [22+10]     [22+19]
+                                   └── +     [26+6]
+                                       ├── Read 'i'     [26+1]
+                                       └── Number(1.0)     [30+1]
                "#]];
                program_for_empty: "for(;;) print i;" => expect![[r#"
                    Program
-                   └── While     [1:1 (0+16)]
-                       ├── Bool(true)     [1:6 (5+1)]
-                       └── Print     [1:9 (8+8)]
-                           └── Read 'i'     [1:15 (14+1)]
+                   └── While     [0+16]
+                       ├── Bool(true)     [5+1]
+                       └── Print     [8+8]
+                           └── Read 'i'     [14+1]
                "#]];
 
                program_fun_empty: "fun foo() {}" => expect![[r#"
                    Program
-                   └── Declare fun 'foo()'     [1:1 (0+12)]
+                   └── Declare fun 'foo()'     [0+12]
                "#]];
                program_fun_simple: "fun foo(a) {print a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'foo(a)'     [1:1 (0+22)]
-                       └── Print     [1:13 (12+9)]
-                           └── Read 'a'     [1:19 (18+1)]
+                   └── Declare fun 'foo(a)'     [0+22]
+                       └── Print     [12+9]
+                           └── Read 'a'     [18+1]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
-                   └── Declare fun 'nop()'     [1:1 (0+20)]
-                       └── Return     [1:12 (11+8)]
-                           └── Nil     [1:12 (11+7)]
+                   └── Declare fun 'nop()'     [0+20]
+                       └── Return     [11+8]
+                           └── Nil     [11+7]
                "#]];
                program_fun_return_value: "fun three(a) {return 3;} " => expect![[r#"
                    Program
-                   └── Declare fun 'three(a)'     [1:1 (0+25)]
-                       └── Return     [1:15 (14+10)]
-                           └── Number(3.0)     [1:22 (21+1)]
+                   └── Declare fun 'three(a)'     [0+25]
+                       └── Return     [14+10]
+                           └── Number(3.0)     [21+1]
                "#]];
                program_fun_return_expression: "fun twice(a) {return a+a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'twice(a)'     [1:1 (0+27)]
-                       └── Return     [1:15 (14+12)]
-                           └── +     [1:22 (21+4)]
-                               ├── Read 'a'     [1:22 (21+1)]
-                               └── Read 'a'     [1:24 (23+1)]
+                   └── Declare fun 'twice(a)'     [0+27]
+                       └── Return     [14+12]
+                           └── +     [21+4]
+                               ├── Read 'a'     [21+1]
+                               └── Read 'a'     [23+1]
                "#]];
                program_class_empty: "class Foo {}" => expect![[r#"
                    Program
-                   └── Declare class 'Foo'     [1:1 (0+12)]
+                   └── Declare class 'Foo'     [0+12]
                "#]];
                program_class_with_methods: "class Foo {fun bar(a) {return a+a;} }" => expect![[r#"
                    Program
-                   └── Declare class 'Foo'     [1:1 (0+37)]
-                       └── Declare fun 'bar(a)'     [1:12 (11+26)]
-                           └── Return     [1:24 (23+12)]
-                               └── +     [1:31 (30+4)]
-                                   ├── Read 'a'     [1:31 (30+1)]
-                                   └── Read 'a'     [1:33 (32+1)]
+                   └── Declare class 'Foo'     [0+37]
+                       └── Declare fun 'bar(a)'     [11+26]
+                           └── Return     [23+12]
+                               └── +     [30+4]
+                                   ├── Read 'a'     [30+1]
+                                   └── Read 'a'     [32+1]
                "#]];
                program_property_access: "a.b;" => expect![[r#"
                    Program
-                   └── Get b     [1:2 (1+3)]     [1:1 (0+4)]
-                       └── Read 'a'     [1:1 (0+1)]
+                   └── Get b     [1+3]     [0+4]
+                       └── Read 'a'     [0+1]
                "#]];
                program_property_set: "a.b = 3;" => expect![[r#"
                    Program
-                   └── Set b     [1:1 (0+8)]     [1:1 (0+8)]
-                       ├── Read 'a'     [1:1 (0+1)]
-                       └── Number(3.0)     [1:7 (6+1)]
+                   └── Set b     [0+8]     [0+8]
+                       ├── Read 'a'     [0+1]
+                       └── Number(3.0)     [6+1]
                "#]];
                program_this: "print this;" => expect![[r#"
                    Program
-                   └── Print     [1:1 (0+11)]
-                       └── This     [1:7 (6+4)]
+                   └── Print     [0+11]
+                       └── This     [6+4]
                "#]];
 
     );

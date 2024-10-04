@@ -167,7 +167,7 @@ impl<'a> AstPrinter<'a> {
     fn add_location<T: AstData>(&self, mut tree: Tree<String>, ast: &AstNode<T>) -> Tree<String> {
         if self.include_locations {
             let location = &ast.location;
-            tree.root += &format!("     [{}:{} ({}+{})]", location.line, location.column, location.start_byte, location.end_byte - location.start_byte)
+            tree.root += &format!("     [{}+{}]", location.start_byte, location.end_byte - location.start_byte)
         }
         tree
     }

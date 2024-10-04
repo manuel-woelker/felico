@@ -7,6 +7,4 @@ pub struct Location {
     pub source_file: SourceFileHandle,
     pub start_byte: ByteOffset,
     pub end_byte: ByteOffset,
-    pub line: ByteOffset,
-    pub column: ByteOffset,
 }
