@@ -20,8 +20,8 @@ pub enum TokenType {
     Number,
 
     // Keywords.
-    And, Class, Else, False, Fun, For, If, Nil, Or,
-    Print, Return, Super, This, True, Var, While,
+    And, Or, Else, False, Fun, For, If,
+    Return, True, Var, While,
 
     UnexpectedCharacter,
 

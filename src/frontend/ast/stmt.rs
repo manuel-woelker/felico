@@ -6,23 +6,16 @@ use crate::frontend::lexer::token::Token;
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Print(PrintStmt),
     Return(ReturnStmt),
     Expression(ExprStmt),
     Var(VarStmt),
     Fun(FunStmt),
-    Class(ClassStmt),
     Block(BlockStmt),
     If(IfStmt),
     While(WhileStmt),
 }
 
 impl AstData for Stmt {}
-
-#[derive(Debug, Clone)]
-pub struct PrintStmt {
-    pub expression: AstNode<Expr>,
-}
 
 #[derive(Debug, Clone)]
 pub struct ReturnStmt {
@@ -49,12 +42,6 @@ pub struct FunStmt {
 }
 
 impl AstData for FunStmt {}
-
-#[derive(Debug, Clone)]
-pub struct ClassStmt {
-    pub name: Token,
-    pub methods: Vec<AstNode<Stmt>>,
-}
 
 #[derive(Debug, Clone)]
 pub struct BlockStmt {

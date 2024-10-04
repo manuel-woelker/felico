@@ -1,7 +1,7 @@
-use crate::frontend::ast::expr::{AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, ThisExpr, UnaryExpr, VarUse};
+use crate::frontend::ast::expr::{AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr, VarUse};
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
-use crate::frontend::ast::stmt::{BlockStmt, ClassStmt, ExprStmt, FunStmt, IfStmt, PrintStmt, ReturnStmt, Stmt, VarStmt, WhileStmt};
+use crate::frontend::ast::stmt::{BlockStmt, ExprStmt, FunStmt, IfStmt, ReturnStmt, Stmt, VarStmt, WhileStmt};
 use crate::frontend::ast::AstData;
 use crate::frontend::lexer::lexer::Lexer;
 use crate::frontend::lexer::token::{Token, TokenType};
@@ -69,10 +69,6 @@ impl Parser {
                 let node = self.parse_fun_stmt("function")?;
                 Ok(node)
             }
-            TokenType::Class => {
-                let node = self.parse_class_stmt()?;
-                Ok(node)
-            }
             _ => {
                 self.parse_stmt()
             }
@@ -120,63 +116,29 @@ impl Parser {
         }))
     }
 
-    fn parse_class_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
-        let start_location = self.current_location();
-        self.consume(TokenType::Class, "class expected")?;
-        let name = self.consume(TokenType::Identifier, "Expected class identifier")?;
-        self.consume(TokenType::LeftBrace, "Expected '{'")?;
-        let mut methods = vec![];
-        while self.current_token.token_type != TokenType::RightBrace {
-            let  stmt = self.parse_fun_stmt("method")?;
-            if let Stmt::Fun(ref _fun_stmt) = *stmt.data {
-                methods.push(stmt);
-            } else {
-                return self.create_diagnostic(format!("Expected method definition, found {:?} instead", stmt), |diagnostic| {
-                    diagnostic.add_primary_label(&stmt.location)
-                });
-
-            }
-        }
-        self.consume(TokenType::RightBrace, "Expected '}' to complete class")?;
-        self.create_node(start_location, Stmt::Class(ClassStmt {
-            name,
-            methods,
-        }))
-    }
-
-
     fn parse_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
-        let start_location = self.current_location();
-        let stmt = match self.current_token.token_type {
-            TokenType::Print => {
-                self.advance();
-                Stmt::Print(PrintStmt {
-                    expression: self.parse_expr()?,
-                })
-            }
+        match self.current_token.token_type {
             TokenType::LeftBrace => {
-                return self.parse_block();
+                self.parse_block()
             }
             TokenType::If => {
-                return self.parse_if();
+                self.parse_if()
             }
             TokenType::While => {
-                return self.parse_while();
+                self.parse_while()
             }
             TokenType::For => {
-                return self.parse_for();
+                self.parse_for()
             }
             TokenType::Return => {
-                return self.parse_return();
+                self.parse_return()
             }
             _ => {
                 let node = self.parse_expr_stmt()?;
                 self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
-                return Ok(node)
+                Ok(node)
             }
-        };
-        self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
-        self.create_node(start_location, stmt)
+        }
     }
 
     fn parse_return(&mut self) -> FelicoResult<AstNode<Stmt>> {
@@ -410,16 +372,8 @@ impl Parser {
             TokenType::False => {
                 LiteralExpr::Bool(false)
             }
-            TokenType::Nil => {
-                LiteralExpr::Nil
-            }
             TokenType::Identifier => {
                 let result = self.create_node(self.current_location(), Expr::Variable(VarUse {variable: self.current_token.clone(), distance: -1000}));
-                self.advance();
-                return result;
-            }
-            TokenType::This => {
-                let result = self.create_node(self.current_location(), Expr::This(ThisExpr {token: self.current_token.clone()}));
                 self.advance();
                 return result;
             }
@@ -574,7 +528,7 @@ mod tests {
         "#]];
 
         nil: "nil" => expect![[r#"
-            Nil     [0+3]
+            Read 'nil'     [0+3]
         "#]];
 
         string_empty: "\"\"" => expect![[r#"
@@ -716,29 +670,29 @@ mod tests {
             └── 'b' (Identifier) =      [2+3]
                 └── Number(3.0)     [4+1]
         "#]];
-        expression_and: "a and b" => expect![[r#"
-            and     [0+7]
-            ├── Read 'a'     [0+1]
-            └── Read 'b'     [6+1]
-        "#]];
-        expression_or: "a or b" => expect![[r#"
-            or     [0+6]
+        expression_and: "a && b" => expect![[r#"
+            &&     [0+6]
             ├── Read 'a'     [0+1]
             └── Read 'b'     [5+1]
         "#]];
-        expression_and_or: "a and b or c" => expect![[r#"
-            or     [0+12]
-            ├── and     [0+10]
-            │   ├── Read 'a'     [0+1]
-            │   └── Read 'b'     [6+1]
-            └── Read 'c'     [11+1]
-        "#]];
-        expression_or_and: "a or b and c" => expect![[r#"
-            or     [0+12]
+        expression_or: "a || b" => expect![[r#"
+            ||     [0+6]
             ├── Read 'a'     [0+1]
-            └── and     [5+7]
+            └── Read 'b'     [5+1]
+        "#]];
+        expression_and_or: "a && b || c" => expect![[r#"
+            ||     [0+11]
+            ├── &&     [0+9]
+            │   ├── Read 'a'     [0+1]
+            │   └── Read 'b'     [5+1]
+            └── Read 'c'     [10+1]
+        "#]];
+        expression_or_and: "a || b && c" => expect![[r#"
+            ||     [0+11]
+            ├── Read 'a'     [0+1]
+            └── &&     [5+6]
                 ├── Read 'b'     [5+1]
-                └── Read 'c'     [11+1]
+                └── Read 'c'     [10+1]
         "#]];
         expression_call_empty: "foo()" => expect![[r#"
             Call     [3+2]
@@ -804,24 +758,22 @@ mod tests {
                     └── String("World")     [9+7]     [9+8]
                 "#]];
 
-                program_print_true: "print true;" => expect![[r#"
+                program_true: "true;" => expect![[r#"
                     Program
-                    └── Print     [0+11]
-                        └── Bool(true)     [6+4]
+                    └── Bool(true)     [0+4]     [0+5]
                 "#]];
-                program_print_string_addition: "print \"Hello \" + 3;" => expect![[r#"
+                program_string_addition: "\"Hello \" + 3;" => expect![[r#"
                     Program
-                    └── Print     [0+19]
-                        └── +     [6+13]
-                            ├── String("Hello ")     [6+8]
-                            └── Number(3.0)     [17+1]
+                    └── +     [0+13]     [0+13]
+                        ├── String("Hello ")     [0+8]
+                        └── Number(3.0)     [11+1]
                 "#]];
                 program_var_decl: "var a = false;" => expect![[r#"
                     Program
                     └── Declare var ''a' (Identifier)'     [0+14]
                         └── Bool(false)     [8+5]
                 "#]];
-                program_program: "var a = 1;var b = a+a;print b;" => expect![[r#"
+                program_program: "var a = 1;var b = a+a;b;" => expect![[r#"
                     Program
                     ├── Declare var ''a' (Identifier)'     [0+10]
                     │   └── Number(1.0)     [8+1]
@@ -829,8 +781,7 @@ mod tests {
                     │   └── +     [18+4]
                     │       ├── Read 'a'     [18+1]
                     │       └── Read 'a'     [20+1]
-                    └── Print     [22+8]
-                        └── Read 'b'     [28+1]
+                    └── Read 'b'     [22+1]     [22+2]
                 "#]];
 
                 program_assign: "a=1;" => expect![[r#"
@@ -848,12 +799,11 @@ mod tests {
                     Program
                     └── Block     [0+2]
                 "#]];
-                program_nested_block: "{{print foo;}}" => expect![[r#"
+                program_nested_block: "{{foo;}}" => expect![[r#"
                     Program
-                    └── Block     [0+14]
-                        └── Block     [1+13]
-                            └── Print     [2+11]
-                                └── Read 'foo'     [8+3]
+                    └── Block     [0+8]
+                        └── Block     [1+7]
+                            └── Read 'foo'     [2+3]     [2+4]
                 "#]];
 
                program_if: "if(c) a;" => expect![[r#"
@@ -877,40 +827,37 @@ mod tests {
                        └── Read 'b'     [9+1]     [9+2]
                "#]];
 
-               program_for_var: "for(var i = 1; i < 3; i = i + 1) print i;" => expect![[r#"
+               program_for_var: "for(var i = 1; i < 3; i = i + 1) i;" => expect![[r#"
                    Program
-                   └── Block     [0+41]
+                   └── Block     [0+35]
                        ├── Declare var ''i' (Identifier)'     [4+10]
                        │   └── Number(1.0)     [12+1]
-                       └── While     [0+41]
+                       └── While     [0+35]
                            ├── <     [15+6]
                            │   ├── Read 'i'     [15+1]
                            │   └── Number(3.0)     [19+1]
-                           └── Block     [33+8]
-                               ├── Print     [33+8]
-                               │   └── Read 'i'     [39+1]
-                               └── 'i' (Identifier) =      [22+10]     [22+19]
+                           └── Block     [33+2]
+                               ├── Read 'i'     [33+1]     [33+2]
+                               └── 'i' (Identifier) =      [22+10]     [22+13]
                                    └── +     [26+6]
                                        ├── Read 'i'     [26+1]
                                        └── Number(1.0)     [30+1]
                "#]];
-               program_for_empty: "for(;;) print i;" => expect![[r#"
+               program_for_empty: "for(;;) i;" => expect![[r#"
                    Program
-                   └── While     [0+16]
+                   └── While     [0+10]
                        ├── Bool(true)     [5+1]
-                       └── Print     [8+8]
-                           └── Read 'i'     [14+1]
+                       └── Read 'i'     [8+1]     [8+2]
                "#]];
 
                program_fun_empty: "fun foo() {}" => expect![[r#"
                    Program
                    └── Declare fun 'foo()'     [0+12]
                "#]];
-               program_fun_simple: "fun foo(a) {print a;} " => expect![[r#"
+               program_fun_simple: "fun foo(a) {a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'foo(a)'     [0+22]
-                       └── Print     [12+9]
-                           └── Read 'a'     [18+1]
+                   └── Declare fun 'foo(a)'     [0+16]
+                       └── Read 'a'     [12+1]     [12+2]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
@@ -932,19 +879,6 @@ mod tests {
                                ├── Read 'a'     [21+1]
                                └── Read 'a'     [23+1]
                "#]];
-               program_class_empty: "class Foo {}" => expect![[r#"
-                   Program
-                   └── Declare class 'Foo'     [0+12]
-               "#]];
-               program_class_with_methods: "class Foo {fun bar(a) {return a+a;} }" => expect![[r#"
-                   Program
-                   └── Declare class 'Foo'     [0+37]
-                       └── Declare fun 'bar(a)'     [11+26]
-                           └── Return     [23+12]
-                               └── +     [30+4]
-                                   ├── Read 'a'     [30+1]
-                                   └── Read 'a'     [32+1]
-               "#]];
                program_property_access: "a.b;" => expect![[r#"
                    Program
                    └── Get b     [1+3]     [0+4]
@@ -955,11 +889,6 @@ mod tests {
                    └── Set b     [0+8]     [0+8]
                        ├── Read 'a'     [0+1]
                        └── Number(3.0)     [6+1]
-               "#]];
-               program_this: "print this;" => expect![[r#"
-                   Program
-                   └── Print     [0+11]
-                       └── This     [6+4]
                "#]];
 
     );
@@ -1009,9 +938,10 @@ mod tests {
                 ·     ──
                 ╰────"#]];
          incomplete_statement: "print true" => expect![[r#"
-             × Expected statement terminator (';'), found End of file instead
-                ╭─[incomplete_statement:1:11]
+             × Expected statement terminator (';'), found 'true' (True) instead
+                ╭─[incomplete_statement:1:7]
               1 │ print true
+                ·       ────
                 ╰────"#]];
          chained_values: "true \"foo\"" => expect![[r#"
              × Expected statement terminator (';'), found '"foo"' (String) instead

@@ -13,7 +13,6 @@ pub enum Expr {
     Call(CallExpr),
     Get(GetExpr),
     Set(SetExpr),
-    This(ThisExpr),
 }
 
 impl AstData for Expr {}
@@ -24,12 +23,6 @@ pub struct VarUse {
     pub variable: Token,
     pub distance: i32,
 }
-
-#[derive(Debug, Clone)]
-pub struct ThisExpr {
-    pub token: Token,
-}
-
 
 #[derive(Debug, Clone)]
 pub struct BinaryExpr {

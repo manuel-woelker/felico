@@ -51,19 +51,12 @@ pub struct Lexer {
 }
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
-    "and" => TokenType::And,
-    "class" => TokenType::Class,
     "else" => TokenType::Else,
     "false" => TokenType::False,
     "for" => TokenType::For,
     "fun" => TokenType::Fun,
     "if" => TokenType::If,
-    "nil" => TokenType::Nil,
-    "or" => TokenType::Or,
-    "print" => TokenType::Print,
     "return" => TokenType::Return,
-    "super" => TokenType::Super,
-    "this" => TokenType::This,
     "true" => TokenType::True,
     "var" => TokenType::Var,
     "while" => TokenType::While,
@@ -231,6 +224,16 @@ impl Iterator for Lexer {
                     TokenType::GreaterEqual
                 } else {
                     TokenType::Greater
+                }
+                '&' => if self.matches('&') {
+                    TokenType::And
+                } else {
+                    TokenType::UnexpectedCharacter
+                }
+                '|' => if self.matches('|') {
+                    TokenType::Or
+                } else {
+                    TokenType::UnexpectedCharacter
                 }
                 '/' => if self.matches('/') {
                     while self.next_char != '\n' && !self.is_at_end() {
@@ -507,19 +510,15 @@ mod tests {
             EOF        '' 4+0
         "#]];
 
-        keyword_and: "and" => expect![[r#"
-            And        'and' 0+3
-            EOF        '' 3+0
+        keyword_and: "&&" => expect![[r#"
+            And        '&&' 0+2
+            EOF        '' 2+0
         "#]];
 
-        keyword_class: "class" => expect![[r#"
-            Class      'class' 0+5
-            EOF        '' 5+0
-        "#]];
 
-        keyword_else: "class" => expect![[r#"
-            Class      'class' 0+5
-            EOF        '' 5+0
+        keyword_else: "else" => expect![[r#"
+            Else       'else' 0+4
+            EOF        '' 4+0
         "#]];
 
         keyword_false: "false" => expect![[r#"
@@ -542,34 +541,19 @@ mod tests {
             EOF        '' 2+0
         "#]];
 
-        keyword_nil: "nil" => expect![[r#"
-            Nil        'nil' 0+3
-            EOF        '' 3+0
-        "#]];
-
-        keyword_or: "or" => expect![[r#"
-            Or         'or' 0+2
+        keyword_or: "||" => expect![[r#"
+            Or         '||' 0+2
             EOF        '' 2+0
         "#]];
 
         keyword_print: "print" => expect![[r#"
-            Print      'print' 0+5
+            Identifier 'print' 0+5
             EOF        '' 5+0
         "#]];
 
         keyword_return: "return" => expect![[r#"
             Return     'return' 0+6
             EOF        '' 6+0
-        "#]];
-
-        keyword_super: "super" => expect![[r#"
-            Super      'super' 0+5
-            EOF        '' 5+0
-        "#]];
-
-        keyword_this: "this" => expect![[r#"
-            This       'this' 0+4
-            EOF        '' 4+0
         "#]];
 
         keyword_true: "true" => expect![[r#"

@@ -55,9 +55,6 @@ impl<'a> AstPrinter<'a> {
             Expr::Variable(var_use) => {
                 Tree::new(format!("Read '{}'", var_use.variable.lexeme()))
             }
-            Expr::This(_this) => {
-                Tree::new("This".to_string())
-            }
             Expr::Unary(unary) => {
                 let mut tree = Tree::new(format!("{}", unary.operator.lexeme()));
                 tree.push(self.expr_to_tree(&unary.right));
@@ -102,11 +99,6 @@ impl<'a> AstPrinter<'a> {
             Stmt::Expression(expr) => {
                 self.expr_to_tree(&expr.expression)
             }
-            Stmt::Print(print) => {
-                let mut tree = Tree::new("Print".into());
-                tree.push(self.expr_to_tree(&print.expression));
-                tree
-            }
             Stmt::Return(return_stmt) => {
                 let mut tree = Tree::new("Return".into());
                 tree.push(self.expr_to_tree(&return_stmt.expression));
@@ -121,13 +113,6 @@ impl<'a> AstPrinter<'a> {
                 let mut tree = Tree::new(format!("Declare fun '{}({})'", fun.name.lexeme(), fun.parameters.iter().map(|p| p.lexeme()).collect::<Vec<&str>>()
                     .join(",")));
                 tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
-                tree
-            }
-            Stmt::Class(cls) => {
-                let mut tree = Tree::new(format!("Declare class '{}'", cls.name.lexeme()));
-                for stmt in &cls.methods {
-                    tree.push(self.stmt_to_tree(stmt));
-                }
                 tree
             }
             Stmt::Block(block) => {
