@@ -1,0 +1,8 @@
+[package]
+name = "felico"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.64"
+error-stack = "0.5.0"
