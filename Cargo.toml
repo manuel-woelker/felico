@@ -8,3 +8,9 @@ thiserror = "1.0.64"
 error-stack = "0.5.0"
 arcstr = "1.2.0"
 miette = { version = "7.2.0", features = ["fancy"] }
+utf8-chars = "3.0.4"
+phf = { version = "0.11.2", features = ["macros"] }
+ouroboros = "0.18.4"
+
+[dev-dependencies]
+expect-test = "1.5.0"
