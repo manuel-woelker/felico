@@ -45,6 +45,8 @@ pub struct Lexer {
     current_offset: ByteOffset,
     start_offset: ByteOffset,
     line_number: ByteOffset,
+    start_line_number: ByteOffset,
+    start_column_number: ByteOffset,
     column_number: ByteOffset,
     lexeme_collector: Vec<char>,
     current_char: char,
@@ -53,33 +55,44 @@ pub struct Lexer {
 }
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
+    "and" => TokenType::And,
+    "class" => TokenType::Class,
     "else" => TokenType::Else,
     "false" => TokenType::False,
     "for" => TokenType::For,
     "fun" => TokenType::Fun,
     "if" => TokenType::If,
+    "nil" => TokenType::Nil,
+    "or" => TokenType::Or,
+    "print" => TokenType::Print,
     "return" => TokenType::Return,
+    "super" => TokenType::Super,
+    "this" => TokenType::This,
     "true" => TokenType::True,
     "var" => TokenType::Var,
     "while" => TokenType::While,
 };
 
 impl Lexer {
-    pub fn emit_token(&mut self, token_type: TokenType) -> Token {
+    pub(crate) fn emit_token(&mut self, token_type: TokenType) -> Token {
         let token = Token {
             token_type,
             location: Location {
                 source_file: self.source_file.clone(),
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
+                line: self.start_line_number,
+                column: self.start_column_number + 1,
             },
         };
         self.start_offset = self.current_offset;
+        self.start_column_number = self.column_number;
+        self.start_line_number = self.line_number;
         self.lexeme_collector.clear();
         token
     }
 
-    pub fn advance(&mut self) -> char {
+    pub(crate) fn advance(&mut self) -> char {
         self.chars_left -= 1;
         self.column_number += 1;
         self.current_char = self.next_char;
@@ -97,7 +110,7 @@ impl Lexer {
         self.current_char
     }
 
-    pub fn matches(&mut self, expected: char) -> bool {
+    pub(crate) fn matches(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
         }
@@ -108,7 +121,7 @@ impl Lexer {
         true
     }
 
-    pub fn lex_string(&mut self) -> Token {
+    pub(crate) fn lex_string(&mut self) -> Token {
         while self.next_char != '"' && !self.is_at_end() {
             self.advance();
             if self.current_char == '\n' {
@@ -122,7 +135,7 @@ impl Lexer {
         self.emit_token(TokenType::String)
     }
 
-    pub fn lex_number(&mut self) -> Token {
+    pub(crate) fn lex_number(&mut self) -> Token {
         while is_digit(self.next_char) {
             self.advance();
         }
@@ -137,7 +150,7 @@ impl Lexer {
         self.emit_token(TokenType::Number)
     }
 
-    pub fn lex_identifier_or_keyword(&mut self) -> Token {
+    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token {
         while is_alpha_numeric(self.next_char) {
             self.advance();
         }
@@ -155,6 +168,8 @@ impl Lexer {
 
     fn ignore_chars(&mut self) {
         self.start_offset = self.current_offset;
+        self.start_column_number = self.column_number;
+        self.start_line_number = self.line_number;
         self.lexeme_collector.clear();
     }
 
@@ -179,7 +194,9 @@ impl Lexer {
             current_offset: 0,
             start_offset: 0,
             line_number: 1,
+            start_line_number: 1,
             column_number: 0,
+            start_column_number: 0,
             lexeme_collector: Default::default(),
             current_char: '\0',
             next_char,
@@ -288,10 +305,21 @@ fn is_alpha_numeric(c: char) -> bool {
 mod tests {
     use super::*;
     use expect_test::{expect, Expect};
+    /*
+
+        TODO: test non-utf8
+            #[test]
+            fn lex_non_utf8() {
+                let result = Lexer::new(SourceFileHandle::from_string("foo", || Box::new(Cursor::new(b"\xc3\x28")))));
+                let err = result.err().expect("Should error");
+                let expected = expect!["Could not read file 'foo': Could not read to string: stream did not contain valid UTF-8"];
+                expected.assert_eq(&err.to_string());
+            }
+        */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
         let s = Lexer::new(SourceFileHandle::from_string(name, input)).unwrap();
         let result = s.collect::<Vec<_>>();
-        let result_tokens = result.iter().map(|token| format!("{:<10} '{}' ({}+{})", token.token_type, token.lexeme(), token.location.start_byte, token.location.end_byte - token.location.start_byte)).fold(String::new(), |a, b| a + &b + "\n");
+        let result_tokens = result.iter().map(|token| format!("{:<10} '{}' {}:{} ({}+{})", token.token_type, token.lexeme(), token.location.line, token.location.column, token.location.start_byte, token.location.end_byte - token.location.start_byte)).fold(String::new(), |a, b| a + &b + "\n");
         expected.assert_eq(&result_tokens);
     }
 
@@ -309,307 +337,307 @@ mod tests {
 
     test_lex!(
         empty: "" => expect![[r#"
-            EOF        '' (0+0)
+            EOF        '' 1:1 (0+0)
         "#]];
         space : " " => expect![[r#"
-            EOF        '' (1+0)
+            EOF        '' 1:2 (1+0)
         "#]];
         tab : "\t" => expect![[r#"
-            EOF        '' (1+0)
+            EOF        '' 1:2 (1+0)
         "#]];
         newline : "\n" => expect![[r#"
-            EOF        '' (1+0)
+            EOF        '' 2:1 (1+0)
         "#]];
         newline_windows : "\r\n" => expect![[r#"
-            EOF        '' (2+0)
+            EOF        '' 2:1 (2+0)
         "#]];
 
         left_paren: "(" => expect![[r#"
-            LeftParen  '(' (0+1)
-            EOF        '' (1+0)
+            LeftParen  '(' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         newline2 : "\n(" => expect![[r#"
-            LeftParen  '(' (1+1)
-            EOF        '' (2+0)
+            LeftParen  '(' 2:1 (1+1)
+            EOF        '' 2:2 (2+0)
         "#]];
         newline3 : "(\n)" => expect![[r#"
-            LeftParen  '(' (0+1)
-            RightParen ')' (2+1)
-            EOF        '' (3+0)
+            LeftParen  '(' 1:1 (0+1)
+            RightParen ')' 2:1 (2+1)
+            EOF        '' 2:2 (3+0)
         "#]];
 
         bang: "!" => expect![[r#"
-            Bang       '!' (0+1)
-            EOF        '' (1+0)
+            Bang       '!' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         bang_equal: "!=" => expect![[r#"
-            BangEqual  '!=' (0+2)
-            EOF        '' (2+0)
+            BangEqual  '!=' 1:1 (0+2)
+            EOF        '' 1:3 (2+0)
         "#]];
         bang_equal2: "! =" => expect![[r#"
-            Bang       '!' (0+1)
-            Equal      '=' (2+1)
-            EOF        '' (3+0)
+            Bang       '!' 1:1 (0+1)
+            Equal      '=' 1:3 (2+1)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         equal: "=" => expect![[r#"
-            Equal      '=' (0+1)
-            EOF        '' (1+0)
+            Equal      '=' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         equal_equal: "==" => expect![[r#"
-            EqualEqual '==' (0+2)
-            EOF        '' (2+0)
+            EqualEqual '==' 1:1 (0+2)
+            EOF        '' 1:3 (2+0)
         "#]];
         equal_equal2: "= =" => expect![[r#"
-            Equal      '=' (0+1)
-            Equal      '=' (2+1)
-            EOF        '' (3+0)
+            Equal      '=' 1:1 (0+1)
+            Equal      '=' 1:3 (2+1)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         slash: "/" => expect![[r#"
-            Slash      '/' (0+1)
-            EOF        '' (1+0)
+            Slash      '/' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         slash_slash: "/ /" => expect![[r#"
-            Slash      '/' (0+1)
-            Slash      '/' (2+1)
-            EOF        '' (3+0)
+            Slash      '/' 1:1 (0+1)
+            Slash      '/' 1:3 (2+1)
+            EOF        '' 1:4 (3+0)
         "#]];
         comment: "//" => expect![[r#"
-            EOF        '' (2+0)
+            EOF        '' 1:3 (2+0)
         "#]];
         comment2: "// bar" => expect![[r#"
-            EOF        '' (6+0)
+            EOF        '' 1:7 (6+0)
         "#]];
         comment3: "// bar\n" => expect![[r#"
-            EOF        '' (7+0)
+            EOF        '' 2:1 (7+0)
         "#]];
 
 
         // TODO: Test string lexemes
         empty_string: r#""""# => expect![[r#"
-            String     '""' (0+2)
-            EOF        '' (2+0)
+            String     '""' 1:1 (0+2)
+            EOF        '' 1:3 (2+0)
         "#]];
         simple_string: r#""foobar""# => expect![[r#"
-            String     '"foobar"' (0+8)
-            EOF        '' (8+0)
+            String     '"foobar"' 1:1 (0+8)
+            EOF        '' 1:9 (8+0)
         "#]];
         newline_string: r#""
                                 ""# => expect![[r#"
                                     String     '"
-                                                                    "' (0+35)
-                                    EOF        '' (35+0)
+                                                                    "' 1:1 (0+35)
+                                    EOF        '' 2:34 (35+0)
                                 "#]];
         string_and_bang: r#""x"!"# => expect![[r#"
-            String     '"x"' (0+3)
-            Bang       '!' (3+1)
-            EOF        '' (4+0)
+            String     '"x"' 1:1 (0+3)
+            Bang       '!' 1:4 (3+1)
+            EOF        '' 1:5 (4+0)
         "#]];
 
         number_0: "0" => expect![[r#"
-            Number     '0' (0+1)
-            EOF        '' (1+0)
+            Number     '0' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         number_1: "1" => expect![[r#"
-            Number     '1' (0+1)
-            EOF        '' (1+0)
+            Number     '1' 1:1 (0+1)
+            EOF        '' 1:2 (1+0)
         "#]];
         number_123: "123" => expect![[r#"
-            Number     '123' (0+3)
-            EOF        '' (3+0)
+            Number     '123' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         number_98765434210: "98765434210" => expect![[r#"
-            Number     '98765434210' (0+11)
-            EOF        '' (11+0)
+            Number     '98765434210' 1:1 (0+11)
+            EOF        '' 1:12 (11+0)
         "#]];
 
         numbers_98765434210: "9 8 7 6 5 4 3 4 2 1 0" => expect![[r#"
-            Number     '9' (0+1)
-            Number     '8' (2+1)
-            Number     '7' (4+1)
-            Number     '6' (6+1)
-            Number     '5' (8+1)
-            Number     '4' (10+1)
-            Number     '3' (12+1)
-            Number     '4' (14+1)
-            Number     '2' (16+1)
-            Number     '1' (18+1)
-            Number     '0' (20+1)
-            EOF        '' (21+0)
+            Number     '9' 1:1 (0+1)
+            Number     '8' 1:3 (2+1)
+            Number     '7' 1:5 (4+1)
+            Number     '6' 1:7 (6+1)
+            Number     '5' 1:9 (8+1)
+            Number     '4' 1:11 (10+1)
+            Number     '3' 1:13 (12+1)
+            Number     '4' 1:15 (14+1)
+            Number     '2' 1:17 (16+1)
+            Number     '1' 1:19 (18+1)
+            Number     '0' 1:21 (20+1)
+            EOF        '' 1:22 (21+0)
         "#]];
 
        decimal_numbers_0_0: "0.0" => expect![[r#"
-           Number     '0.0' (0+3)
-           EOF        '' (3+0)
+           Number     '0.0' 1:1 (0+3)
+           EOF        '' 1:4 (3+0)
        "#]];
        decimal_numbers_1_0: "1.0" => expect![[r#"
-           Number     '1.0' (0+3)
-           EOF        '' (3+0)
+           Number     '1.0' 1:1 (0+3)
+           EOF        '' 1:4 (3+0)
        "#]];
        decimal_numbers_9_9: "1.0" => expect![[r#"
-           Number     '1.0' (0+3)
-           EOF        '' (3+0)
+           Number     '1.0' 1:1 (0+3)
+           EOF        '' 1:4 (3+0)
        "#]];
 
        decimal_numbers_tau: "6.283185307179586" => expect![[r#"
-           Number     '6.283185307179586' (0+17)
-           EOF        '' (17+0)
+           Number     '6.283185307179586' 1:1 (0+17)
+           EOF        '' 1:18 (17+0)
        "#]];
 
        decimal_numbers_e: "2.71828" => expect![[r#"
-           Number     '2.71828' (0+7)
-           EOF        '' (7+0)
+           Number     '2.71828' 1:1 (0+7)
+           EOF        '' 1:8 (7+0)
        "#]];
 
        numbers_1_dot_bang: "1.!" => expect![[r#"
-           Number     '1' (0+1)
-           Dot        '.' (1+1)
-           Bang       '!' (2+1)
-           EOF        '' (3+0)
+           Number     '1' 1:1 (0+1)
+           Dot        '.' 1:2 (1+1)
+           Bang       '!' 1:3 (2+1)
+           EOF        '' 1:4 (3+0)
        "#]];
 
         identifier_foo: "foo" => expect![[r#"
-            Identifier 'foo' (0+3)
-            EOF        '' (3+0)
+            Identifier 'foo' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         identifier_uppercase: "ZOO" => expect![[r#"
-            Identifier 'ZOO' (0+3)
-            EOF        '' (3+0)
+            Identifier 'ZOO' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         identifier_starting_with_underscore: "_foo_" => expect![[r#"
-            Identifier '_foo_' (0+5)
-            EOF        '' (5+0)
+            Identifier '_foo_' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         identifier_almost_keyword: "anD" => expect![[r#"
-            Identifier 'anD' (0+3)
-            EOF        '' (3+0)
+            Identifier 'anD' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         identifier_almost_keyword2: "AND" => expect![[r#"
-            Identifier 'AND' (0+3)
-            EOF        '' (3+0)
+            Identifier 'AND' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         identifier_almost_keyword3: "and_" => expect![[r#"
-            Identifier 'and_' (0+4)
-            EOF        '' (4+0)
+            Identifier 'and_' 1:1 (0+4)
+            EOF        '' 1:5 (4+0)
         "#]];
 
         keyword_and: "and" => expect![[r#"
-            Identifier 'and' (0+3)
-            EOF        '' (3+0)
+            And        'and' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         keyword_class: "class" => expect![[r#"
-            Identifier 'class' (0+5)
-            EOF        '' (5+0)
+            Class      'class' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         keyword_else: "class" => expect![[r#"
-            Identifier 'class' (0+5)
-            EOF        '' (5+0)
+            Class      'class' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         keyword_false: "false" => expect![[r#"
-            False      'false' (0+5)
-            EOF        '' (5+0)
+            False      'false' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         keyword_for: "for" => expect![[r#"
-            For        'for' (0+3)
-            EOF        '' (3+0)
+            For        'for' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         keyword_fun: "fun" => expect![[r#"
-            Fun        'fun' (0+3)
-            EOF        '' (3+0)
+            Fun        'fun' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         keyword_íf: "if" => expect![[r#"
-            If         'if' (0+2)
-            EOF        '' (2+0)
+            If         'if' 1:1 (0+2)
+            EOF        '' 1:3 (2+0)
         "#]];
 
         keyword_nil: "nil" => expect![[r#"
-            Identifier 'nil' (0+3)
-            EOF        '' (3+0)
+            Nil        'nil' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         keyword_or: "or" => expect![[r#"
-            Identifier 'or' (0+2)
-            EOF        '' (2+0)
+            Or         'or' 1:1 (0+2)
+            EOF        '' 1:3 (2+0)
         "#]];
 
         keyword_print: "print" => expect![[r#"
-            Identifier 'print' (0+5)
-            EOF        '' (5+0)
+            Print      'print' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         keyword_return: "return" => expect![[r#"
-            Return     'return' (0+6)
-            EOF        '' (6+0)
+            Return     'return' 1:1 (0+6)
+            EOF        '' 1:7 (6+0)
         "#]];
 
         keyword_super: "super" => expect![[r#"
-            Identifier 'super' (0+5)
-            EOF        '' (5+0)
+            Super      'super' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         keyword_this: "this" => expect![[r#"
-            Identifier 'this' (0+4)
-            EOF        '' (4+0)
+            This       'this' 1:1 (0+4)
+            EOF        '' 1:5 (4+0)
         "#]];
 
         keyword_true: "true" => expect![[r#"
-            True       'true' (0+4)
-            EOF        '' (4+0)
+            True       'true' 1:1 (0+4)
+            EOF        '' 1:5 (4+0)
         "#]];
 
         keyword_var: "var" => expect![[r#"
-            Var        'var' (0+3)
-            EOF        '' (3+0)
+            Var        'var' 1:1 (0+3)
+            EOF        '' 1:4 (3+0)
         "#]];
 
         keyword_while: "while" => expect![[r#"
-            While      'while' (0+5)
-            EOF        '' (5+0)
+            While      'while' 1:1 (0+5)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         offset_simple: "\"x\"if" => expect![[r#"
-            String     '"x"' (0+3)
-            If         'if' (3+2)
-            EOF        '' (5+0)
+            String     '"x"' 1:1 (0+3)
+            If         'if' 1:4 (3+2)
+            EOF        '' 1:6 (5+0)
         "#]];
 
         offset_two_bytes: "\"¤\"if" => expect![[r#"
-            String     '"¤"' (0+4)
-            If         'if' (4+2)
-            EOF        '' (6+0)
+            String     '"¤"' 1:1 (0+4)
+            If         'if' 1:4 (4+2)
+            EOF        '' 1:6 (6+0)
         "#]];
         offset_three_bytes: "\"⌚\"if" => expect![[r#"
-            String     '"⌚"' (0+5)
-            If         'if' (5+2)
-            EOF        '' (7+0)
+            String     '"⌚"' 1:1 (0+5)
+            If         'if' 1:4 (5+2)
+            EOF        '' 1:6 (7+0)
         "#]];
         offset_four_bytes: "\"𝅘𝅥𝅮\"if" => expect![[r#"
-            String     '"𝅘𝅥𝅮"' (0+6)
-            If         'if' (6+2)
-            EOF        '' (8+0)
+            String     '"𝅘𝅥𝅮"' 1:1 (0+6)
+            If         'if' 1:4 (6+2)
+            EOF        '' 1:6 (8+0)
         "#]];
         offset_four_byte_emoji: "\"🦀\"if" => expect![[r#"
-            String     '"🦀"' (0+6)
-            If         'if' (6+2)
-            EOF        '' (8+0)
+            String     '"🦀"' 1:1 (0+6)
+            If         'if' 1:4 (6+2)
+            EOF        '' 1:6 (8+0)
         "#]];
         offset_combined_char: "\"👨‍👩\"if" => expect![[r#"
-            String     '"👨‍👩"' (0+13)
-            If         'if' (13+2)
-            EOF        '' (15+0)
+            String     '"👨‍👩"' 1:1 (0+13)
+            If         'if' 1:6 (13+2)
+            EOF        '' 1:8 (15+0)
         "#]];
 
     );
