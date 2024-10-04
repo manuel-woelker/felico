@@ -169,7 +169,7 @@ impl Parser {
         let condition = self.parse_expr()?;
         self.consume(TokenType::RightParen, "Expected ')' after if condition")?;
         let then_stmt = self.parse_stmt()?;
-        let else_stmt = if self.current_token.token_type == TokenType::Else {
+        let else_stmt = if self.is_at(TokenType::Else) {
             self.advance();
             Some(self.parse_stmt()?)
         } else {
@@ -265,18 +265,18 @@ impl Parser {
         let start_location = self.current_location();
         let expr = self.parse_or()?;
 
-        if self.current_token.token_type == TokenType::Equal {
+        if self.is_at(TokenType::Equal) {
             self.advance();
             let value = self.parse_assignment()?;
-            if let Expr::Variable(var_use) = *expr.data {
-                return self.create_node(start_location, Expr::Assign(AssignExpr { destination: var_use.variable, value, distance: -2000 }));
+            return if let Expr::Variable(var_use) = *expr.data {
+                self.create_node(start_location, Expr::Assign(AssignExpr { destination: var_use.variable, value, distance: -2000 }))
             } else if let Expr::Get(get) = *expr.data {
-                return self.create_node(start_location, Expr::Set(SetExpr { value, object: get.object, name: get.name }));
+                self.create_node(start_location, Expr::Set(SetExpr { value, object: get.object, name: get.name }))
             } else {
-                return self.create_diagnostic("Invalid assignment target", |diagnostic| {
+                self.create_diagnostic("Invalid assignment target", |diagnostic| {
                     diagnostic.add_primary_label(&expr.location);
                     diagnostic.set_help("Assignment target must be an l-value (e.g. a variable or field)");
-                });
+                })
             }
         }
         Ok(expr)
@@ -285,7 +285,7 @@ impl Parser {
     fn parse_or(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_and()?;
-        while self.current_token.token_type == TokenType::Or {
+        while self.is_at(TokenType::Or) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_and()?;
@@ -298,7 +298,7 @@ impl Parser {
     fn parse_and(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_equality()?;
-        while self.current_token.token_type == TokenType::And {
+        while self.is_at(TokenType::And) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_equality()?;
@@ -309,7 +309,7 @@ impl Parser {
     fn parse_equality(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_comparison()?;
-        while self.current_token.token_type == TokenType::BangEqual || self.current_token.token_type == TokenType::EqualEqual {
+        while self.is_at(TokenType::BangEqual) || self.is_at(TokenType::EqualEqual) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_comparison()?;
@@ -321,7 +321,7 @@ impl Parser {
     fn parse_comparison(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_term()?;
-        while self.current_token.token_type == TokenType::Less || self.current_token.token_type == TokenType::LessEqual || self.current_token.token_type == TokenType::Greater || self.current_token.token_type == TokenType::GreaterEqual {
+        while self.is_at(TokenType::Less) || self.is_at(TokenType::LessEqual) || self.is_at(TokenType::Greater) || self.is_at(TokenType::GreaterEqual) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_term()?;
@@ -333,7 +333,7 @@ impl Parser {
     fn parse_term(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_factor()?;
-        while self.current_token.token_type == TokenType::Plus || self.current_token.token_type == TokenType::Minus {
+        while self.is_at(TokenType::Plus) || self.is_at(TokenType::Minus) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_factor()?;
@@ -345,7 +345,7 @@ impl Parser {
     fn parse_factor(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         let mut expr = self.parse_unary()?;
-        while self.current_token.token_type == TokenType::Star || self.current_token.token_type == TokenType::Slash {
+        while self.is_at(TokenType::Star) || self.is_at(TokenType::Slash) {
             let operator = self.current_token.clone();
             self.advance();
             let right = self.parse_unary()?;
@@ -394,7 +394,7 @@ impl Parser {
     }
 
     fn consume(&mut self, expected_token_type: TokenType, msg: &str) -> FelicoResult<Token> {
-        if self.current_token.token_type == expected_token_type {
+        if self.is_at(expected_token_type) {
             let token = self.current_token.clone();
             self.advance();
             Ok(token)
@@ -431,10 +431,10 @@ impl Parser {
         let mut expr = self.parse_primary()?;
         let start_location = self.current_location();
         loop {
-            if self.current_token.token_type == TokenType::LeftParen {
+            if self.is_at(TokenType::LeftParen) {
                 self.advance();
                 expr = self.finish_call(expr, start_location.clone())?;
-            } else if self.current_token.token_type == TokenType::Dot {
+            } else if self.is_at(TokenType::Dot) {
                 self.advance();
                 let name = self.consume(TokenType::Identifier, "Expected identifier after '.'")?;
                 expr = self.create_node(start_location.clone(), Expr::Get(GetExpr {object: expr, name}))?;
@@ -453,7 +453,7 @@ impl Parser {
                     bail!("Too many arguments in call expression");
                 }
                 arguments.push(self.parse_expr()?);
-                if self.current_token.token_type == TokenType::Comma {
+                if self.is_at(TokenType::Comma) {
                     self.advance();
                 } else {
                     break;
@@ -478,6 +478,10 @@ impl Parser {
         self.current_token.location.clone()
     }
 
+    #[inline]
+    fn is_at(&self, token_type: TokenType) -> bool {
+        self.current_token.token_type == token_type
+    }
 }
 
 pub fn parse_expression(code_source: SourceFileHandle) -> FelicoResult<AstNode<Expr>> {

@@ -1,0 +1,9 @@
+testcases:
+  - name: should_fail
+    input: foo
+    output: foobar
+
+  - name: should_work
+    input: foo
+    output: foofoo
+

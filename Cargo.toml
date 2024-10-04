@@ -15,3 +15,11 @@ termtree = "0.5.1"
 
 [dev-dependencies]
 expect-test = "1.5.0"
+yaml-rust = "0.4.5"
+libtest-mimic = "0.7.3"
+pretty_assertions = "1.4.1"
+
+[[test]]
+name = "exec"
+path = "tests/exec_test/exec_test.rs"
+harness = false
