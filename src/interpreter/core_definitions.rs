@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
-use crate::interpreter::value::{create_native_callable, InterpreterValue};
+use crate::interpreter::value::{create_native_callable, InterpreterValue, PrimitiveType, Type};
 
 pub struct CoreDefinition {
     pub name: SharedString,
@@ -13,9 +13,12 @@ static CORE_DEFINITIONS: Lazy<Vec<CoreDefinition>> = Lazy::new(|| {
     let mut add_definition = |name: &str, value: InterpreterValue| {
         core_definitions.push(CoreDefinition {
             name: SharedString::from(name),
-            value,
+            value: value.into(),
         });
     };
+
+    add_definition("bool", Type::primitive("bool", PrimitiveType::Bool).into());
+
     add_definition("sqrt", create_native_callable("sqrt", 1,|_interpreter, arguments| {
         if let InterpreterValue::Number(arg) = arguments[0] {
             Ok(InterpreterValue::Number(arg.sqrt()))

@@ -25,6 +25,10 @@ testcases:
     output: |-
       foo
 
+  - name: print bool type
+    input: "debug_print(bool);"
+    output: "〈bool〉"
+
   - name: print expression
     input: |-
       debug_print(1+2);

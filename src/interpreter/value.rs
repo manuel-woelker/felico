@@ -4,6 +4,7 @@ use crate::interpreter::environment::Environment;
 use crate::interpreter::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
+use crate::infra::shared_string::SharedString;
 
 #[derive(Debug, Clone)]
 pub enum InterpreterValue {
@@ -12,6 +13,7 @@ pub enum InterpreterValue {
     Bool(bool),
     Number(f64),
     Callable(Callable),
+    Type(Type),
 }
 
 impl Display for InterpreterValue {
@@ -35,6 +37,9 @@ impl Display for InterpreterValue {
             }
             InterpreterValue::Callable(callable) => {
                 write!(f, "{}/{}", callable.name, callable.arity)
+            }
+            InterpreterValue::Type(ty) => {
+                write!(f, "{:?}", ty)
             }
         }
     }
@@ -71,4 +76,54 @@ pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interp
         arity,
         fun: Arc::new(CallableFun::Native(Box::new(fun))),
     })
+}
+
+#[derive(Clone)]
+pub struct Type {
+    inner: Arc<TypeInner>,
+}
+
+impl Debug for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "〈{}〉", self.inner.name)
+    }
+}
+
+impl Type {
+    pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
+        Self {
+            inner: Arc::new(TypeInner {
+                name: SharedString::from(name),
+                kind: TypeKind::Primitive(primitive_type),
+            }),
+        }
+    }
+
+    pub fn name(&self) -> &SharedString {
+        &self.inner.name
+    }
+}
+
+#[derive(Debug)]
+pub struct TypeInner {
+    name: SharedString,
+    kind: TypeKind,
+}
+
+#[derive(Debug)]
+pub enum TypeKind {
+    Unknown,
+    Primitive(PrimitiveType),
+}
+
+#[derive(Debug)]
+pub enum PrimitiveType {
+    Bool,
+    F64,
+}
+
+impl From<Type> for InterpreterValue {
+    fn from(value: Type) -> Self {
+        InterpreterValue::Type(value)
+    }
 }
