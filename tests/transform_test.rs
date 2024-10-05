@@ -1,8 +1,9 @@
 use libtest_mimic::{Arguments, Trial};
 use pretty_assertions::assert_eq;
 use yaml_rust::{Yaml, YamlLoader};
+use felico::infra::result::FelicoResult;
 
-pub fn run_transform_test(directory: &str, transform_fn: impl Fn(&str) -> String + Send + 'static + Copy) {
+pub fn run_transform_test(directory: &str, transform_fn: impl Fn(&str, &str) -> FelicoResult<String> + Send + 'static + Copy) {
     // Parse command line arguments
     let args = Arguments::from_args();
 
@@ -16,13 +17,12 @@ pub fn run_transform_test(directory: &str, transform_fn: impl Fn(&str) -> String
         let name = testcase.remove(&Yaml::String("name".to_string())).expect("name").into_string().expect("string");
         let input = testcase.remove(&Yaml::String("input".to_string())).expect("input").into_string().expect("string");
         let expected_output = testcase.remove(&Yaml::String("output".to_string())).expect("output").into_string().expect("string");
-        Trial::test(name, move || {
-            let actual_output = transform_fn(&input);
-            assert_eq!(actual_output, expected_output);
+        Trial::test(name.clone(), move || {
+            let actual_output = transform_fn(&name, &input)?;
+            assert_eq!(actual_output, expected_output, "Transformation test failed for '{}' \n\t at .\\tests\\exec_test\\testcases\\simple.yaml:2", name);
             Ok(())
         })
     }).collect();
-
 
     // Run all tests and exit the application appropriately.
     libtest_mimic::run(&args, tests).exit();

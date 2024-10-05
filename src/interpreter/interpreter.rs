@@ -452,14 +452,23 @@ impl Interpreter {
     }
 }
 
+pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
+    let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input))?;
+    let output_buffer = std::sync::Arc::new(std::sync::RwLock::new(String::new()));
+    let output_buffer_clone = output_buffer.clone();
+    interpreter.set_print_fn(Box::new(move |value| output_buffer.write().unwrap().push_str(&format!("{}", value))));
+    interpreter.evaluate_program()?;
+    let guard = output_buffer_clone.write().unwrap();
+    Ok(guard.deref().clone())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::interpreter::eval::eval_expression;
-    use crate::interpreter::interpreter::Interpreter;
+    use crate::interpreter::interpreter::{run_program_to_string, Interpreter};
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::infra::source_file::SourceFileHandle;
     use expect_test::{expect, Expect};
-    use std::sync::{Arc, RwLock};
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {
         let result = eval_expression(SourceFileHandle::from_string(name, input)).unwrap();
@@ -500,12 +509,8 @@ mod tests {
     );
 
     fn test_eval_program(name: &str, input: &str, expected: Expect) {
-        let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input)).unwrap();
-        let output_buffer = Arc::new(RwLock::new(String::new()));
-        let output_buffer_clone = output_buffer.clone();
-        interpreter.set_print_fn(Box::new(move |value| output_buffer.write().unwrap().push_str(&format!("{}", value))));
-        interpreter.evaluate_program().unwrap();
-        expected.assert_eq(&format!("{:?}", output_buffer_clone.read().unwrap()));
+        let result = run_program_to_string(name, input).unwrap();
+        expected.assert_eq(&result);
     }
 
     macro_rules! test_eval_program {
@@ -520,54 +525,54 @@ mod tests {
     }
 
     test_eval_program!(
-        program_empty: "" => expect![[r#""""#]];
-        program_print_1: "debug_print(1);" => expect![[r#""1""#]];
-        program_print_string: "debug_print(\"Hi\");" => expect![[r#""Hi""#]];
-        program_print_exxression: "debug_print(1+2);" => expect![[r#""3""#]];
-        program_multiline: "debug_print(true);\ndebug_print(false);" => expect![[r#""truefalse""#]];
+        program_empty: "" => expect![""];
+        program_print_1: "debug_print(1);" => expect!["1"];
+        program_print_string: "debug_print(\"Hi\");" => expect!["Hi"];
+        program_print_expression: "debug_print(1+2);" => expect!["3"];
+        program_multiline: "debug_print(true);\ndebug_print(false);" => expect!["truefalse"];
 
-        program_var: "let foo = 42;debug_print(foo);" => expect![[r#""42""#]];
-        program_program: "let a = 1;let b = a+a;debug_print(b);" => expect![[r#""2""#]];
-        program_mixed: "debug_print(\"Length: \" + 3);" => expect![[r#""Length: 3""#]];
+        program_var: "let foo = 42;debug_print(foo);" => expect!["42"];
+        program_program: "let a = 1;let b = a+a;debug_print(b);" => expect!["2"];
+        program_mixed: "debug_print(\"Length: \" + 3);" => expect!["Length: 3"];
 
-        program_assign: "let a = 42;a = 99;debug_print(a);" => expect![[r#""99""#]];
-        program_assign_twice: "let a = 1;let b = 2;a = b = 3;debug_print(a);debug_print(b);" => expect![[r#""33""#]];
-        program_assign_twice2: "let a = 1;let b = 2;a = 1 + (b = 3);debug_print(a);debug_print(b);" => expect![[r#""43""#]];
-        program_print_assign: "let a = 1;debug_print(a = 2);" => expect![[r#""2""#]];
+        program_assign: "let a = 42;a = 99;debug_print(a);" => expect!["99"];
+        program_assign_twice: "let a = 1;let b = 2;a = b = 3;debug_print(a);debug_print(b);" => expect!["33"];
+        program_assign_twice2: "let a = 1;let b = 2;a = 1 + (b = 3);debug_print(a);debug_print(b);" => expect!["43"];
+        program_print_assign: "let a = 1;debug_print(a = 2);" => expect!["2"];
 
-        program_block: "let a = 1;{debug_print(a);let a = 2;debug_print(a);}debug_print(a);" => expect![[r#""121""#]];
+        program_block: "let a = 1;{debug_print(a);let a = 2;debug_print(a);}debug_print(a);" => expect!["121"];
 
-        program_if_true: "if(true) debug_print(true); else debug_print(false);" => expect![[r#""true""#]];
-        program_if_false: "if(false) debug_print(true); else debug_print(false);" => expect![[r#""false""#]];
-        program_if_true2: "if(true) {debug_print(true);} else {debug_print(false);}" => expect![[r#""true""#]];
-        program_if_false2: "if(false) {debug_print(true);} else {debug_print(false);}" => expect![[r#""false""#]];
-        program_if_nested: "if (false) if (true) {} else debug_print(true);" => expect![[r#""""#]];
-        program_if_nested2: "if (true) if (false) {} else debug_print(true);" => expect![[r#""true""#]];
+        program_if_true: "if(true) debug_print(true); else debug_print(false);" => expect!["true"];
+        program_if_false: "if(false) debug_print(true); else debug_print(false);" => expect!["false"];
+        program_if_true2: "if(true) {debug_print(true);} else {debug_print(false);}" => expect!["true"];
+        program_if_false2: "if(false) {debug_print(true);} else {debug_print(false);}" => expect!["false"];
+        program_if_nested: "if (false) if (true) {} else debug_print(true);" => expect![""];
+        program_if_nested2: "if (true) if (false) {} else debug_print(true);" => expect!["true"];
 
-        program_or_short_circuit1: "let a = 1;false || (a = 2)==1;debug_print(a);" => expect![[r#""2""#]];
-        program_or_short_circuit2: "let a = 1;true || (a = 2)==1;debug_print(a);" => expect![[r#""1""#]];
+        program_or_short_circuit1: "let a = 1;false || (a = 2)==1;debug_print(a);" => expect!["2"];
+        program_or_short_circuit2: "let a = 1;true || (a = 2)==1;debug_print(a);" => expect!["1"];
 
-        program_and_short_circuit1: "let a = 1;false && (a = 2)==1;debug_print(a);" => expect![[r#""1""#]];
-        program_and_short_circuit2: "let a = 1;true && (a = 2)==1;debug_print(a);" => expect![[r#""2""#]];
+        program_and_short_circuit1: "let a = 1;false && (a = 2)==1;debug_print(a);" => expect!["1"];
+        program_and_short_circuit2: "let a = 1;true && (a = 2)==1;debug_print(a);" => expect!["2"];
 
-        program_while: "let a = 3;while (a>0) { debug_print(a); a = a - 1; }" => expect![[r#""321""#]];
-        program_for_var: "for(let i = 1; i <= 3; i = i + 1) debug_print(i);" => expect![[r#""123""#]];
-        program_for_condition_only: "let i = 1; for(; i <= 5;) {debug_print(i); i = i + 1;}" => expect![[r#""12345""#]];
+        program_while: "let a = 3;while (a>0) { debug_print(a); a = a - 1; }" => expect!["321"];
+        program_for_var: "for(let i = 1; i <= 3; i = i + 1) debug_print(i);" => expect!["123"];
+        program_for_condition_only: "let i = 1; for(; i <= 5;) {debug_print(i); i = i + 1;}" => expect!["12345"];
 
-        program_call_native_sqrt: "debug_print(sqrt(9));" => expect![[r#""3""#]];
-        program_call_native_sqrt_negative: "debug_print(sqrt(-9));" => expect![[r#""NaN""#]];
+        program_call_native_sqrt: "debug_print(sqrt(9));" => expect!["3"];
+        program_call_native_sqrt_negative: "debug_print(sqrt(-9));" => expect!["NaN"];
 
-        program_fun: "fun printTwice(a) {debug_print(a); debug_print(a);} printTwice(1);" => expect![[r#""11""#]];
-        program_fun_return: "fun three() {return 3;} debug_print(three());" => expect![[r#""3""#]];
-        program_fun_arg_fun: "fun p() {debug_print(1);} fun x(a) {a();} x(p);" => expect![[r#""1""#]];
-        program_fun_return_fun: "fun b() {fun p() {debug_print(1);} return p;} b()();" => expect![[r#""1""#]];
+        program_fun: "fun printTwice(a) {debug_print(a); debug_print(a);} printTwice(1);" => expect!["11"];
+        program_fun_return: "fun three() {return 3;} debug_print(three());" => expect!["3"];
+        program_fun_arg_fun: "fun p() {debug_print(1);} fun x(a) {a();} x(p);" => expect!["1"];
+        program_fun_return_fun: "fun b() {fun p() {debug_print(1);} return p;} b()();" => expect!["1"];
         program_fib: "
             fun fib(n) {
                  if (n <= 1) return n;
                  return fib(n - 2) + fib(n - 1);
             }
             debug_print(fib(6));
-        " => expect![[r#""8""#]];
+        " => expect!["8"];
         program_counter: "
             fun makeCounter() {
               let i = 0;
@@ -582,7 +587,7 @@ mod tests {
             let counter = makeCounter();
             counter();1;
             counter();2;
-        " => expect![[r#""12""#]];
+        " => expect!["12"];
         program_dynamic_scope: r#"
             let a = "global";
             {
@@ -595,7 +600,7 @@ mod tests {
               let a = "block";
               showA();
             }
-        "# => expect![[r#""global.global.""#]];
+        "# => expect!["global.global."];
         program_assign_in_closure: r#"
           let a = 1;
           {
@@ -610,7 +615,7 @@ mod tests {
               showA();
           }
           debug_print(a);
-        "# => expect![[r#""22""#]];
+        "# => expect!["22"];
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {

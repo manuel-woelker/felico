@@ -1,9 +1,9 @@
 testcases:
-  - name: should_fail
-    input: foo
-    output: foobar
+  - name: empty
+    input: ""
+    output: ""
 
-  - name: should_work
-    input: foo
-    output: foofoo
+  - name: print true
+    input: "debug_print(true);"
+    output: "true"
 
