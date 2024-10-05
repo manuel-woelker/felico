@@ -11,6 +11,7 @@ use crate::infra::source_file::SourceFileHandle;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
+use crate::interpreter::core_definitions::get_core_definitions;
 
 struct VariableState {
     declaration_site: Location,
@@ -31,14 +32,12 @@ impl ResolverPass {
             start_byte: 0,
             end_byte: 0,
         };
-        global_scope.insert("sqrt".to_string(), VariableState {
-            declaration_site: location.clone(),
-            is_defined: true,
-        });
-        global_scope.insert("debug_print".to_string(), VariableState {
-            declaration_site: location,
-            is_defined: true,
-        });
+        for core_definition in get_core_definitions() {
+            global_scope.insert(core_definition.name.to_string(), VariableState {
+                declaration_site: location.clone(),
+                is_defined: true,
+            });
+        }
         ResolverPass {
             scopes: vec![global_scope, Default::default()],
         }

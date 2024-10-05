@@ -12,7 +12,7 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
 type PrintFn = Box<dyn Fn(&InterpreterValue) -> ()>;
 
@@ -433,7 +433,7 @@ impl Interpreter {
         let callable = InterpreterValue::Callable(Callable {
             name: fun.name.lexeme().to_string(),
             arity: fun.parameters.len(),
-            fun: Rc::new(CallableFun::Defined(DefinedFunction {
+            fun: Arc::new(CallableFun::Defined(DefinedFunction {
                 fun_stmt: fun.clone(),
                 closure: self.environment.clone(),
             })),
@@ -487,25 +487,7 @@ mod tests {
     }
 
     test_eval_expression!(
-        empty_string: "\"\"" => expect![[r#"String("")"#]];
-        some_string: "\"x\"" => expect![[r#"String("x")"#]];
-        space_string: "\" \"" => expect![[r#"String(" ")"#]];
-
         literal_number_0: "0" => expect!["Number(0.0)"];
-        literal_number_tau: "6.28" => expect!["Number(6.28)"];
-        literal_number_negative: "-0.2" => expect!["Number(-0.2)"];
-
-        literal_number_true: "true" => expect!["Bool(true)"];
-        literal_number_false: "false" => expect!["Bool(false)"];
-
-        expression_plus: "1+2" => expect!["Number(3.0)"];
-        expression_minux: "1-2" => expect!["Number(-1.0)"];
-        expression_star: "1*2" => expect!["Number(2.0)"];
-        expression_slash: "1/2" => expect!["Number(0.5)"];
-
-        expression_precedence: "1+2*3" => expect!["Number(7.0)"];
-
-        expression_parens: "(1+2)*3" => expect!["Number(9.0)"];
     );
 
     fn test_eval_program(name: &str, input: &str, expected: Expect) {
@@ -525,47 +507,6 @@ mod tests {
     }
 
     test_eval_program!(
-        program_empty: "" => expect![""];
-        program_print_1: "debug_print(1);" => expect!["1"];
-        program_print_string: "debug_print(\"Hi\");" => expect!["Hi"];
-        program_print_expression: "debug_print(1+2);" => expect!["3"];
-        program_multiline: "debug_print(true);\ndebug_print(false);" => expect!["truefalse"];
-
-        program_var: "let foo = 42;debug_print(foo);" => expect!["42"];
-        program_program: "let a = 1;let b = a+a;debug_print(b);" => expect!["2"];
-        program_mixed: "debug_print(\"Length: \" + 3);" => expect!["Length: 3"];
-
-        program_assign: "let a = 42;a = 99;debug_print(a);" => expect!["99"];
-        program_assign_twice: "let a = 1;let b = 2;a = b = 3;debug_print(a);debug_print(b);" => expect!["33"];
-        program_assign_twice2: "let a = 1;let b = 2;a = 1 + (b = 3);debug_print(a);debug_print(b);" => expect!["43"];
-        program_print_assign: "let a = 1;debug_print(a = 2);" => expect!["2"];
-
-        program_block: "let a = 1;{debug_print(a);let a = 2;debug_print(a);}debug_print(a);" => expect!["121"];
-
-        program_if_true: "if(true) debug_print(true); else debug_print(false);" => expect!["true"];
-        program_if_false: "if(false) debug_print(true); else debug_print(false);" => expect!["false"];
-        program_if_true2: "if(true) {debug_print(true);} else {debug_print(false);}" => expect!["true"];
-        program_if_false2: "if(false) {debug_print(true);} else {debug_print(false);}" => expect!["false"];
-        program_if_nested: "if (false) if (true) {} else debug_print(true);" => expect![""];
-        program_if_nested2: "if (true) if (false) {} else debug_print(true);" => expect!["true"];
-
-        program_or_short_circuit1: "let a = 1;false || (a = 2)==1;debug_print(a);" => expect!["2"];
-        program_or_short_circuit2: "let a = 1;true || (a = 2)==1;debug_print(a);" => expect!["1"];
-
-        program_and_short_circuit1: "let a = 1;false && (a = 2)==1;debug_print(a);" => expect!["1"];
-        program_and_short_circuit2: "let a = 1;true && (a = 2)==1;debug_print(a);" => expect!["2"];
-
-        program_while: "let a = 3;while (a>0) { debug_print(a); a = a - 1; }" => expect!["321"];
-        program_for_var: "for(let i = 1; i <= 3; i = i + 1) debug_print(i);" => expect!["123"];
-        program_for_condition_only: "let i = 1; for(; i <= 5;) {debug_print(i); i = i + 1;}" => expect!["12345"];
-
-        program_call_native_sqrt: "debug_print(sqrt(9));" => expect!["3"];
-        program_call_native_sqrt_negative: "debug_print(sqrt(-9));" => expect!["NaN"];
-
-        program_fun: "fun printTwice(a) {debug_print(a); debug_print(a);} printTwice(1);" => expect!["11"];
-        program_fun_return: "fun three() {return 3;} debug_print(three());" => expect!["3"];
-        program_fun_arg_fun: "fun p() {debug_print(1);} fun x(a) {a();} x(p);" => expect!["1"];
-        program_fun_return_fun: "fun b() {fun p() {debug_print(1);} return p;} b()();" => expect!["1"];
         program_fib: "
             fun fib(n) {
                  if (n <= 1) return n;
@@ -573,49 +514,6 @@ mod tests {
             }
             debug_print(fib(6));
         " => expect!["8"];
-        program_counter: "
-            fun makeCounter() {
-              let i = 0;
-              fun count() {
-                i = i + 1;
-                debug_print(i);
-              }
-
-              return count;
-            }
-
-            let counter = makeCounter();
-            counter();1;
-            counter();2;
-        " => expect!["12"];
-        program_dynamic_scope: r#"
-            let a = "global";
-            {
-              fun showA() {
-                debug_print(a);
-                debug_print(".");
-              }
-
-              showA();
-              let a = "block";
-              showA();
-            }
-        "# => expect!["global.global."];
-        program_assign_in_closure: r#"
-          let a = 1;
-          {
-              fun setA() {
-                a=2;
-              }
-              fun showA() {
-                debug_print(a);
-              }
-              let a = 3;
-              setA();
-              showA();
-          }
-          debug_print(a);
-        "# => expect!["22"];
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {

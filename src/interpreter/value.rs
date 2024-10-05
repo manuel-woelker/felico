@@ -3,7 +3,7 @@ use crate::infra::result::FelicoResult;
 use crate::interpreter::environment::Environment;
 use crate::interpreter::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum InterpreterValue {
@@ -45,7 +45,7 @@ impl Display for InterpreterValue {
 pub struct Callable {
     pub name: String,
     pub arity: usize,
-    pub fun: Rc<CallableFun>,
+    pub fun: Arc<CallableFun>,
 }
 
 pub enum CallableFun {
@@ -69,6 +69,6 @@ pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interp
     InterpreterValue::Callable(Callable {
         name: name.to_string(),
         arity,
-        fun: Rc::new(CallableFun::Native(Box::new(fun))),
+        fun: Arc::new(CallableFun::Native(Box::new(fun))),
     })
 }

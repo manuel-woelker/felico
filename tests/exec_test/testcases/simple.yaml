@@ -7,3 +7,87 @@ testcases:
     input: "debug_print(true);"
     output: "true"
 
+  - name: print false
+    input: "debug_print(false);"
+    output: "false"
+
+  - name: print 1
+    input: "debug_print(1);"
+    output: "1"
+
+  - name: print pi
+    input: "debug_print(3.141);"
+    output: "3.141"
+
+  - name: print string
+    input: |-
+      debug_print("foo");
+    output: |-
+      foo
+
+  - name: print expression
+    input: |-
+      debug_print(1+2);
+    output: |-
+      3
+
+  - name: multiline
+    input: |-
+      debug_print(1);
+      debug_print(2);
+    output: |-
+      12
+
+  - name: let
+    input: |-
+      let a = 42;
+      debug_print(a);
+    output: |-
+      42
+
+  - name: reassign
+    input: |-
+      let a = 42;
+      a = 99;
+      debug_print(a);
+    output: |-
+      99
+
+  - name: assign twice
+    input: |-
+      let a = 1;
+      let b = 2;
+      a = b = 3;
+      debug_print(a);
+      debug_print(b);
+    output: |-
+      33
+
+  - name: assign twice
+    input: |-
+      let a = 1;
+      let b = 2;
+      a = 1 + (b = 3);
+      debug_print(a);
+      debug_print(b);
+    output: |-
+      43
+
+  - name: print assign
+    input: |-
+      let a = 1;
+      debug_print(a = 3);
+    output: |-
+      3
+
+  - name: block
+    input: |-
+      let a = 1;
+      {
+        debug_print(a);
+        let a = 2;
+        debug_print(a);
+      }
+      debug_print(a);
+    output: |-
+      121

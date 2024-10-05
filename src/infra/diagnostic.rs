@@ -132,15 +132,16 @@ mod tests {
         };
 
         let mut graphical_report_handler = GraphicalReportHandler::new();
+        let should_print = std::env::var("PRINT_DIAGNOSTICS").is_ok();
+        if should_print {
+            println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
 
-        println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
+            graphical_report_handler = graphical_report_handler.with_theme(GraphicalTheme::unicode());
+            println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
 
-        graphical_report_handler = graphical_report_handler.with_theme(GraphicalTheme::unicode());
-        println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
-
-        graphical_report_handler = graphical_report_handler.with_theme(GraphicalTheme::unicode_nocolor());
-        println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
-
+            graphical_report_handler = graphical_report_handler.with_theme(GraphicalTheme::unicode_nocolor());
+            println!("{}", diagnostic_to_string(&diagnostic, &graphical_report_handler));
+        }
 
 
         assert_diagnostic::<()>(&Err(FelicoReport::from(diagnostic)), expect![[r#"
