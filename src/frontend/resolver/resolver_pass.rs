@@ -62,24 +62,21 @@ impl ResolverPass {
             Let(let_stmt) => {
                 let name = let_stmt.name.lexeme();
                 let ty = if let Some(expr) = &let_stmt.type_expression {
-                    if let Expr::Variable(type_id) = &*expr.data {
-                        let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
-                        if let Some((_distance, symbol)) = distance_and_symbol {
-                            if let Some(value) = &symbol.value {
-                                if let ValueKind::Type(ty) = &value.val {
-                                    ty.clone()
-                                } else {
-                                    bail!("Type expression must be a type: {}", type_id.variable.lexeme());
-                                }
-                            } else {
-                                bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
-                            }
-                        } else {
-                            bail!("Unsupported type: {}", type_id.variable.lexeme());
-                        }
-                    } else {
+                    // TODO: make bails into diagnostics
+                    let Expr::Variable(type_id) = &*expr.data else {
                         bail!("Unsupported expression in type position: {:?}", expr);
-                    }
+                    };
+                    let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
+                    let Some((_distance, symbol)) = distance_and_symbol else {
+                        bail!("Unknown symbol: {}", type_id.variable.lexeme());
+                    };
+                    let Some(value) = &symbol.value else {
+                        bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
+                    };
+                    let ValueKind::Type(ty) = &value.val else {
+                        bail!("Type expression must be a type: {}", type_id.variable.lexeme());
+                    };
+                    ty.clone()
                 } else {
                     TYPE_UNKNOWN.clone()
                 };
