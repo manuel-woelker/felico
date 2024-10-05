@@ -1,4 +1,4 @@
-Intitestcases:
+testcases:
   - name: empty string
     input: |-      
       debug_print("");

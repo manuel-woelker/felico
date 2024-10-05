@@ -27,7 +27,7 @@ testcases:
 
   - name: print bool type
     input: "debug_print(bool);"
-    output: "〈bool〉"
+    output: "❬bool❭"
 
   - name: print expression
     input: |-

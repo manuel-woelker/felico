@@ -9,7 +9,7 @@ use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpreter::core_definitions::{get_core_definitions, TYPE_BOOL, TYPE_F64, TYPE_FUNCTION, TYPE_STRING, TYPE_UNIT, TYPE_UNKNOWN};
-use crate::interpreter::value::Type;
+use crate::interpreter::value::{InterpreterValue, Type, ValueKind};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -18,6 +18,7 @@ struct Symbol {
     declaration_site: Location,
     is_defined: bool,
     ty: Type,
+    value: Option<InterpreterValue>,
 }
 
 
@@ -38,6 +39,7 @@ impl ResolverPass {
                 declaration_site: location.clone(),
                 is_defined: true,
                 ty: core_definition.value.ty.clone(),
+                value: Some(core_definition.value.clone()),
             });
         }
         ResolverPass {
@@ -59,6 +61,28 @@ impl ResolverPass {
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
                 let name = let_stmt.name.lexeme();
+                let ty = if let Some(expr) = &let_stmt.type_expression {
+                    if let Expr::Variable(type_id) = &*expr.data {
+                        let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
+                        if let Some((_distance, symbol)) = distance_and_symbol {
+                            if let Some(value) = &symbol.value {
+                                if let ValueKind::Type(ty) = &value.val {
+                                    ty.clone()
+                                } else {
+                                    bail!("Type expression must be a type: {}", type_id.variable.lexeme());
+                                }
+                            } else {
+                                bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
+                            }
+                        } else {
+                            bail!("Unsupported type: {}", type_id.variable.lexeme());
+                        }
+                    } else {
+                        bail!("Unsupported expression in type position: {:?}", expr);
+                    }
+                } else {
+                    TYPE_UNKNOWN.clone()
+                };
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
                         let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Variable '{}' already declared", let_stmt.name.lexeme()));
@@ -67,20 +91,7 @@ impl ResolverPass {
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        let ty = if let Some(expr) = &let_stmt.type_expression {
-                            if let Expr::Variable(type_id) = &*expr.data {
-                                if type_id.variable.lexeme() == "bool" {
-                                    TYPE_BOOL.clone()
-                                } else {
-                                    bail!("Unsupported type: {}", type_id.variable.lexeme());
-                                }
-                            } else {
-                                bail!("Unsupported expression in type position: {:?}", expr);
-                            }
-                        } else {
-                            TYPE_UNKNOWN.clone()
-                        };
-                        slot.insert(Symbol { declaration_site: let_stmt.name.location.clone(), is_defined: false, ty });
+                        slot.insert(Symbol { declaration_site: let_stmt.name.location.clone(), is_defined: false, ty, value: None });
                     }
                 }
                 self.resolve_expr(&mut let_stmt.expression)?;
@@ -102,13 +113,13 @@ impl ResolverPass {
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: TYPE_FUNCTION.clone() });
+                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: TYPE_FUNCTION.clone(), value: None });
                     }
                 }
                 self.scopes.push(Default::default());
                 let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
-                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: TYPE_UNKNOWN.clone() });
+                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: TYPE_UNKNOWN.clone(), value: None });
                 }
                 self.resolve_stmt(&mut fun_stmt.body)?;
                 self.scopes.pop();
