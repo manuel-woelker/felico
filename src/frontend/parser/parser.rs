@@ -147,7 +147,7 @@ impl Parser {
         let expression = if self.current_token.token_type != TokenType::Semicolon {
             self.parse_expr()?
         } else {
-            self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Nil))?
+            self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Unit))?
         };
         self.consume(TokenType::Semicolon, "Expected semicolon after return statement")?;
         self.create_node(start_location, Stmt::Return(ReturnStmt {
@@ -867,7 +867,7 @@ mod tests {
                    Program
                    └── Declare fun 'nop()'     [0+20]
                        └── Return     [11+8]
-                           └── Nil     [11+7]
+                           └── Unit     [11+7]
                "#]];
                program_fun_return_value: "fun three(a) {return 3;} " => expect![[r#"
                    Program

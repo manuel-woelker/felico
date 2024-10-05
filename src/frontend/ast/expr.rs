@@ -50,7 +50,7 @@ pub enum LiteralExpr {
     String(String),
     Number(f64),
     Bool(bool),
-    Nil,
+    Unit,
 }
 
 #[derive(Debug, Clone)]
