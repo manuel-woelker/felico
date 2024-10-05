@@ -1,0 +1,116 @@
+testcases:
+  - name: call native sqrt
+    input: "debug_print(sqrt(9));"
+    output: "3"
+
+  - name: call native sqrt negative
+    input: "debug_print(sqrt(-9));"
+    output: "NaN"
+
+  - name: function
+    input: |-
+      fun printTwice(a) {
+        debug_print(a);
+        debug_print(a);
+      }
+      printTwice(1);
+    output: |-
+      11
+
+  - name: function return
+    input: |-
+      fun three() {
+        return 3;
+      }
+      debug_print(three());
+    output: |-
+      3
+
+  - name: function as argument
+    input: |-
+      fun p() {
+        debug_print(1);
+      }
+      fun x(a) {
+        a();
+      }
+      x(p);
+    output: |-
+      1
+
+  - name: function as return value
+    input: |-
+      fun b() {
+        fun p() {
+          debug_print(1);
+        }
+        return p;
+      }
+      b()();
+    output: |-
+      1
+
+  - name: recursive fibonacci
+    input: |-
+      fun fib(n) {
+           if (n <= 1) return n;
+           return fib(n - 2) + fib(n - 1);
+      }
+      debug_print(fib(6));
+    output: |-
+      8
+
+  - name: variable captured in closure
+    input: |-
+      fun makeCounter() {
+        let i = 0;
+        fun count() {
+          i = i + 1;
+          debug_print(i);
+        }
+
+        return count;
+      }
+
+      let counter = makeCounter();
+      counter();1;
+      counter();2;
+    output: |-
+      12
+
+  - name: dynamic scope
+    input: |-
+      let a = "global";
+      {
+        fun showA() {
+          debug_print(a);
+          debug_print(".");
+        }
+
+        showA();
+        let a = "block";
+        showA();
+      }
+    output: |-
+      global.global.
+
+
+  - name: assign in closure
+    input: |-
+      let a = 1;
+      {
+          fun setA() {
+            a=2;
+          }
+          fun showA() {
+            debug_print(a);
+          }
+          let a = 3;
+          showA();
+          setA();
+          showA();
+      }
+      debug_print(a);
+    output: |-
+      122
+

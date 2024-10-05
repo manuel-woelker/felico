@@ -788,8 +788,8 @@ mod tests {
                 "#]];
                 program_let_decl_with_type: "let a: bool = false;" => expect![[r#"
                     Program
-                    └── Let ''a' (Identifier)'     [0+14]
-                        └── Bool(false)     [8+5]
+                    └── Let ''a' (Identifier)'     [0+20]
+                        └── Bool(false)     [14+5]
                 "#]];
                 program_program: "let a = 1;let b = a+a;b;" => expect![[r#"
                     Program

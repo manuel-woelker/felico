@@ -5,9 +5,58 @@ use crate::interpreter::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 use crate::infra::shared_string::SharedString;
+use crate::interpreter::core_definitions::{TYPE_BOOL, TYPE_F64, TYPE_FUNCTION, TYPE_TYPE};
+
+#[derive(Clone)]
+pub struct InterpreterValue {
+    pub val: ValueKind,
+    pub ty: Type,
+}
+
+
+impl InterpreterValue {
+    pub fn f64(value: f64) -> Self {
+        Self {
+            val: ValueKind::Number(value),
+            ty: TYPE_F64.clone(),
+        }
+    }
+    pub fn bool(value: bool) -> Self {
+        Self {
+            val: ValueKind::Bool(value),
+            ty: TYPE_BOOL.clone(),
+        }
+    }
+    pub fn unit() -> Self {
+        Self {
+            val: ValueKind::Unit,
+            ty: TYPE_BOOL.clone(),
+        }
+    }
+    pub fn callable(callable: Callable) -> Self {
+        Self {
+            val: ValueKind::Callable(callable),
+            ty: TYPE_FUNCTION.clone(),
+        }
+    }
+
+    pub fn new_type(ty: Type) -> Self {
+        Self {
+            val: ValueKind::Type(ty),
+            ty: TYPE_TYPE.clone(),
+        }
+    }
+
+    pub fn new_string(s: String) -> Self {
+        Self {
+            val: ValueKind::String(s),
+            ty: TYPE_TYPE.clone(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
-pub enum InterpreterValue {
+pub enum ValueKind {
     Unit,
     String(String),
     Bool(bool),
@@ -16,29 +65,43 @@ pub enum InterpreterValue {
     Type(Type),
 }
 
+
 impl Display for InterpreterValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.val, f)
+    }
+}
+
+impl Debug for InterpreterValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.val, f)
+    }
+}
+
+
+impl Display for ValueKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InterpreterValue::Unit => {
+            ValueKind::Unit => {
                 f.write_str("()")
             }
-            InterpreterValue::String(s) => {
+            ValueKind::String(s) => {
                 f.write_str(s)
             }
-            InterpreterValue::Bool(bool) => {
+            ValueKind::Bool(bool) => {
                 if *bool {
                     f.write_str("true")
                 } else {
                     f.write_str("false")
                 }
             }
-            InterpreterValue::Number(number) => {
+            ValueKind::Number(number) => {
                 write!(f, "{}", number)
             }
-            InterpreterValue::Callable(callable) => {
+            ValueKind::Callable(callable) => {
                 write!(f, "{}/{}", callable.name, callable.arity)
             }
-            InterpreterValue::Type(ty) => {
+            ValueKind::Type(ty) => {
                 write!(f, "{:?}", ty)
             }
         }
@@ -71,7 +134,7 @@ impl Debug for Callable {
 }
 
 pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + Send + Sync + 'static) -> InterpreterValue {
-    InterpreterValue::Callable(Callable {
+    InterpreterValue::callable(Callable {
         name: name.to_string(),
         arity,
         fun: Arc::new(CallableFun::Native(Box::new(fun))),
@@ -89,7 +152,22 @@ impl Debug for Type {
     }
 }
 
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "〈{}〉", self.inner.name)
+    }
+}
+
 impl Type {
+    pub fn new<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
+        Self {
+            inner: Arc::new(TypeInner {
+                name: name.into(),
+                kind,
+            }),
+        }
+    }
+
     pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
         Self {
             inner: Arc::new(TypeInner {
@@ -104,26 +182,35 @@ impl Type {
     }
 }
 
+impl PartialEq for Type {
+    fn eq(&self, other: &Type) -> bool {
+        self.inner.kind == other.inner.kind
+    }
+}
+
+
 #[derive(Debug)]
 pub struct TypeInner {
     name: SharedString,
     kind: TypeKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum TypeKind {
     Unknown,
     Primitive(PrimitiveType),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum PrimitiveType {
     Bool,
+    Unit,
     F64,
+    String,
 }
 
 impl From<Type> for InterpreterValue {
     fn from(value: Type) -> Self {
-        InterpreterValue::Type(value)
+        InterpreterValue::new_type(value)
     }
 }

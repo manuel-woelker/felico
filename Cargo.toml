@@ -25,3 +25,8 @@ located_yaml = "0.2.1"
 name = "exec"
 path = "tests/exec_test/exec_test.rs"
 harness = false
+
+[[test]]
+name = "error"
+path = "tests/error_test/error_test.rs"
+harness = false

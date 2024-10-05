@@ -1,0 +1,121 @@
+testcases:
+  - name: if true
+    input: |-
+      if (true) debug_print(true);
+    output: |-
+      true
+
+  - name: if false
+    input: |-
+      if (false) debug_print(true);
+    output: |-
+
+  - name: if else true
+    input: |-
+      if (true) debug_print(true);
+      else debug_print(false);
+    output: |-
+      true
+
+  - name: if else false
+    input: |-
+      if (false) debug_print(true);
+      else debug_print(false);
+    output: |-
+      false
+
+  - name: if else true 2
+    input: |-
+      if (true) {
+        debug_print(true);
+      } else {
+        debug_print(false);
+      }
+    output: |-
+      true
+
+  - name: if else false 2
+    input: |-
+      if (false) {
+        debug_print(true);
+      } else {
+        debug_print(false);
+      }
+    output: |-
+      false
+
+  - name: if nested
+    input: |-
+      if (false)
+        if (true) debug_print(1);
+        else debug_print(2);
+    output: |-
+
+
+  - name: if nested 2
+    input: |-
+      if (true)
+        if (false) debug_print(1);
+        else debug_print(2);
+    output: |-
+      2
+
+  - name: or short circuit 1
+    input: |-
+      let a = 1;
+      false || (a = 2)==1;
+      debug_print(a);
+    output: |-
+      2
+
+  - name: or short circuit 2
+    input: |-
+      let a = 1;
+      true || (a = 2)==1;
+      debug_print(a);
+    output: |-
+      1
+
+  - name: and short circuit 1
+    input: |-
+      let a = 1;
+      false && (a = 2)==1;
+      debug_print(a);
+    output: |-
+      1
+
+  - name: and short circuit 2
+    input: |-
+      let a = 1;
+      true && (a = 2)==1;
+      debug_print(a);
+    output: |-
+      2
+
+  - name: while
+    input: |-
+      let a = 3;
+      while (a>0) { 
+        debug_print(a);
+        a = a - 1;
+      }
+    output: |-
+      321
+
+  - name: for with let
+    input: |-
+      for(let i = 1; i <= 3; i = i + 1) 
+        debug_print(i);
+    output: |-
+      123
+
+  - name: for with condition only
+    input: |-
+      let i = 1;
+      for(; i <= 5;) {
+        debug_print(i);
+        i = i + 1;
+      }
+    output: |-
+      12345
+

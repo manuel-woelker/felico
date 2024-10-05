@@ -4,7 +4,7 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::interpreter::environment::Environment;
-use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue};
+use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue, ValueKind};
 use crate::frontend::lexer::token::TokenType;
 use crate::frontend::parser::parser::{parse_expression, parse_program};
 use crate::frontend::resolver::resolver_pass::resolve_variables;
@@ -92,24 +92,24 @@ impl Interpreter {
     fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
         Ok(match expr.data.deref() {
             Expr::Literal(LiteralExpr::Unit) => {
-                InterpreterValue::Unit
+                InterpreterValue::unit()
             }
             Expr::Literal(LiteralExpr::String(string)) => {
-                InterpreterValue::String(string.clone())
+                InterpreterValue::new_string(string.clone())
             }
             Expr::Literal(LiteralExpr::Number(number)) => {
-                InterpreterValue::Number(*number)
+                InterpreterValue::f64(*number)
             }
             Expr::Literal(LiteralExpr::Bool(bool)) => {
-                InterpreterValue::Bool(*bool)
+                InterpreterValue::bool(*bool)
             }
             Expr::Unary(unary) => {
                 let sub_expression = self.evaluate_expr(&unary.right)?;
                 match unary.operator.token_type {
                     TokenType::Minus => {
-                        match sub_expression {
-                            InterpreterValue::Number(number) => {
-                                InterpreterValue::Number(-number)
+                        match sub_expression.val {
+                            ValueKind::Number(number) => {
+                                InterpreterValue::f64(-number)
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Value '{:?}' cannot be negated", sub_expression), |diagnostic| {
@@ -130,19 +130,19 @@ impl Interpreter {
                 // Handle "and" & "or" upfront to handle short-circuiting logic
                 match binary.operator.token_type {
                     TokenType::Or | TokenType::And => {
-                        if let InterpreterValue::Bool(left) = left_value {
+                        if let ValueKind::Bool(left) = left_value.val {
                             if binary.operator.token_type == TokenType::Or {
                                 if left {
-                                    return Ok(InterpreterValue::Bool(true));
+                                    return Ok(InterpreterValue::bool(true));
                                 }
                             } else { // AND
                                 if !left {
-                                    return Ok(InterpreterValue::Bool(false));
+                                    return Ok(InterpreterValue::bool(false));
                                 }
                             }
                             let right_value = self.evaluate_expr(&binary.right)?;
-                            return match right_value {
-                                InterpreterValue::Bool(_) => {
+                            return match right_value.val {
+                                ValueKind::Bool(_) => {
                                     Ok(right_value)
                                 } // Ok
                                 _ => {
@@ -160,38 +160,38 @@ impl Interpreter {
                     _ => {}
                 };
                 let right_value = self.evaluate_expr(&binary.right)?;
-                match (left_value, right_value) {
-                    (InterpreterValue::Number(left), InterpreterValue::Number(right)) => {
+                match (left_value.val, right_value.val) {
+                    (ValueKind::Number(left), ValueKind::Number(right)) => {
                         match binary.operator.token_type {
                             TokenType::Minus => {
-                                InterpreterValue::Number(left - right)
+                                InterpreterValue::f64(left - right)
                             }
                             TokenType::Plus => {
-                                InterpreterValue::Number(left + right)
+                                InterpreterValue::f64(left + right)
                             }
                             TokenType::Star => {
-                                InterpreterValue::Number(left * right)
+                                InterpreterValue::f64(left * right)
                             }
                             TokenType::Slash => {
-                                InterpreterValue::Number(left / right)
+                                InterpreterValue::f64(left / right)
                             }
                             TokenType::EqualEqual => {
-                                InterpreterValue::Bool(left == right)
+                                InterpreterValue::bool(left == right)
                             }
                             TokenType::BangEqual => {
-                                InterpreterValue::Bool(left != right)
+                                InterpreterValue::bool(left != right)
                             }
                             TokenType::Greater => {
-                                InterpreterValue::Bool(left > right)
+                                InterpreterValue::bool(left > right)
                             }
                             TokenType::GreaterEqual => {
-                                InterpreterValue::Bool(left >= right)
+                                InterpreterValue::bool(left >= right)
                             }
                             TokenType::Less => {
-                                InterpreterValue::Bool(left < right)
+                                InterpreterValue::bool(left < right)
                             }
                             TokenType::LessEqual => {
-                                InterpreterValue::Bool(left <= right)
+                                InterpreterValue::bool(left <= right)
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Unsupported binary operator for numbers: {}", binary.operator.lexeme()), |diagnostic| {
@@ -200,10 +200,10 @@ impl Interpreter {
                             }
                         }
                     }
-                    (InterpreterValue::String(left), right) => {
+                    (ValueKind::String(left), right) => {
                         match binary.operator.token_type {
                             TokenType::Plus => {
-                                return Ok(InterpreterValue::String(left + &format!("{}", right)))
+                                return Ok(InterpreterValue::new_string(left + &format!("{}", right)))
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Unsupported binary operator for string: {}", binary.operator.lexeme()), |diagnostic| {
@@ -287,7 +287,7 @@ impl Interpreter {
                     });
                 }
                 let callee = self.evaluate_expr(&call.callee)?;
-                if let InterpreterValue::Callable(callable) = callee {
+                if let ValueKind::Callable(callable) = callee.val {
                     // Check arity
                     if call.arguments.len() != callable.arity {
                         return self.create_diagnostic(expr, format!("Wrong number of arguments in function call '{}' - Expected: {}, got: {} instead", callable.name, callable.arity, call.arguments.len()), |diagnostic| {
@@ -324,7 +324,7 @@ impl Interpreter {
                             self.environment = old_environment;
                             match result {
                                 StmtResult::Continue => {
-                                    InterpreterValue::Unit
+                                    InterpreterValue::unit()
                                 }
                                 StmtResult::Return(value) => {
                                     value
@@ -370,14 +370,14 @@ impl Interpreter {
                 return Ok(result);
             }
             Stmt::If(if_stmt) => {
-                match self.evaluate_expr(&if_stmt.condition)? {
-                    InterpreterValue::Bool(true) => {
+                match self.evaluate_expr(&if_stmt.condition)?.val {
+                    ValueKind::Bool(true) => {
                         let result = self.evaluate_stmt(&if_stmt.then_stmt)?;
                         if result.is_return() {
                             return Ok(result);
                         }
                     }
-                    InterpreterValue::Bool(false) => {
+                    ValueKind::Bool(false) => {
                         if let Some(else_stmt) = &if_stmt.else_stmt {
                             let result = self.evaluate_stmt(else_stmt)?;
                             if result.is_return() {
@@ -394,14 +394,14 @@ impl Interpreter {
             }
             Stmt::While(while_stmt) => {
                 loop {
-                    match self.evaluate_expr(&while_stmt.condition)? {
-                        InterpreterValue::Bool(true) => {
+                    match self.evaluate_expr(&while_stmt.condition)?.val {
+                        ValueKind::Bool(true) => {
                             let result = self.evaluate_stmt(&while_stmt.body_stmt)?;
                             if result.is_return() {
                                 return Ok(result);
                             }
                         }
-                        InterpreterValue::Bool(false) => {
+                        ValueKind::Bool(false) => {
                             break;
                         }
                         other => {
@@ -422,7 +422,7 @@ impl Interpreter {
     }
 
     fn create_fun_callable(&mut self, fun: &FunStmt) -> InterpreterValue {
-        let callable = InterpreterValue::Callable(Callable {
+        let callable = InterpreterValue::callable(Callable {
             name: fun.name.lexeme().to_string(),
             arity: fun.parameters.len(),
             fun: Arc::new(CallableFun::Defined(DefinedFunction {
