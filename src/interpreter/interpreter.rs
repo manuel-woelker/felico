@@ -4,22 +4,23 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::interpreter::environment::Environment;
-use crate::interpreter::value::{create_native_callable, Callable, CallableFun, DefinedFunction, InterpreterValue};
+use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue};
 use crate::frontend::lexer::token::TokenType;
 use crate::frontend::parser::parser::{parse_expression, parse_program};
 use crate::frontend::resolver::resolver_pass::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::result::{bail, FelicoResult};
+use crate::infra::result::{FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
 use std::ops::Deref;
 use std::sync::Arc;
+use crate::interpreter::core_definitions::get_core_definitions;
 
 type PrintFn = Box<dyn Fn(&InterpreterValue) -> ()>;
 
 pub struct Interpreter {
     source_file: SourceFileHandle,
     environment: Environment,
-    print_fn: PrintFn,
+    pub(crate) print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
 }
@@ -38,19 +39,10 @@ impl StmtResult {
 impl Interpreter {
     pub fn new(source_file: SourceFileHandle) -> FelicoResult<Self> {
         let mut environment = Environment::new();
-        environment.define("sqrt", create_native_callable("sqrt", 1,|_interpreter, arguments| {
-            if let InterpreterValue::Number(arg) = arguments[0] {
-                Ok(InterpreterValue::Number(arg.sqrt()))
-            } else {
-                bail!("Expected number as argument to sqrt")
-            }
-        }));
-        environment.define("debug_print", create_native_callable("debug_print", 1,|interpreter, arguments| {
-            for argument in &arguments {
-                (interpreter.print_fn)(argument);
-            }
-            Ok(InterpreterValue::Unit)
-        }));
+        for core_definition in get_core_definitions() {
+            environment.define(&core_definition.name, core_definition.value.clone());
+        }
+
         environment.enter_new();
         Ok(Self {
             source_file,

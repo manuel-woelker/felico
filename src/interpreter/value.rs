@@ -49,7 +49,7 @@ pub struct Callable {
 }
 
 pub enum CallableFun {
-    Native(Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>>),
+    Native(Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + Send + Sync>),
     Defined(DefinedFunction),
 }
 
@@ -65,7 +65,7 @@ impl Debug for Callable {
     }
 }
 
-pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + 'static) -> InterpreterValue {
+pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + Send + Sync + 'static) -> InterpreterValue {
     InterpreterValue::Callable(Callable {
         name: name.to_string(),
         arity,

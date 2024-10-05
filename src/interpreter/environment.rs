@@ -1,9 +1,8 @@
-use std::cell::RefCell;
 use crate::interpreter::value::InterpreterValue;
 use crate::infra::result::{bail, FelicoResult};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub struct EnvironmentInner {
     values: HashMap<String, InterpreterValue>,
@@ -12,29 +11,29 @@ pub struct EnvironmentInner {
 
 #[derive(Clone)]
 pub struct Environment {
-    inner: Rc<RefCell<EnvironmentInner>>,
+    inner: Arc<Mutex<EnvironmentInner>>,
 }
 
 impl Debug for Environment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Environment <{} entries>", self.inner.borrow().values.len())
+        write!(f, "Environment <{} entries>", self.inner.lock().unwrap().values.len())
     }
 }
 impl Environment {
     pub fn new() -> Self {
         Self {
-            inner: Rc::new(RefCell::new(EnvironmentInner {
+            inner: Arc::new(Mutex::new(EnvironmentInner {
                 values: Default::default(),
                 parent: None,
             })),
         }
     }
     pub fn define(&self, name: &str, value: InterpreterValue) {
-        self.inner.borrow_mut().values.insert(name.to_string(), value);
+        self.inner.lock().unwrap().values.insert(name.to_string(), value);
     }
 
     pub fn assign(&self, name: &str, value: InterpreterValue) -> FelicoResult<()> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap();
         if let Some(destination) = inner.values.get_mut(name) {
             *destination = value;
             return Ok(())
@@ -48,7 +47,7 @@ impl Environment {
     }
 
     pub fn get(&self, name: &str) -> FelicoResult<InterpreterValue> {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().unwrap();
         if let Some(value) = inner.values.get(name) {
             return Ok(value.clone())
         }
@@ -61,7 +60,7 @@ impl Environment {
 
     pub(crate) fn get_at_distance(&self, name: &str, distance: i32) -> FelicoResult<InterpreterValue> {
         let environment = self.get_environment_at_distance(name, distance)?;
-        let borrowed = environment.inner.borrow();
+        let borrowed = environment.inner.lock().unwrap();
         if let Some(value) = borrowed.values.get(name) {
             Ok(value.clone())
         } else {
@@ -73,7 +72,7 @@ impl Environment {
         let mut environment = self.clone();
         for _ in 0..distance {
             let cloned = environment.clone();
-            let borrowed = cloned.inner.borrow();
+            let borrowed = cloned.inner.lock().unwrap();
             if let Some(parent) = &borrowed.parent {
                 environment = parent.clone();
             } else {
@@ -85,7 +84,7 @@ impl Environment {
 
     pub(crate) fn assign_at_distance(&self, name: &str, distance: i32, value: InterpreterValue) -> FelicoResult<()> {
         let environment = self.get_environment_at_distance(name, distance)?;
-        let mut borrowed = environment.inner.borrow_mut();
+        let mut borrowed = environment.inner.lock().unwrap();
         if let Some(slot) = borrowed.values.get_mut(name) {
             *slot = value;
             Ok(())
@@ -97,7 +96,7 @@ impl Environment {
 
     pub fn child_environment(&self)-> Self {
         Self {
-            inner: Rc::new(RefCell::new(EnvironmentInner {
+            inner: Arc::new(Mutex::new(EnvironmentInner {
                 values: Default::default(),
                 parent: Some(self.clone()),
             })),
@@ -109,7 +108,7 @@ impl Environment {
     }
 
     pub fn exit(&mut self) {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().unwrap();
         let parent = inner.parent.clone();
         std::mem::drop(inner);
         if let Some(parent) = &parent {
