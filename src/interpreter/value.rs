@@ -148,13 +148,13 @@ pub struct Type {
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "〈{}〉", self.inner.name)
+        write!(f, "❬{}❭", self.inner.name)
     }
 }
 
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "〈{}〉", self.inner.name)
+        write!(f, "❬{}❭", self.inner.name)
     }
 }
 

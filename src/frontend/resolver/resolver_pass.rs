@@ -14,7 +14,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 
-struct VariableState {
+struct Symbol {
     declaration_site: Location,
     is_defined: bool,
     ty: Type,
@@ -22,19 +22,19 @@ struct VariableState {
 
 
 struct ResolverPass {
-    scopes: Vec<HashMap<String, VariableState>>,
+    scopes: Vec<HashMap<String, Symbol>>,
 }
 
 impl ResolverPass {
     fn new() -> Self {
-        let mut global_scope: HashMap<String, VariableState> = Default::default();
+        let mut global_scope: HashMap<String, Symbol> = Default::default();
         let location = Location {
             source_file: SourceFileHandle::from_string("native", "native_code"),
             start_byte: 0,
             end_byte: 0,
         };
         for core_definition in get_core_definitions() {
-            global_scope.insert(core_definition.name.to_string(), VariableState {
+            global_scope.insert(core_definition.name.to_string(), Symbol {
                 declaration_site: location.clone(),
                 is_defined: true,
                 ty: core_definition.value.ty.clone(),
@@ -80,7 +80,7 @@ impl ResolverPass {
                         } else {
                             TYPE_UNKNOWN.clone()
                         };
-                        slot.insert(VariableState { declaration_site: let_stmt.name.location.clone(), is_defined: false, ty });
+                        slot.insert(Symbol { declaration_site: let_stmt.name.location.clone(), is_defined: false, ty });
                     }
                 }
                 self.resolve_expr(&mut let_stmt.expression)?;
@@ -102,13 +102,13 @@ impl ResolverPass {
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        slot.insert(VariableState { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: TYPE_FUNCTION.clone() });
+                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: TYPE_FUNCTION.clone() });
                     }
                 }
                 self.scopes.push(Default::default());
                 let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
-                    current_scope.insert(parameter.lexeme().to_string(), VariableState { declaration_site: parameter.location.clone(), is_defined: true, ty: TYPE_UNKNOWN.clone() });
+                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: TYPE_UNKNOWN.clone() });
                 }
                 self.resolve_stmt(&mut fun_stmt.body)?;
                 self.scopes.pop();
@@ -160,31 +160,35 @@ impl ResolverPass {
                 }
             }
             Expr::Variable(var_use) => {
-                let (distance, _ty) = self.get_definition_distance_and_type(&var_use.variable);
-                if distance < 0 {
+                let distance_and_symbol = self.get_definition_distance_and_symbol(&var_use.variable);
+                if let Some((distance, _)) = distance_and_symbol {
+                    var_use.distance = distance;
+                } else {
                     let mut diagnostic = InterpreterDiagnostic::new(&var_use.variable.location.source_file, format!("Variable '{}' is not defined here", var_use.variable.lexeme()));
                     diagnostic.add_primary_label(&var_use.variable.location);
                     return Err(diagnostic.into());
                 }
-                var_use.distance = distance;
             }
             Expr::Assign(assign) => {
                 let destination = &assign.destination;
-                let (distance, destination_type) = self.get_definition_distance_and_type(&destination);
-                if distance < 0 {
+                self.resolve_expr(&mut assign.value)?;
+                let distance_and_symbol = self.get_definition_distance_and_symbol(&destination);
+                if let Some((distance, symbol)) = distance_and_symbol {
+                    assign.distance = distance;
+                    let destination_type = &symbol.ty;
+                    if destination_type != &*TYPE_UNKNOWN {
+                        let expression_type = &assign.value.ty;
+                        if destination_type != &*expression_type {
+                            let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
+                            diagnostic.add_primary_label(&expr.location);
+                            diagnostic.add_label(&symbol.declaration_site, format!("is declared as {} here", destination_type));
+                            return Err(diagnostic.into());
+                        }
+                    }
+                } else {
                     let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Variable '{}' is not defined here", destination.lexeme()));
                     diagnostic.add_primary_label(&destination.location);
                     return Err(diagnostic.into());
-                }
-                assign.distance = distance;
-                self.resolve_expr(&mut assign.value)?;
-                if destination_type != *TYPE_UNKNOWN {
-                    let expression_type = &assign.value.ty;
-                    if destination_type != *expression_type {
-                        let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type: {}", expression_type, assign.destination.lexeme(), destination_type));
-                        diagnostic.add_primary_label(&expr.location);
-                        return Err(diagnostic.into());
-                    }
                 }
             }
             Expr::Call(call) => {
@@ -204,22 +208,22 @@ impl ResolverPass {
         Ok(())
     }
 
-    fn current_scope(&mut self) -> &mut HashMap<String, VariableState> {
+    fn current_scope(&mut self) -> &mut HashMap<String, Symbol> {
         self.scopes.iter_mut().last().expect("Scope Stack should not be empty")
     }
 
-    fn get_definition_distance_and_type(&self, variable: &Token) -> (i32, Type) {
+    fn get_definition_distance_and_symbol(&self, variable: &Token) -> Option<(i32, &Symbol)> {
         let name = variable.lexeme();
         let mut distance = -1;
         for scope in self.scopes.iter().rev() {
             distance += 1;
             if let Some(entry) = scope.get(name) {
                 if entry.is_defined {
-                    return (distance, entry.ty.clone());
+                    return Some((distance, entry));
                 }
             }
         }
-        (-1, TYPE_UNKNOWN.clone())
+        None
     }
 }
 
@@ -282,11 +286,20 @@ mod tests {
              1 │ x();
                · ─
                ╰────"#]];
-        assign_wrong_type_to_variable: "fun f() {let x: bool = true;x=3;}" => expect![[r#"
-            × Expression value of type 〈f64〉 cannot be assigned to variable 'x' of type: 〈bool〉
-               ╭─[assign_wrong_type_to_variable:1:29]
-             1 │ fun f() {let x: bool = true;x=3;}
-               ·                             ────
-               ╰────"#]];
+        assign_wrong_type_to_variable: r#"
+        fun f() {
+            let x: bool = true;
+            x=3;
+         }"# => expect![[r#"
+             × Expression value of type ❬f64❭ cannot be assigned to variable 'x' of type ❬bool❭
+                ╭─[assign_wrong_type_to_variable:4:13]
+              2 │         fun f() {
+              3 │             let x: bool = true;
+                ·                 ┬
+                ·                 ╰── is declared as ❬bool❭ here
+              4 │             x=3;
+                ·             ────
+              5 │          }
+                ╰────"#]];
     );
 }
