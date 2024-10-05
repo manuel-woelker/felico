@@ -204,6 +204,7 @@ impl Iterator for Lexer {
                 '.' => TokenType::Dot,
                 '+' => TokenType::Plus,
                 '-' => TokenType::Minus,
+                ':' => TokenType::Colon,
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
                 '!' => if self.matches('=') {
@@ -381,6 +382,11 @@ mod tests {
             Slash      '/' 0+1
             EOF        '' 1+0
         "#]];
+
+        colon: ":" => expect![[r#"
+            Colon      ':' 0+1
+            EOF        '' 1+0
+        "#]];
         slash_slash: "/ /" => expect![[r#"
             Slash      '/' 0+1
             Slash      '/' 2+1
@@ -537,7 +543,7 @@ mod tests {
             EOF        '' 3+0
         "#]];
 
-        keyword_íf: "if" => expect![[r#"
+        keyword_if: "if" => expect![[r#"
             If         'if' 0+2
             EOF        '' 2+0
         "#]];

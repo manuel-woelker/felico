@@ -355,7 +355,7 @@ impl Interpreter {
             Stmt::Expression(expr) => {
                 self.evaluate_expr(&expr.expression)?;
             }
-            Stmt::Var(var) => {
+            Stmt::Let(var) => {
                 let value = self.evaluate_expr(&var.expression)?;
                 self.environment.define(&var.name.lexeme(), value);
             }

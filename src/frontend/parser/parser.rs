@@ -1,7 +1,7 @@
 use crate::frontend::ast::expr::{AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr, VarUse};
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
-use crate::frontend::ast::stmt::{BlockStmt, ExprStmt, FunStmt, IfStmt, ReturnStmt, Stmt, VarStmt, WhileStmt};
+use crate::frontend::ast::stmt::{BlockStmt, ExprStmt, FunStmt, IfStmt, ReturnStmt, Stmt, LetStmt, WhileStmt};
 use crate::frontend::ast::AstData;
 use crate::frontend::lexer::lexer::Lexer;
 use crate::frontend::lexer::token::{Token, TokenType};
@@ -80,11 +80,18 @@ impl Parser {
         self.consume(TokenType::Let, "let expected")?;
         let name = self.current_token.clone();
         self.consume(TokenType::Identifier, "Expected identifier after let")?;
+        let type_expression = if self.is_at(TokenType::Colon) {
+            self.advance();
+            Some(self.parse_primary()?)
+        } else {
+            None
+        };
         self.consume(TokenType::Equal, "Expected '=' in let declaration")?;
         let expression = self.parse_expr()?;
-        self.create_node(start_location, Stmt::Var(VarStmt {
+        self.create_node(start_location, Stmt::Let(LetStmt {
             name,
             expression,
+            type_expression,
         }))
     }
 
@@ -393,6 +400,7 @@ impl Parser {
         result
     }
 
+    #[track_caller]
     fn consume(&mut self, expected_token_type: TokenType, msg: &str) -> FelicoResult<Token> {
         if self.is_at(expected_token_type) {
             let token = self.current_token.clone();
@@ -405,6 +413,7 @@ impl Parser {
         }
     }
 
+    #[track_caller]
     fn create_diagnostic<T, S: Into<String>>(&self, message: S, mut f: impl FnMut(&mut InterpreterDiagnostic) -> ()) -> FelicoResult<T> {
         let mut diagnostic = InterpreterDiagnostic::new(&self.source_file, message.into());
         f(&mut diagnostic);
@@ -773,6 +782,11 @@ mod tests {
                         └── Number(3.0)     [11+1]
                 "#]];
                 program_let_decl: "let a = false;" => expect![[r#"
+                    Program
+                    └── Let ''a' (Identifier)'     [0+14]
+                        └── Bool(false)     [8+5]
+                "#]];
+                program_let_decl_with_type: "let a: bool = false;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)'     [0+14]
                         └── Bool(false)     [8+5]

@@ -104,7 +104,7 @@ impl<'a> AstPrinter<'a> {
                 tree.push(self.expr_to_tree(&return_stmt.expression));
                 tree
             }
-            Stmt::Var(var) => {
+            Stmt::Let(var) => {
                 let mut tree = Tree::new(format!("Let '{}'", var.name));
                 tree.push(self.expr_to_tree(&var.expression));
                 tree

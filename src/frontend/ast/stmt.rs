@@ -8,7 +8,7 @@ use crate::frontend::lexer::token::Token;
 pub enum Stmt {
     Return(ReturnStmt),
     Expression(ExprStmt),
-    Var(VarStmt),
+    Let(LetStmt),
     Fun(FunStmt),
     Block(BlockStmt),
     If(IfStmt),
@@ -29,9 +29,10 @@ pub struct ExprStmt {
 }
 
 #[derive(Debug, Clone)]
-pub struct VarStmt {
+pub struct LetStmt {
     pub name: Token,
     pub expression: AstNode<Expr>,
+    pub type_expression: Option<AstNode<Expr>>,
 }
 
 #[derive(Debug, Clone)]

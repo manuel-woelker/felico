@@ -2,7 +2,7 @@ use crate::frontend::ast::expr::Expr;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
-use crate::frontend::ast::stmt::Stmt::Var;
+use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::lexer::token::Token;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::FelicoResult;
@@ -55,7 +55,7 @@ impl ResolverPass {
 
     fn resolve_stmt(&mut self, stmt: &mut AstNode<Stmt>) -> FelicoResult<()> {
         match stmt.data.deref_mut() {
-            Var(var_stmt) => {
+            Let(var_stmt) => {
                 let name = var_stmt.name.lexeme();
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
