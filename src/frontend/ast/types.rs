@@ -39,16 +39,30 @@ impl Type {
         Self::new(name, TypeKind::Primitive(primitive_type))
     }
 
+    pub fn tuple(name: &str, components: Vec<Type>) -> Self {
+        Self::new(name, TypeKind::Tuple(components))
+    }
+
+    pub fn function(name: &str /*, arguments: Vec<Type>, return_value: Vec<Type>*/) -> Self {
+        Self::new(name, TypeKind::Function)
+    }
+
+    pub fn ty() -> Self {
+        Self::new("Type", TypeKind::Type)
+    }
+
     pub fn name(&self) -> &SharedString {
         &self.inner.name
     }
 }
 
-impl PartialEq for Type {
-    fn eq(&self, other: &Type) -> bool {
+impl PartialEq<Self> for Type {
+    fn eq(&self, other: &Self) -> bool {
         self.inner.kind == other.inner.kind
     }
 }
+
+impl Eq for Type {}
 
 #[derive(Debug)]
 pub struct TypeInner {
@@ -60,12 +74,14 @@ pub struct TypeInner {
 pub enum TypeKind {
     Unknown,
     Primitive(PrimitiveType),
+    Tuple(Vec<Type>),
+    Type,
+    Function,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PrimitiveType {
     Bool,
-    Unit,
     F64,
     String,
 }

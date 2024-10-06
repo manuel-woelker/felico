@@ -42,11 +42,11 @@ impl TypeFactory {
         Self {
             inner: Rc::new(TypeFactoryInner {
                 bool: Type::primitive("bool", PrimitiveType::Bool),
-                unit: Type::primitive("()", PrimitiveType::Unit),
+                unit: Type::tuple("()", vec![]),
                 f64: Type::primitive("f64", PrimitiveType::F64),
                 string: Type::primitive("string", PrimitiveType::String),
-                function: Type::primitive("FUNCTION", PrimitiveType::Unit),
-                ty: Type::primitive("Type", PrimitiveType::Unit),
+                function: Type::function("FUNCTION"),
+                ty: Type::ty(),
                 unknown: Type::new("unknown", TypeKind::Unknown),
             }),
         }
