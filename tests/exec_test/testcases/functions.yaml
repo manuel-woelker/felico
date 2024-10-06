@@ -9,7 +9,7 @@ testcases:
 
   - name: function
     input: |-
-      fun printTwice(a) {
+      fun printTwice(a: f64) {
         debug_print(a);
         debug_print(a);
       }
@@ -31,7 +31,7 @@ testcases:
       fun p() {
         debug_print(1);
       }
-      fun x(a) {
+      fun x(a: f64) {
         a();
       }
       x(p);
@@ -52,7 +52,7 @@ testcases:
 
   - name: recursive fibonacci
     input: |-
-      fun fib(n) {
+      fun fib(n: f64) {
            if (n <= 1) return n;
            return fib(n - 2) + fib(n - 1);
       }

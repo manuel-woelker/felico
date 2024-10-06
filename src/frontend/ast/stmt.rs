@@ -35,9 +35,24 @@ pub struct LetStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct FunParameter {
+    pub name: Token,
+    pub type_expression: AstNode<Expr>,
+}
+
+impl FunParameter {
+    pub fn new(name: Token, type_expression: AstNode<Expr>) -> Self {
+        Self {
+            name,
+            type_expression,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FunStmt {
     pub name: Token,
-    pub parameters: Vec<Token>,
+    pub parameters: Vec<FunParameter>,
     pub body: AstNode<Stmt>,
 }
 

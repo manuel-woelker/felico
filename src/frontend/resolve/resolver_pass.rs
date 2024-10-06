@@ -146,9 +146,9 @@ impl ResolverPass {
                 let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
                     current_scope.insert(
-                        parameter.lexeme().to_string(),
+                        parameter.name.lexeme().to_string(),
                         Symbol {
-                            declaration_site: parameter.location.clone(),
+                            declaration_site: parameter.name.location.clone(),
                             is_defined: true,
                             ty: type_factory.unknown(),
                             value: None,

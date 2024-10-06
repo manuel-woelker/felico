@@ -349,8 +349,8 @@ impl Interpreter {
                                 .parameters
                                 .iter()
                                 .zip(arguments)
-                                .for_each(|(name, value)| {
-                                    self.environment.define(name.lexeme(), value);
+                                .for_each(|(parameter, value)| {
+                                    self.environment.define(parameter.name.lexeme(), value);
                                 });
                             let result = self.evaluate_stmt(&defined_function.fun_stmt.body)?;
                             self.environment = old_environment;
@@ -547,7 +547,7 @@ mod tests {
 
     test_eval_program!(
         program_fib: "
-            fun fib(n) {
+            fun fib(n: f64) {
                  if (n <= 1) return n;
                  return fib(n - 2) + fib(n - 1);
             }
@@ -593,10 +593,10 @@ mod tests {
              1 │ sqrt();
                · ────
                ╰────"#]];
-        call_wrong_arity_defined: "fun foo(a) {}\ndebug_print(3);\nfoo();" => expect![[r#"
+        call_wrong_arity_defined: "fun foo(a: bool) {}\ndebug_print(3);\nfoo();" => expect![[r#"
             × Wrong number of arguments in function call 'foo' - Expected: 1, got: 0 instead
                ╭─[call_wrong_arity_defined:3:1]
-             1 │ fun foo(a) {}
+             1 │ fun foo(a: bool) {}
                ·     ─┬─
                ·      ╰── 'foo' defined here
              2 │ debug_print(3);

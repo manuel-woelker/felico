@@ -141,10 +141,15 @@ impl<'a> AstPrinterWorker<'a> {
                     fun.name.lexeme(),
                     fun.parameters
                         .iter()
-                        .map(|p| p.lexeme())
+                        .map(|p| p.name.lexeme())
                         .collect::<Vec<&str>>()
                         .join(",")
                 ));
+                for parameter in &fun.parameters {
+                    let mut paramtree = Tree::new(format!("Param {}", parameter.name.lexeme()));
+                    paramtree.push(self.expr_to_tree(&parameter.type_expression));
+                    tree.push(paramtree);
+                }
                 tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
                 tree
             }

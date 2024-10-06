@@ -4,7 +4,7 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
-    BlockStmt, ExprStmt, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, WhileStmt,
+    BlockStmt, ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -93,7 +93,7 @@ impl Parser {
         self.consume(TokenType::Identifier, "Expected identifier after let")?;
         let type_expression = if self.is_at(TokenType::Colon) {
             self.advance();
-            Some(self.parse_primary()?)
+            Some(self.parse_type_expression()?)
         } else {
             None
         };
@@ -120,8 +120,11 @@ impl Parser {
                 if parameters.len() > 255 {
                     bail!("Too many parameters");
                 }
-                parameters
-                    .push(self.consume(TokenType::Identifier, "Expected parameter identifier")?);
+                let parameter_name =
+                    self.consume(TokenType::Identifier, "Expected parameter identifier")?;
+                self.consume(TokenType::Colon, "Expected ':' after parameter name")?;
+                let type_expression = self.parse_type_expression()?;
+                parameters.push(FunParameter::new(parameter_name, type_expression));
                 if self.current_token.token_type != TokenType::Comma {
                     break;
                 }
@@ -443,6 +446,10 @@ impl Parser {
             )?
         }
         Ok(expr)
+    }
+
+    fn parse_type_expression(&mut self) -> FelicoResult<AstNode<Expr>> {
+        self.parse_primary()
     }
 
     fn parse_primary(&mut self) -> FelicoResult<AstNode<Expr>> {
@@ -985,10 +992,12 @@ mod tests {
                    Program
                    └── Declare fun 'foo()'     [0+12]
                "#]];
-               program_fun_simple: "fun foo(a) {a;} " => expect![[r#"
+               program_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'foo(a)'     [0+16]
-                       └── Read 'a'     [12+1]     [12+2]
+                   └── Declare fun 'foo(a)'     [0+22]
+                       ├── Param a
+                       │   └── Read 'bool'     [11+4]
+                       └── Read 'a'     [18+1]     [18+2]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
@@ -996,19 +1005,23 @@ mod tests {
                        └── Return     [11+8]
                            └── Unit     [11+7]
                "#]];
-               program_fun_return_value: "fun three(a) {return 3;} " => expect![[r#"
+               program_fun_return_value: "fun three(a: bool) {return 3;} " => expect![[r#"
                    Program
-                   └── Declare fun 'three(a)'     [0+25]
-                       └── Return     [14+10]
-                           └── Number(3.0)     [21+1]
+                   └── Declare fun 'three(a)'     [0+31]
+                       ├── Param a
+                       │   └── Read 'bool'     [13+4]
+                       └── Return     [20+10]
+                           └── Number(3.0)     [27+1]
                "#]];
-               program_fun_return_expression: "fun twice(a) {return a+a;} " => expect![[r#"
+               program_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'twice(a)'     [0+27]
-                       └── Return     [14+12]
-                           └── +     [21+4]
-                               ├── Read 'a'     [21+1]
-                               └── Read 'a'     [23+1]
+                   └── Declare fun 'twice(a)'     [0+32]
+                       ├── Param a
+                       │   └── Read 'f64'     [13+3]
+                       └── Return     [19+12]
+                           └── +     [26+4]
+                               ├── Read 'a'     [26+1]
+                               └── Read 'a'     [28+1]
                "#]];
                program_property_access: "a.b;" => expect![[r#"
                    Program
