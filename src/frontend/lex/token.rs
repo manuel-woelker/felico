@@ -79,7 +79,7 @@ impl Display for Token {
 impl Token {
     pub fn lexeme(&self) -> &str {
         if let Some(value) = &self.value {
-            &value
+            value
         } else {
             let location = &self.location;
             &self.location.source_file.source_code()

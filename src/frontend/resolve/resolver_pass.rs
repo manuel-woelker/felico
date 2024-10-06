@@ -5,6 +5,7 @@ use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::ast::types::Type;
 use crate::frontend::lex::token::Token;
+use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
@@ -25,6 +26,7 @@ struct Symbol {
 struct ResolverPass {
     scopes: Vec<HashMap<String, Symbol>>,
     type_factory: TypeFactory,
+    type_checker: TypeChecker,
 }
 
 impl ResolverPass {
@@ -49,6 +51,7 @@ impl ResolverPass {
         ResolverPass {
             scopes: vec![global_scope, Default::default()],
             type_factory,
+            type_checker: TypeChecker::new(),
         }
     }
     pub(crate) fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
@@ -68,13 +71,21 @@ impl ResolverPass {
             Let(let_stmt) => {
                 let name = let_stmt.name.lexeme();
                 self.resolve_expr(&mut let_stmt.expression)?;
-                let ty = if let Some(expr) = &let_stmt.type_expression {
-                    let ty = self.resolve_type(expr)?;
-                    ty.clone()
+                let expression_type = &let_stmt.expression.ty;
+                let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
+                    self.resolve_type(&type_expr)?
                 } else {
                     let_stmt.expression.ty.clone()
                 };
-                stmt.ty = ty.clone();
+                if !self
+                    .type_checker
+                    .is_assignable_to(&expression_type, &variable_type)
+                {
+                    let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
+                    diagnostic.add_primary_label(&stmt.location);
+                    return Err(diagnostic.into());
+                }
+                stmt.ty = variable_type.clone();
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
                         let mut diagnostic = InterpreterDiagnostic::new(
@@ -90,7 +101,7 @@ impl ResolverPass {
                         slot.insert(Symbol {
                             declaration_site: let_stmt.name.location.clone(),
                             is_defined: false,
-                            ty,
+                            ty: variable_type,
                             value: None,
                         });
                     }
@@ -242,7 +253,10 @@ impl ResolverPass {
 
                     if !destination_type.is_unknown() {
                         let expression_type = &assign.value.ty;
-                        if destination_type != expression_type {
+                        if !self
+                            .type_checker
+                            .is_assignable_to(expression_type, destination_type)
+                        {
                             let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
                             diagnostic.add_primary_label(&expr.location);
                             diagnostic.add_label(
@@ -472,6 +486,17 @@ mod tests {
               4 │             x=3;
                 ·             ────
               5 │          }
+                ╰────"#]];
+        initialize_variable_with_wrong_type: r#"
+        fun f() {
+            let x: bool = 3;
+         }"# => expect![[r#"
+             × Expression value of type ❬f64❭ cannot be assigned to variable 'x' declared to be type ❬bool❭
+                ╭─[initialize_variable_with_wrong_type:3:13]
+              2 │         fun f() {
+              3 │             let x: bool = 3;
+                ·             ────────────────
+              4 │          }
                 ╰────"#]];
 
     );

@@ -11,6 +11,9 @@ impl Type {
     pub fn is_unknown(&self) -> bool {
         matches!(self.inner.kind, TypeKind::Unknown)
     }
+    pub fn kind(&self) -> &TypeKind {
+        &self.inner.kind
+    }
 }
 
 impl Debug for Type {
@@ -78,6 +81,7 @@ pub struct TypeInner {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TypeKind {
+    Any, // Top Kind, should only be used for debug_print()
     Unknown,
     Primitive(PrimitiveType),
     Tuple(Vec<Type>),
