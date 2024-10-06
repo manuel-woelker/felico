@@ -2,7 +2,8 @@ use crate::infra::result::{bail, FelicoResult};
 use crate::interpret::value::InterpreterValue;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::sync::Mutex;
 
 pub struct EnvironmentInner {
     values: HashMap<String, InterpreterValue>,
@@ -11,7 +12,7 @@ pub struct EnvironmentInner {
 
 #[derive(Clone)]
 pub struct Environment {
-    inner: Arc<Mutex<EnvironmentInner>>,
+    inner: Rc<Mutex<EnvironmentInner>>,
 }
 
 impl Debug for Environment {
@@ -26,7 +27,7 @@ impl Debug for Environment {
 impl Environment {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(EnvironmentInner {
+            inner: Rc::new(Mutex::new(EnvironmentInner {
                 values: Default::default(),
                 parent: None,
             })),
@@ -120,7 +121,7 @@ impl Environment {
 
     pub fn child_environment(&self) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(EnvironmentInner {
+            inner: Rc::new(Mutex::new(EnvironmentInner {
                 values: Default::default(),
                 parent: Some(self.clone()),
             })),
