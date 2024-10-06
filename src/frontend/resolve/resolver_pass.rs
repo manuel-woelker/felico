@@ -288,12 +288,45 @@ pub fn resolve_variables(
 
 #[cfg(test)]
 mod tests {
+    use crate::frontend::ast::print_ast::AstPrinter;
     use crate::frontend::parse::parser::Parser;
     use crate::frontend::resolve::resolver_pass::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::interpret::core_definitions::TypeFactory;
     use expect_test::{expect, Expect};
 
+    fn test_resolve_program(name: &str, input: &str, expected: Expect) {
+        let type_factory = &TypeFactory::new();
+        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let mut program = parser.parse_program().unwrap();
+        resolve_variables(&mut program, type_factory).unwrap();
+        let printed_ast = AstPrinter::new()
+            .with_locations(false)
+            .with_types(true)
+            .print(&program)
+            .unwrap();
+
+        expected.assert_eq(&printed_ast);
+    }
+
+    macro_rules! test_program {
+    ( $($label:ident: $input:expr => $expect:expr;)+ ) => {
+        $(
+            #[test]
+            fn $label() {
+                test_resolve_program(stringify!($label), $input, $expect);
+            }
+        )*
+        }
+    }
+
+    test_program!(
+                program_empty: "let a = 3;" => expect![[r#"
+                    Program
+                    └── Let ''a' (Identifier)': ❬unknown❭
+                        └── Number(3.0): ❬f64❭
+                "#]];
+    );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
@@ -358,5 +391,6 @@ mod tests {
                 ·             ────
               5 │          }
                 ╰────"#]];
+
     );
 }

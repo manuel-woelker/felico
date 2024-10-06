@@ -7,34 +7,66 @@ use crate::infra::result::FelicoResult;
 use std::io::{BufWriter, Cursor, Write};
 use termtree::Tree;
 
-pub fn print_expr_ast(ast: &AstNode<Expr>, write: &mut dyn Write) -> FelicoResult<()> {
-    let mut ast_printer = AstPrinter {
-        write: BufWriter::new(write),
-        include_locations: true,
-    };
-    ast_printer.print_expr(ast)
+pub struct AstPrinter {
+    print_locations: bool,
+    print_types: bool,
 }
 
-pub fn print_program_ast(ast: &AstNode<Program>, write: &mut dyn Write) -> FelicoResult<()> {
-    let mut ast_printer = AstPrinter {
-        write: BufWriter::new(write),
-        include_locations: true,
-    };
-    ast_printer.print_program(ast)
+impl AstPrinter {
+    pub fn new() -> Self {
+        Self {
+            print_locations: true,
+            print_types: false,
+        }
+    }
+
+    pub fn with_types(mut self, on: bool) -> Self {
+        self.print_types = on;
+        self
+    }
+
+    pub fn with_locations(mut self, on: bool) -> Self {
+        self.print_locations = on;
+        self
+    }
+
+    fn using_worker(
+        &self,
+        print_fn: impl FnOnce(&mut AstPrinterWorker) -> FelicoResult<()>,
+    ) -> FelicoResult<String> {
+        let mut buffer = Cursor::new(Vec::<u8>::new());
+        {
+            let mut worker = AstPrinterWorker {
+                write: BufWriter::new(&mut buffer),
+                print_locations: self.print_locations,
+                print_types: self.print_types,
+            };
+            print_fn(&mut worker)?;
+        }
+        let printed_ast = String::from_utf8(buffer.into_inner()).unwrap();
+        Ok(printed_ast)
+    }
+
+    pub fn print(&self, ast: &AstNode<Program>) -> FelicoResult<String> {
+        self.using_worker(|worker| worker.print_program(ast))
+    }
+
+    pub fn print_expr(&self, ast: &AstNode<Expr>) -> FelicoResult<String> {
+        self.using_worker(|worker| worker.print_expr(ast))
+    }
 }
 
 pub fn ast_to_string(ast: &AstNode<Program>) -> FelicoResult<String> {
-    let mut buffer = Cursor::new(Vec::<u8>::new());
-    print_program_ast(ast, &mut buffer)?;
-    Ok(String::from_utf8(buffer.into_inner()).unwrap())
+    AstPrinter::new().print(ast)
 }
 
-struct AstPrinter<'a> {
+struct AstPrinterWorker<'a> {
     write: BufWriter<&'a mut dyn Write>,
-    include_locations: bool,
+    print_locations: bool,
+    print_types: bool,
 }
 
-impl<'a> AstPrinter<'a> {
+impl<'a> AstPrinterWorker<'a> {
     fn print_expr(&mut self, ast: &AstNode<Expr>) -> FelicoResult<()> {
         let tree = self.expr_to_tree(ast);
         write!(self.write, "{}", tree)?;
@@ -151,13 +183,16 @@ impl<'a> AstPrinter<'a> {
     }
 
     fn add_location<T: AstData>(&self, mut tree: Tree<String>, ast: &AstNode<T>) -> Tree<String> {
-        if self.include_locations {
+        if self.print_locations {
             let location = &ast.location;
             tree.root += &format!(
                 "     [{}+{}]",
                 location.start_byte,
                 location.end_byte - location.start_byte
             )
+        }
+        if self.print_types {
+            tree.root += &format!(": {}", ast.ty)
         }
         tree
     }

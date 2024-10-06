@@ -625,17 +625,15 @@ pub fn parse_program(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::frontend::ast::print_ast::{print_expr_ast, print_program_ast};
+    use crate::frontend::ast::print_ast::{ast_to_string, AstPrinter};
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use expect_test::{expect, Expect};
-    use std::io::Cursor;
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
         let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
         let expr = parser.parse_expression().unwrap();
-        let mut buffer = Cursor::new(Vec::<u8>::new());
-        print_expr_ast(&expr, &mut buffer).unwrap();
-        let printed_ast = String::from_utf8(buffer.into_inner()).unwrap();
+        AstPrinter::new().print_expr(&expr).unwrap();
+        let printed_ast = AstPrinter::new().print_expr(&expr).unwrap();
         expected.assert_eq(&printed_ast);
     }
 
@@ -850,9 +848,7 @@ mod tests {
     fn test_parse_program(name: &str, input: &str, expected: Expect) {
         let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
         let program = parser.parse_program().unwrap();
-        let mut buffer = Cursor::new(Vec::<u8>::new());
-        print_program_ast(&program, &mut buffer).unwrap();
-        let printed_ast = String::from_utf8(buffer.into_inner()).unwrap();
+        let printed_ast = ast_to_string(&program).unwrap();
 
         expected.assert_eq(&printed_ast);
     }
