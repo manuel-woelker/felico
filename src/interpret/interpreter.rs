@@ -586,33 +586,30 @@ mod tests {
     }
 
     test_interpret_error!(
-        naked_if_condition: "debug_print(3+true);" => expect![[r#"
+        invalid_addition: "debug_print(3+true);" => expect![[r#"
             × Operator Plus not defined for values F64(3.0) and Bool(true)
-               ╭─[naked_if_condition:1:13]
+               ╭─[invalid_addition:1:13]
              1 │ debug_print(3+true);
                ·             ───────
                ╰────"#]];
         call_uncallable: "true();" => expect![[r#"
-            × Expression 'Bool(true)' is not callable
+            × Expected a function to call, but instead found type ❬bool❭
                ╭─[call_uncallable:1:1]
              1 │ true();
                · ────
                ╰────"#]];
         call_wrong_arity: "sqrt();" => expect![[r#"
-            × Wrong number of arguments in function call 'sqrt' - Expected: 1, got: 0 instead
-               ╭─[call_wrong_arity:1:1]
+            × Wrong number of arguments in call - expected: 1, actual 0
+               ╭─[call_wrong_arity:1:5]
              1 │ sqrt();
-               · ────
+               ·     ───
                ╰────"#]];
         call_wrong_arity_defined: "fun foo(a: bool) {}\ndebug_print(3);\nfoo();" => expect![[r#"
-            × Wrong number of arguments in function call 'foo' - Expected: 1, got: 0 instead
-               ╭─[call_wrong_arity_defined:3:1]
-             1 │ fun foo(a: bool) {}
-               ·     ─┬─
-               ·      ╰── 'foo' defined here
+            × Wrong number of arguments in call - expected: 1, actual 0
+               ╭─[call_wrong_arity_defined:3:4]
              2 │ debug_print(3);
              3 │ foo();
-               · ───
+               ·    ───
                ╰────"#]];
         wrong_string_operator: "\"foo\" * 3;" => expect![[r#"
             × Unsupported binary operator for string: *
@@ -663,10 +660,10 @@ mod tests {
                ·      ─
                ╰────"#]];
         sqrt_true: "sqrt(true);" => expect![[r#"
-            × Error in native call to sqrt(): Expected number as argument to sqrt
-               ╭─[sqrt_true:1:1]
+            × Cannot coerce argument of type ❬bool❭ as parameter of type ❬f64❭ in function invocation
+               ╭─[sqrt_true:1:6]
              1 │ sqrt(true);
-               · ────
+               ·      ────
                ╰────"#]];
         endless_loop: "while(true) {}" => expect![[r#"
             × Out of fuel! Execution took to many loops/function calls.

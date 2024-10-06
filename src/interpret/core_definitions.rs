@@ -119,7 +119,10 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                 }
                 Ok(value_factory_clone.unit())
             },
-            type_factory.function(vec![type_factory.f64()], type_factory.unit()),
+            type_factory.function(
+                vec![Type::new("any".to_string(), TypeKind::Any)],
+                type_factory.unit(),
+            ),
         ),
     );
     core_definitions

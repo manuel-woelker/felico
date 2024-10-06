@@ -3,7 +3,7 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::types::Type;
+use crate::frontend::ast::types::{Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
@@ -145,14 +145,14 @@ impl ResolverPass {
                     }
                 }
                 self.scopes.push(Default::default());
-                let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
-                    current_scope.insert(
+                    let ty = self.resolve_type(&parameter.type_expression)?.clone();
+                    self.current_scope().insert(
                         parameter.name.lexeme().to_string(),
                         Symbol {
                             declaration_site: parameter.name.location.clone(),
                             is_defined: true,
-                            ty: type_factory.unknown(),
+                            ty,
                             value: None,
                         },
                     );
@@ -280,6 +280,39 @@ impl ResolverPass {
                 for arg in &mut call.arguments {
                     self.resolve_expr(arg)?
                 }
+                let TypeKind::Function(function_type) = call.callee.ty.kind() else {
+                    return self.fail_fast(
+                        &call.callee.location,
+                        format!(
+                            "Expected a function to call, but instead found type {}",
+                            call.callee.ty
+                        ),
+                    );
+                };
+                if function_type.parameter_types.len() != call.arguments.len() {
+                    return self.fail_fast(
+                        &expr.location,
+                        format!(
+                            "Wrong number of arguments in call - expected: {}, actual {}",
+                            function_type.parameter_types.len(),
+                            call.arguments.len()
+                        ),
+                    );
+                }
+                for (parameter, argument) in
+                    function_type.parameter_types.iter().zip(&call.arguments)
+                {
+                    if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
+                        return self.fail_fast(
+                            &argument.location,
+                            format!(
+                                "Cannot coerce argument of type {} as parameter of type {} in function invocation",
+                                argument.ty, parameter,
+                            ),
+                        );
+                    }
+                }
+                expr.ty = function_type.return_type.clone();
             }
             Expr::Tuple(tuple) => {
                 let mut component_types = Vec::<Type>::new();
@@ -319,6 +352,12 @@ impl ResolverPass {
             }
         }
         None
+    }
+
+    fn fail_fast<T, S: Into<String>>(&self, location: &Location, message: S) -> FelicoResult<T> {
+        let mut diagnostic = InterpreterDiagnostic::new(&location.source_file, message.into());
+        diagnostic.add_primary_label(location);
+        Err(diagnostic.into())
     }
 }
 
@@ -411,6 +450,12 @@ mod tests {
                         ├── F64(3.0): ❬f64❭
                         └── Bool(true): ❬bool❭
                 "#]];
+                call_type_native: "sqrt(3);" => expect![[r#"
+                    Program
+                    └── Call: ❬f64❭
+                        ├── Read 'sqrt': ❬Fn(❬f64❭)❬f64❭❭
+                        └── F64(3.0): ❬f64❭
+                "#]];
                 function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
                     Program
                     ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
@@ -421,6 +466,20 @@ mod tests {
                     │   └── Return type: Read 'f64'
                     └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
                         └── Read 'x': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
+                "#]];
+                function_arg_type: "fun x(a: bool, b: i64) -> f64 {
+                    a;
+                    b;
+                }" => expect![[r#"
+                    Program
+                    └── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
+                        ├── Param a
+                        │   └── Read 'bool'
+                        ├── Param b
+                        │   └── Read 'i64'
+                        ├── Return type: Read 'f64'
+                        ├── Read 'a': ❬bool❭
+                        └── Read 'b': ❬i64❭
                 "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
@@ -498,6 +557,36 @@ mod tests {
                 ·             ────────────────
               4 │          }
                 ╰────"#]];
+        call_a_non_function: r#"
+        true();
+        "# => expect![[r#"
+            × Expected a function to call, but instead found type ❬bool❭
+               ╭─[call_a_non_function:2:9]
+             1 │ 
+             2 │         true();
+               ·         ────
+             3 │         
+               ╰────"#]];
+        call_wrong_number_of_arguments: r#"
+        sqrt(1,2);
+        "# => expect![[r#"
+            × Wrong number of arguments in call - expected: 1, actual 2
+               ╭─[call_wrong_number_of_arguments:2:13]
+             1 │ 
+             2 │         sqrt(1,2);
+               ·             ──────
+             3 │         
+               ╰────"#]];
 
+        call_with_wrong_argument: r#"
+        sqrt(true);
+        "# => expect![[r#"
+            × Cannot coerce argument of type ❬bool❭ as parameter of type ❬f64❭ in function invocation
+               ╭─[call_with_wrong_argument:2:14]
+             1 │ 
+             2 │         sqrt(true);
+               ·              ────
+             3 │         
+               ╰────"#]];
     );
 }
