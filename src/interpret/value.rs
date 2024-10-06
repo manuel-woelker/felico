@@ -51,10 +51,10 @@ impl ValueFactory {
             ty: self.type_factory.unit(),
         }
     }
-    pub fn callable(&self, callable: Callable) -> InterpreterValue {
+    pub fn callable(&self, callable: Callable, ty: Type) -> InterpreterValue {
         InterpreterValue {
             val: ValueKind::Callable(callable),
-            ty: self.type_factory.function(),
+            ty,
         }
     }
 
@@ -78,12 +78,16 @@ impl ValueFactory {
         arity: usize,
         fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>
             + 'static,
+        ty: Type,
     ) -> InterpreterValue {
-        self.callable(Callable {
-            name: name.to_string(),
-            arity,
-            fun: Rc::new(CallableFun::Native(Box::new(fun))),
-        })
+        self.callable(
+            Callable {
+                name: name.to_string(),
+                arity,
+                fun: Rc::new(CallableFun::Native(Box::new(fun))),
+            },
+            ty,
+        )
     }
 }
 

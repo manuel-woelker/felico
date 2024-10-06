@@ -35,7 +35,7 @@ struct TypeFactoryInner {
 
 }
 
-factory_fns!(bool, unit, i64, f64, function, ty, str, unknown);
+factory_fns!(bool, unit, i64, f64, ty, str, unknown);
 
 impl TypeFactory {
     pub fn new() -> Self {
@@ -46,11 +46,14 @@ impl TypeFactory {
                 f64: Type::primitive("f64", PrimitiveType::F64),
                 i64: Type::primitive("i64", PrimitiveType::I64),
                 str: Type::primitive("str", PrimitiveType::Str),
-                function: Type::function("FUNCTION"),
                 ty: Type::ty(),
                 unknown: Type::new("unknown", TypeKind::Unknown),
             }),
         }
+    }
+
+    pub fn function(&self, name: &str, parameter_types: Vec<Type>, return_type: Type) -> Type {
+        Type::function(name, parameter_types, return_type)
     }
 }
 
@@ -68,26 +71,45 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
     add_definition("i64", value_factory.new_type(type_factory.i64()));
     add_definition("f64", value_factory.new_type(type_factory.f64()));
     add_definition("str", value_factory.new_type(type_factory.str()));
+    add_definition("unit", value_factory.new_type(type_factory.unit()));
     let value_factory_clone = value_factory.clone();
     add_definition(
         "sqrt",
-        value_factory.new_native_callable("sqrt", 1, move |_interpreter, arguments| {
-            if let ValueKind::F64(arg) = arguments[0].val {
-                Ok(value_factory_clone.f64(arg.sqrt()))
-            } else {
-                bail!("Expected number as argument to sqrt")
-            }
-        }),
+        value_factory.new_native_callable(
+            "sqrt",
+            1,
+            move |_interpreter, arguments| {
+                if let ValueKind::F64(arg) = arguments[0].val {
+                    Ok(value_factory_clone.f64(arg.sqrt()))
+                } else {
+                    bail!("Expected number as argument to sqrt")
+                }
+            },
+            type_factory.function(
+                "sqrt(f64) -> f64",
+                vec![type_factory.f64()],
+                type_factory.f64(),
+            ),
+        ),
     );
     let value_factory_clone = value_factory.clone();
     add_definition(
         "debug_print",
-        value_factory.new_native_callable("debug_print", 1, move |interpreter, arguments| {
-            for argument in &arguments {
-                interpreter.print(argument);
-            }
-            Ok(value_factory_clone.unit())
-        }),
+        value_factory.new_native_callable(
+            "debug_print",
+            1,
+            move |interpreter, arguments| {
+                for argument in &arguments {
+                    interpreter.print(argument);
+                }
+                Ok(value_factory_clone.unit())
+            },
+            type_factory.function(
+                "debug_print(any)",
+                vec![type_factory.f64()],
+                type_factory.unit(),
+            ),
+        ),
     );
     core_definitions
 }

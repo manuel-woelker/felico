@@ -43,8 +43,14 @@ impl Type {
         Self::new(name, TypeKind::Tuple(components))
     }
 
-    pub fn function(name: &str /*, arguments: Vec<Type>, return_value: Vec<Type>*/) -> Self {
-        Self::new(name, TypeKind::Function)
+    pub fn function(name: &str, parameter_types: Vec<Type>, return_type: Type) -> Self {
+        Self::new(
+            name,
+            TypeKind::Function(FunctionType {
+                parameter_types,
+                return_type,
+            }),
+        )
     }
 
     pub fn ty() -> Self {
@@ -76,9 +82,14 @@ pub enum TypeKind {
     Primitive(PrimitiveType),
     Tuple(Vec<Type>),
     Type,
-    Function,
+    Function(FunctionType),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct FunctionType {
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
+}
 #[derive(Debug, Eq, PartialEq)]
 pub enum PrimitiveType {
     Bool,

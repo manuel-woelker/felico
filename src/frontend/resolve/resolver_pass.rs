@@ -69,24 +69,7 @@ impl ResolverPass {
                 let name = let_stmt.name.lexeme();
                 self.resolve_expr(&mut let_stmt.expression)?;
                 let ty = if let Some(expr) = &let_stmt.type_expression {
-                    // TODO: make bails into diagnostics
-                    let Expr::Variable(type_id) = &*expr.data else {
-                        bail!("Unsupported expression in type position: {:?}", expr);
-                    };
-                    let distance_and_symbol =
-                        self.get_definition_distance_and_symbol(&type_id.variable);
-                    let Some((_distance, symbol)) = distance_and_symbol else {
-                        bail!("Unknown symbol: {}", type_id.variable.lexeme());
-                    };
-                    let Some(value) = &symbol.value else {
-                        bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
-                    };
-                    let ValueKind::Type(ty) = &value.val else {
-                        bail!(
-                            "Type expression must be a type: {}",
-                            type_id.variable.lexeme()
-                        );
-                    };
+                    let ty = self.resolve_type(expr)?;
                     ty.clone()
                 } else {
                     let_stmt.expression.ty.clone()
@@ -122,6 +105,14 @@ impl ResolverPass {
             }
             Stmt::Fun(fun_stmt) => {
                 let name = fun_stmt.name.lexeme();
+                let return_type = self.resolve_type(&fun_stmt.return_type)?;
+                let parameter_types: Vec<Type> = fun_stmt
+                    .parameters
+                    .iter()
+                    .map(|parameter| self.resolve_type(&parameter.type_expression))
+                    .collect::<FelicoResult<Vec<_>>>()?;
+                let function_type =
+                    type_factory.function(fun_stmt.name.lexeme(), parameter_types, return_type);
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
                         let mut diagnostic = InterpreterDiagnostic::new(
@@ -134,10 +125,11 @@ impl ResolverPass {
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
+                        stmt.ty = function_type.clone();
                         slot.insert(Symbol {
                             declaration_site: fun_stmt.name.location.clone(),
                             is_defined: true,
-                            ty: type_factory.function(),
+                            ty: function_type,
                             value: None,
                         });
                     }
@@ -177,6 +169,27 @@ impl ResolverPass {
             }
         }
         Ok(())
+    }
+
+    fn resolve_type(&mut self, expr: &AstNode<Expr>) -> FelicoResult<Type> {
+        // TODO: make bails into diagnostics
+        let Expr::Variable(type_id) = &*expr.data else {
+            bail!("Unsupported expression in type position: {:?}", expr);
+        };
+        let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
+        let Some((_distance, symbol)) = distance_and_symbol else {
+            bail!("Unknown symbol: {}", type_id.variable.lexeme());
+        };
+        let Some(value) = &symbol.value else {
+            bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
+        };
+        let ValueKind::Type(ty) = &value.val else {
+            bail!(
+                "Type expression must be a type: {}",
+                type_id.variable.lexeme()
+            );
+        };
+        Ok(ty.clone())
     }
 
     fn resolve_expr(&mut self, expr: &mut AstNode<Expr>) -> FelicoResult<()> {

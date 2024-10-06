@@ -398,7 +398,7 @@ impl Interpreter {
                 self.environment.define(var.name.lexeme(), value);
             }
             Stmt::Fun(fun) => {
-                let callable = self.create_fun_callable(fun);
+                let callable = self.create_fun_callable(fun, stmt);
                 self.environment.define(fun.name.lexeme(), callable);
             }
             Stmt::Block(block) => {
@@ -464,15 +464,18 @@ impl Interpreter {
         Ok(StmtResult::Continue)
     }
 
-    fn create_fun_callable(&mut self, fun: &FunStmt) -> InterpreterValue {
-        let callable = self.value_factory.callable(Callable {
-            name: fun.name.lexeme().to_string(),
-            arity: fun.parameters.len(),
-            fun: Rc::new(CallableFun::Defined(DefinedFunction {
-                fun_stmt: fun.clone(),
-                closure: self.environment.clone(),
-            })),
-        });
+    fn create_fun_callable(&mut self, fun: &FunStmt, stmt: &AstNode<Stmt>) -> InterpreterValue {
+        let callable = self.value_factory.callable(
+            Callable {
+                name: fun.name.lexeme().to_string(),
+                arity: fun.parameters.len(),
+                fun: Rc::new(CallableFun::Defined(DefinedFunction {
+                    fun_stmt: fun.clone(),
+                    closure: self.environment.clone(),
+                })),
+            },
+            stmt.ty.clone(),
+        );
         callable
     }
 
