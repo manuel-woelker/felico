@@ -106,16 +106,17 @@ impl Interpreter {
     fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
         Ok(match expr.data.deref() {
             Expr::Literal(LiteralExpr::Unit) => self.value_factory.unit(),
-            Expr::Literal(LiteralExpr::String(string)) => {
+            Expr::Literal(LiteralExpr::Str(string)) => {
                 self.value_factory.new_string(string.clone())
             }
-            Expr::Literal(LiteralExpr::Number(number)) => self.value_factory.f64(*number),
+            Expr::Literal(LiteralExpr::F64(number)) => self.value_factory.f64(*number),
+            Expr::Literal(LiteralExpr::I64(number)) => self.value_factory.i64(*number),
             Expr::Literal(LiteralExpr::Bool(bool)) => self.value_factory.bool(*bool),
             Expr::Unary(unary) => {
                 let sub_expression = self.evaluate_expr(&unary.right)?;
                 match unary.operator.token_type {
                     TokenType::Minus => match sub_expression.val {
-                        ValueKind::Number(number) => self.value_factory.f64(-number),
+                        ValueKind::F64(number) => self.value_factory.f64(-number),
                         _ => {
                             return self.create_diagnostic(
                                 expr,
@@ -184,7 +185,7 @@ impl Interpreter {
                 };
                 let right_value = self.evaluate_expr(&binary.right)?;
                 match (left_value.val, right_value.val) {
-                    (ValueKind::Number(left), ValueKind::Number(right)) => {
+                    (ValueKind::F64(left), ValueKind::F64(right)) => {
                         match binary.operator.token_type {
                             TokenType::Minus => self.value_factory.f64(left - right),
                             TokenType::Plus => self.value_factory.f64(left + right),
@@ -526,7 +527,7 @@ mod tests {
     }
 
     test_eval_expression!(
-        literal_number_0: "0" => expect!["Number(0.0)"];
+        literal_number_0: "0" => expect!["F64(0.0)"];
     );
 
     fn test_eval_program(name: &str, input: &str, expected: Expect) {
@@ -576,7 +577,7 @@ mod tests {
 
     test_interpret_error!(
         naked_if_condition: "debug_print(3+true);" => expect![[r#"
-            × Operator Plus not defined for values Number(3.0) and Bool(true)
+            × Operator Plus not defined for values F64(3.0) and Bool(true)
                ╭─[naked_if_condition:1:13]
              1 │ debug_print(3+true);
                ·             ───────

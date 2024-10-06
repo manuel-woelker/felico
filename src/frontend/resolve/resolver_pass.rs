@@ -194,8 +194,9 @@ impl ResolverPass {
             }
             Expr::Literal(literal) => {
                 expr.ty = match literal {
-                    LiteralExpr::String(_) => self.type_factory.string(),
-                    LiteralExpr::Number(_) => self.type_factory.f64(),
+                    LiteralExpr::Str(_) => self.type_factory.str(),
+                    LiteralExpr::F64(_) => self.type_factory.f64(),
+                    LiteralExpr::I64(_) => self.type_factory.i64(),
                     LiteralExpr::Bool(_) => self.type_factory.bool(),
                     LiteralExpr::Unit => self.type_factory.unit(),
                 }
@@ -337,34 +338,34 @@ mod tests {
                 let_inferred_type: "let a = 3;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)': ❬f64❭
-                        └── Number(3.0): ❬f64❭
+                        └── F64(3.0): ❬f64❭
                 "#]];
                 let_inferred_type_from_binary_expression: "let a = 1 + 2;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)': ❬f64❭
                         └── +: ❬f64❭
-                            ├── Number(1.0): ❬f64❭
-                            └── Number(2.0): ❬f64❭
+                            ├── F64(1.0): ❬f64❭
+                            └── F64(2.0): ❬f64❭
                 "#]];
                 let_inferred_type_from_unary_expression: "let a = -1;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)': ❬f64❭
                         └── -: ❬f64❭
-                            └── Number(1.0): ❬f64❭
+                            └── F64(1.0): ❬f64❭
                 "#]];
                 let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
                     Program
                     ├── Let ''a' (Identifier)': ❬f64❭
-                    │   └── Number(1.0): ❬f64❭
+                    │   └── F64(1.0): ❬f64❭
                     └── Let ''b' (Identifier)': ❬f64❭
                         └── Read 'a': ❬f64❭
                 "#]];
                 assign_type: "let a = 1;a = 3;" => expect![[r#"
                     Program
                     ├── Let ''a' (Identifier)': ❬f64❭
-                    │   └── Number(1.0): ❬f64❭
+                    │   └── F64(1.0): ❬f64❭
                     └── 'a' (Identifier) = : ❬f64❭
-                        └── Number(3.0): ❬f64❭
+                        └── F64(3.0): ❬f64❭
                 "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {

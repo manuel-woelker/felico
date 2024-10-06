@@ -27,10 +27,18 @@ impl ValueFactory {
 
     pub fn f64(&self, value: f64) -> InterpreterValue {
         InterpreterValue {
-            val: ValueKind::Number(value),
+            val: ValueKind::F64(value),
             ty: self.type_factory.f64(),
         }
     }
+
+    pub fn i64(&self, value: i64) -> InterpreterValue {
+        InterpreterValue {
+            val: ValueKind::I64(value),
+            ty: self.type_factory.i64(),
+        }
+    }
+
     pub fn bool(&self, value: bool) -> InterpreterValue {
         InterpreterValue {
             val: ValueKind::Bool(value),
@@ -60,7 +68,7 @@ impl ValueFactory {
     pub fn new_string(&self, s: String) -> InterpreterValue {
         InterpreterValue {
             val: ValueKind::String(s),
-            ty: self.type_factory.string(),
+            ty: self.type_factory.str(),
         }
     }
 
@@ -84,7 +92,8 @@ pub enum ValueKind {
     Unit,
     String(String),
     Bool(bool),
-    Number(f64),
+    F64(f64),
+    I64(i64),
     Callable(Callable),
     Type(Type),
 }
@@ -113,7 +122,10 @@ impl Display for ValueKind {
                     f.write_str("false")
                 }
             }
-            ValueKind::Number(number) => {
+            ValueKind::F64(number) => {
+                write!(f, "{}", number)
+            }
+            ValueKind::I64(number) => {
                 write!(f, "{}", number)
             }
             ValueKind::Callable(callable) => {

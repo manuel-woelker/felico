@@ -464,12 +464,12 @@ impl Parser {
                             e
                         )
                     })?;
-                    LiteralExpr::Number(number)
+                    LiteralExpr::F64(number)
                 }
                 TokenType::String => {
                     let lexeme = self.current_token.lexeme();
                     let string = lexeme[1..lexeme.len() - 1].to_string();
-                    LiteralExpr::String(string)
+                    LiteralExpr::Str(string)
                 }
                 TokenType::True => LiteralExpr::Bool(true),
                 TokenType::False => LiteralExpr::Bool(false),
@@ -668,19 +668,19 @@ mod tests {
         "#]];
 
         string_empty: "\"\"" => expect![[r#"
-            String("")     [0+2]
+            Str("")     [0+2]
         "#]];
         string_space: "\" \"" => expect![[r#"
-            String(" ")     [0+3]
+            Str(" ")     [0+3]
         "#]];
         string_newline: "\"\n\"" => expect![[r#"
-            String("\n")     [0+3]
+            Str("\n")     [0+3]
         "#]];
         string_foo: "\"foo\"" => expect![[r#"
-            String("foo")     [0+5]
+            Str("foo")     [0+5]
         "#]];
         string_unicode: "\"😶‍🌫️\"" => expect![[r#"
-            String("😶\u{200d}🌫\u{fe0f}")     [0+16]
+            Str("😶\u{200d}🌫\u{fe0f}")     [0+16]
         "#]];
 
         identifier_foo: "foo" => expect![[r#"
@@ -698,113 +698,113 @@ mod tests {
 
 
         number_literal_0: "0" => expect![[r#"
-            Number(0.0)     [0+1]
+            F64(0.0)     [0+1]
         "#]];
         number_literal_123: "123" => expect![[r#"
-            Number(123.0)     [0+3]
+            F64(123.0)     [0+3]
         "#]];
         number_literal_3_141: "3.141" => expect![[r#"
-            Number(3.141)     [0+5]
+            F64(3.141)     [0+5]
         "#]];
         number_literal_minus_1: "-1.0" => expect![[r#"
             -     [0+4]
-            └── Number(1.0)     [1+3]
+            └── F64(1.0)     [1+3]
         "#]];
         expression_equal_equal: "1.0==2.0" => expect![[r#"
             ==     [0+8]
-            ├── Number(1.0)     [0+3]
-            └── Number(2.0)     [5+3]
+            ├── F64(1.0)     [0+3]
+            └── F64(2.0)     [5+3]
         "#]];
         bang_equal_equal: "-1 == - 10" => expect![[r#"
             ==     [0+10]
             ├── -     [0+5]
-            │   └── Number(1.0)     [1+1]
+            │   └── F64(1.0)     [1+1]
             └── -     [6+4]
-                └── Number(10.0)     [8+2]
+                └── F64(10.0)     [8+2]
         "#]];
         expression_less: "1<2" => expect![[r#"
             <     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_less_equal: "1<=2" => expect![[r#"
             <=     [0+4]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [3+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [3+1]
         "#]];
         expression_greater: "1>2" => expect![[r#"
             >     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_greater_equal: "1>=2" => expect![[r#"
             >=     [0+4]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [3+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [3+1]
         "#]];
         expression_precedence: "true == 1>=2" => expect![[r#"
             ==     [0+12]
             ├── Bool(true)     [0+4]
             └── >=     [8+4]
-                ├── Number(1.0)     [8+1]
-                └── Number(2.0)     [11+1]
+                ├── F64(1.0)     [8+1]
+                └── F64(2.0)     [11+1]
         "#]];
         expression_plus: "1+2" => expect![[r#"
             +     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_minus: "1-2" => expect![[r#"
             -     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_times: "1*2" => expect![[r#"
             *     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_division: "1/2" => expect![[r#"
             /     [0+3]
-            ├── Number(1.0)     [0+1]
-            └── Number(2.0)     [2+1]
+            ├── F64(1.0)     [0+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_precedence_math: "4==1+2*-3" => expect![[r#"
             ==     [0+9]
-            ├── Number(4.0)     [0+1]
+            ├── F64(4.0)     [0+1]
             └── +     [3+6]
-                ├── Number(1.0)     [3+1]
+                ├── F64(1.0)     [3+1]
                 └── *     [5+4]
-                    ├── Number(2.0)     [5+1]
+                    ├── F64(2.0)     [5+1]
                     └── -     [7+2]
-                        └── Number(3.0)     [8+1]
+                        └── F64(3.0)     [8+1]
         "#]];
         expression_paren_simple: "(1)" => expect![[r#"
-            Number(1.0)     [1+1]
+            F64(1.0)     [1+1]
         "#]];
         expression_paren_nexted: "((1))" => expect![[r#"
-            Number(1.0)     [2+1]
+            F64(1.0)     [2+1]
         "#]];
         expression_paren_complex: "3*(1+2)" => expect![[r#"
             *     [0+7]
-            ├── Number(3.0)     [0+1]
+            ├── F64(3.0)     [0+1]
             └── +     [3+4]
-                ├── Number(1.0)     [3+1]
-                └── Number(2.0)     [5+1]
+                ├── F64(1.0)     [3+1]
+                └── F64(2.0)     [5+1]
         "#]];
         expression_assign: "a=2" => expect![[r#"
             'a' (Identifier) =      [0+3]
-            └── Number(2.0)     [2+1]
+            └── F64(2.0)     [2+1]
         "#]];
         expression_assign_twice: "a=b=3" => expect![[r#"
             'a' (Identifier) =      [0+5]
             └── 'b' (Identifier) =      [2+3]
-                └── Number(3.0)     [4+1]
+                └── F64(3.0)     [4+1]
         "#]];
         expression_assign_twice2: "a=b=3" => expect![[r#"
             'a' (Identifier) =      [0+5]
             └── 'b' (Identifier) =      [2+3]
-                └── Number(3.0)     [4+1]
+                └── F64(3.0)     [4+1]
         "#]];
         expression_and: "a && b" => expect![[r#"
             &&     [0+6]
@@ -882,13 +882,13 @@ mod tests {
                 program_addition: "1+2;" => expect![[r#"
                     Program
                     └── +     [0+4]     [0+4]
-                        ├── Number(1.0)     [0+1]
-                        └── Number(2.0)     [2+1]
+                        ├── F64(1.0)     [0+1]
+                        └── F64(2.0)     [2+1]
                 "#]];
                 program_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
                     Program
-                    ├── String("Hello")     [0+7]     [0+8]
-                    └── String("World")     [9+7]     [9+8]
+                    ├── Str("Hello")     [0+7]     [0+8]
+                    └── Str("World")     [9+7]     [9+8]
                 "#]];
 
                 program_true: "true;" => expect![[r#"
@@ -898,8 +898,8 @@ mod tests {
                 program_string_addition: "\"Hello \" + 3;" => expect![[r#"
                     Program
                     └── +     [0+13]     [0+13]
-                        ├── String("Hello ")     [0+8]
-                        └── Number(3.0)     [11+1]
+                        ├── Str("Hello ")     [0+8]
+                        └── F64(3.0)     [11+1]
                 "#]];
                 program_let_decl: "let a = false;" => expect![[r#"
                     Program
@@ -914,7 +914,7 @@ mod tests {
                 program_program: "let a = 1;let b = a+a;b;" => expect![[r#"
                     Program
                     ├── Let ''a' (Identifier)'     [0+10]
-                    │   └── Number(1.0)     [8+1]
+                    │   └── F64(1.0)     [8+1]
                     ├── Let ''b' (Identifier)'     [10+12]
                     │   └── +     [18+4]
                     │       ├── Read 'a'     [18+1]
@@ -925,13 +925,13 @@ mod tests {
                 program_assign: "a=1;" => expect![[r#"
                     Program
                     └── 'a' (Identifier) =      [0+4]     [0+4]
-                        └── Number(1.0)     [2+1]
+                        └── F64(1.0)     [2+1]
                 "#]];
                 program_assign_twice2: "a=b=3;" => expect![[r#"
                     Program
                     └── 'a' (Identifier) =      [0+6]     [0+6]
                         └── 'b' (Identifier) =      [2+4]
-                            └── Number(3.0)     [4+1]
+                            └── F64(3.0)     [4+1]
                 "#]];
                 program_block_empty: "{}" => expect![[r#"
                     Program
@@ -969,17 +969,17 @@ mod tests {
                    Program
                    └── Block     [0+35]
                        ├── Let ''i' (Identifier)'     [4+10]
-                       │   └── Number(1.0)     [12+1]
+                       │   └── F64(1.0)     [12+1]
                        └── While     [0+35]
                            ├── <     [15+6]
                            │   ├── Read 'i'     [15+1]
-                           │   └── Number(3.0)     [19+1]
+                           │   └── F64(3.0)     [19+1]
                            └── Block     [33+2]
                                ├── Read 'i'     [33+1]     [33+2]
                                └── 'i' (Identifier) =      [22+10]     [22+13]
                                    └── +     [26+6]
                                        ├── Read 'i'     [26+1]
-                                       └── Number(1.0)     [30+1]
+                                       └── F64(1.0)     [30+1]
                "#]];
                program_for_empty: "for(;;) i;" => expect![[r#"
                    Program
@@ -1011,7 +1011,7 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [13+4]
                        └── Return     [20+10]
-                           └── Number(3.0)     [27+1]
+                           └── F64(3.0)     [27+1]
                "#]];
                program_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
                    Program
@@ -1032,7 +1032,7 @@ mod tests {
                    Program
                    └── Set b     [0+8]     [0+8]
                        ├── Read 'a'     [0+1]
-                       └── Number(3.0)     [6+1]
+                       └── F64(3.0)     [6+1]
                "#]];
 
     );

@@ -35,7 +35,7 @@ struct TypeFactoryInner {
 
 }
 
-factory_fns!(bool, unit, f64, function, ty, string, unknown);
+factory_fns!(bool, unit, i64, f64, function, ty, str, unknown);
 
 impl TypeFactory {
     pub fn new() -> Self {
@@ -44,7 +44,8 @@ impl TypeFactory {
                 bool: Type::primitive("bool", PrimitiveType::Bool),
                 unit: Type::tuple("()", vec![]),
                 f64: Type::primitive("f64", PrimitiveType::F64),
-                string: Type::primitive("string", PrimitiveType::String),
+                i64: Type::primitive("i64", PrimitiveType::I64),
+                str: Type::primitive("str", PrimitiveType::Str),
                 function: Type::function("FUNCTION"),
                 ty: Type::ty(),
                 unknown: Type::new("unknown", TypeKind::Unknown),
@@ -64,11 +65,14 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
     let value_factory = ValueFactory::new(type_factory);
 
     add_definition("bool", value_factory.new_type(type_factory.bool()));
+    add_definition("i64", value_factory.new_type(type_factory.i64()));
+    add_definition("f64", value_factory.new_type(type_factory.f64()));
+    add_definition("str", value_factory.new_type(type_factory.str()));
     let value_factory_clone = value_factory.clone();
     add_definition(
         "sqrt",
         value_factory.new_native_callable("sqrt", 1, move |_interpreter, arguments| {
-            if let ValueKind::Number(arg) = arguments[0].val {
+            if let ValueKind::F64(arg) = arguments[0].val {
                 Ok(value_factory_clone.f64(arg.sqrt()))
             } else {
                 bail!("Expected number as argument to sqrt")

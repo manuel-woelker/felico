@@ -45,8 +45,9 @@ pub struct UnaryExpr {
 
 #[derive(Debug, Clone)]
 pub enum LiteralExpr {
-    String(String),
-    Number(f64),
+    Str(String),
+    F64(f64),
+    I64(i64),
     Bool(bool),
     Unit,
 }

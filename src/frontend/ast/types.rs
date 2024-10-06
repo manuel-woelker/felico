@@ -83,5 +83,6 @@ pub enum TypeKind {
 pub enum PrimitiveType {
     Bool,
     F64,
-    String,
+    I64,
+    Str,
 }
