@@ -191,7 +191,7 @@ impl<'a> AstPrinterWorker<'a> {
                 location.end_byte - location.start_byte
             )
         }
-        if self.print_types {
+        if self.print_types && !ast.ty.is_unknown() {
             tree.root += &format!(": {}", ast.ty)
         }
         tree

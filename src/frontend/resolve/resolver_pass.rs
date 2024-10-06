@@ -67,6 +67,7 @@ impl ResolverPass {
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
                 let name = let_stmt.name.lexeme();
+                self.resolve_expr(&mut let_stmt.expression)?;
                 let ty = if let Some(expr) = &let_stmt.type_expression {
                     // TODO: make bails into diagnostics
                     let Expr::Variable(type_id) = &*expr.data else {
@@ -88,8 +89,9 @@ impl ResolverPass {
                     };
                     ty.clone()
                 } else {
-                    self.type_factory.unknown()
+                    let_stmt.expression.ty.clone()
                 };
+                stmt.ty = ty.clone();
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
                         let mut diagnostic = InterpreterDiagnostic::new(
@@ -110,7 +112,6 @@ impl ResolverPass {
                         });
                     }
                 }
-                self.resolve_expr(&mut let_stmt.expression)?;
                 self.current_scope().get_mut(name).unwrap().is_defined = true;
             }
             Stmt::Return(return_stmt) => {
@@ -182,10 +183,14 @@ impl ResolverPass {
         match expr.data.deref_mut() {
             Expr::Unary(unary) => {
                 self.resolve_expr(&mut unary.right)?;
+                expr.ty = unary.right.ty.clone();
             }
             Expr::Binary(binary) => {
                 self.resolve_expr(&mut binary.left)?;
                 self.resolve_expr(&mut binary.right)?;
+                if binary.left.ty == binary.right.ty {
+                    expr.ty = binary.left.ty.clone();
+                }
             }
             Expr::Literal(literal) => {
                 expr.ty = match literal {
@@ -198,8 +203,9 @@ impl ResolverPass {
             Expr::Variable(var_use) => {
                 let distance_and_symbol =
                     self.get_definition_distance_and_symbol(&var_use.variable);
-                if let Some((distance, _)) = distance_and_symbol {
+                if let Some((distance, symbol)) = distance_and_symbol {
                     var_use.distance = distance;
+                    expr.ty = symbol.ty.clone();
                 } else {
                     let mut diagnostic = InterpreterDiagnostic::new(
                         &var_use.variable.location.source_file,
@@ -219,6 +225,8 @@ impl ResolverPass {
                 if let Some((distance, symbol)) = distance_and_symbol {
                     assign.distance = distance;
                     let destination_type = &symbol.ty;
+                    expr.ty = symbol.ty.clone();
+
                     if !destination_type.is_unknown() {
                         let expression_type = &assign.value.ty;
                         if destination_type != expression_type {
@@ -321,9 +329,41 @@ mod tests {
     }
 
     test_program!(
-                program_empty: "let a = 3;" => expect![[r#"
+                let_explicit_type: "let a: bool = true;" => expect![[r#"
                     Program
-                    └── Let ''a' (Identifier)': ❬unknown❭
+                    └── Let ''a' (Identifier)': ❬bool❭
+                        └── Bool(true): ❬bool❭
+                "#]];
+                let_inferred_type: "let a = 3;" => expect![[r#"
+                    Program
+                    └── Let ''a' (Identifier)': ❬f64❭
+                        └── Number(3.0): ❬f64❭
+                "#]];
+                let_inferred_type_from_binary_expression: "let a = 1 + 2;" => expect![[r#"
+                    Program
+                    └── Let ''a' (Identifier)': ❬f64❭
+                        └── +: ❬f64❭
+                            ├── Number(1.0): ❬f64❭
+                            └── Number(2.0): ❬f64❭
+                "#]];
+                let_inferred_type_from_unary_expression: "let a = -1;" => expect![[r#"
+                    Program
+                    └── Let ''a' (Identifier)': ❬f64❭
+                        └── -: ❬f64❭
+                            └── Number(1.0): ❬f64❭
+                "#]];
+                let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
+                    Program
+                    ├── Let ''a' (Identifier)': ❬f64❭
+                    │   └── Number(1.0): ❬f64❭
+                    └── Let ''b' (Identifier)': ❬f64❭
+                        └── Read 'a': ❬f64❭
+                "#]];
+                assign_type: "let a = 1;a = 3;" => expect![[r#"
+                    Program
+                    ├── Let ''a' (Identifier)': ❬f64❭
+                    │   └── Number(1.0): ❬f64❭
+                    └── 'a' (Identifier) = : ❬f64❭
                         └── Number(3.0): ❬f64❭
                 "#]];
     );
