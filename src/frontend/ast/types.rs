@@ -9,11 +9,7 @@ pub struct Type {
 
 impl Type {
     pub fn is_unknown(&self) -> bool {
-        if let TypeKind::Unknown = self.inner.kind {
-            true
-        } else {
-            false
-        }
+        matches!(self.inner.kind, TypeKind::Unknown)
     }
 }
 

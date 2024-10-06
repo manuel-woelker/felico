@@ -3,21 +3,21 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::frontend::ast::AstData;
-use crate::frontend::lexer::token::TokenType;
-use crate::frontend::parser::parser::{parse_expression, parse_program};
+use crate::frontend::lex::token::TokenType;
+use crate::frontend::parse::parser::{parse_expression, parse_program};
 use crate::frontend::resolver::resolver_pass::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFileHandle;
-use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
-use crate::interpreter::environment::Environment;
-use crate::interpreter::value::{
+use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpret::environment::Environment;
+use crate::interpret::value::{
     Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
 };
 use std::ops::Deref;
 use std::rc::Rc;
 
-type PrintFn = Box<dyn Fn(&InterpreterValue) -> ()>;
+type PrintFn = Box<dyn Fn(&InterpreterValue)>;
 
 pub struct Interpreter {
     source_file: SourceFileHandle,
@@ -65,7 +65,7 @@ impl Interpreter {
         self.print_fn = print_fn;
     }
 
-    pub fn print(&self, value: &InterpreterValue) -> () {
+    pub fn print(&self, value: &InterpreterValue) {
         (self.print_fn)(value);
     }
 
@@ -248,7 +248,7 @@ impl Interpreter {
             Expr::Assign(assign) => {
                 let value = self.evaluate_expr(&assign.value)?;
                 self.environment.assign_at_distance(
-                    &assign.destination.lexeme(),
+                    assign.destination.lexeme(),
                     assign.distance,
                     value.clone(),
                 )?;
@@ -348,7 +348,7 @@ impl Interpreter {
                                 .fun_stmt
                                 .parameters
                                 .iter()
-                                .zip(arguments.into_iter())
+                                .zip(arguments)
                                 .for_each(|(name, value)| {
                                     self.environment.define(name.lexeme(), value);
                                 });
@@ -379,7 +379,7 @@ impl Interpreter {
         &self,
         ast_node: &AstNode<A>,
         message: S,
-        mut f: impl FnMut(&mut InterpreterDiagnostic) -> (),
+        mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> FelicoResult<T> {
         let mut diagnostic =
             InterpreterDiagnostic::new(&ast_node.location.source_file, message.into());
@@ -394,7 +394,7 @@ impl Interpreter {
             }
             Stmt::Let(var) => {
                 let value = self.evaluate_expr(&var.expression)?;
-                self.environment.define(&var.name.lexeme(), value);
+                self.environment.define(var.name.lexeme(), value);
             }
             Stmt::Fun(fun) => {
                 let callable = self.create_fun_callable(fun);
@@ -505,8 +505,8 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
 mod tests {
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::infra::source_file::SourceFileHandle;
-    use crate::interpreter::eval::eval_expression;
-    use crate::interpreter::interpreter::{run_program_to_string, Interpreter};
+    use crate::interpret::eval::eval_expression;
+    use crate::interpret::interpreter::{run_program_to_string, Interpreter};
     use expect_test::{expect, Expect};
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {

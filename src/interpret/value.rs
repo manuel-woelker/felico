@@ -1,9 +1,9 @@
 use crate::frontend::ast::stmt::FunStmt;
 use crate::frontend::ast::types::Type;
 use crate::infra::result::FelicoResult;
-use crate::interpreter::core_definitions::TypeFactory;
-use crate::interpreter::environment::Environment;
-use crate::interpreter::interpreter::Interpreter;
+use crate::interpret::core_definitions::TypeFactory;
+use crate::interpret::environment::Environment;
+use crate::interpret::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
@@ -133,8 +133,11 @@ pub struct Callable {
     pub fun: Rc<CallableFun>,
 }
 
+pub type NativeFunction =
+    Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>>;
+
 pub enum CallableFun {
-    Native(Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>>),
+    Native(NativeFunction),
     Defined(DefinedFunction),
 }
 

@@ -2,7 +2,7 @@ use phf::phf_map;
 use std::fmt::{Debug, Formatter};
 use std::str::Chars;
 
-use crate::frontend::lexer::token::{Token, TokenType};
+use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::location::{ByteOffset, Location};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFileHandle;
@@ -280,11 +280,11 @@ impl Iterator for Lexer {
 }
 
 fn is_digit(c: char) -> bool {
-    c >= '0' && c <= '9'
+    c.is_ascii_digit()
 }
 
 fn is_alpha(c: char) -> bool {
-    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+    c.is_ascii_alphabetic() || c == '_'
 }
 
 fn is_alpha_numeric(c: char) -> bool {

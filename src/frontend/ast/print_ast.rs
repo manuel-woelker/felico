@@ -52,12 +52,12 @@ impl<'a> AstPrinter<'a> {
             Expr::Literal(literal) => Tree::new(format!("{:?}", literal)),
             Expr::Variable(var_use) => Tree::new(format!("Read '{}'", var_use.variable.lexeme())),
             Expr::Unary(unary) => {
-                let mut tree = Tree::new(format!("{}", unary.operator.lexeme()));
+                let mut tree = Tree::new(unary.operator.lexeme().to_string());
                 tree.push(self.expr_to_tree(&unary.right));
                 tree
             }
             Expr::Binary(binary) => {
-                let mut tree = Tree::new(format!("{}", binary.operator.lexeme()));
+                let mut tree = Tree::new(binary.operator.lexeme().to_string());
                 tree.push(self.expr_to_tree(&binary.left));
                 tree.push(self.expr_to_tree(&binary.right));
                 tree

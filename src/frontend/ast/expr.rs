@@ -1,6 +1,6 @@
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::AstData;
-use crate::frontend::lexer::token::Token;
+use crate::frontend::lex::token::Token;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]

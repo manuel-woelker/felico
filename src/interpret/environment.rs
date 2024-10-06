@@ -1,5 +1,5 @@
 use crate::infra::result::{bail, FelicoResult};
-use crate::interpreter::value::InterpreterValue;
+use crate::interpret::value::InterpreterValue;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};

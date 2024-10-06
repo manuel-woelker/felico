@@ -7,13 +7,13 @@ use crate::frontend::ast::stmt::{
     BlockStmt, ExprStmt, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, WhileStmt,
 };
 use crate::frontend::ast::AstData;
-use crate::frontend::lexer::lexer::Lexer;
-use crate::frontend::lexer::token::{Token, TokenType};
+use crate::frontend::lex::lexer::Lexer;
+use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
 use crate::infra::source_file::SourceFileHandle;
-use crate::interpreter::core_definitions::TypeFactory;
+use crate::interpret::core_definitions::TypeFactory;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -518,7 +518,7 @@ impl Parser {
     fn create_diagnostic<T, S: Into<String>>(
         &self,
         message: S,
-        mut f: impl FnMut(&mut InterpreterDiagnostic) -> (),
+        mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> FelicoResult<T> {
         let mut diagnostic = InterpreterDiagnostic::new(&self.source_file, message.into());
         f(&mut diagnostic);

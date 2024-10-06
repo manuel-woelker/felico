@@ -1,7 +1,7 @@
 use crate::frontend::ast::types::{PrimitiveType, Type, TypeKind};
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
-use crate::interpreter::value::{InterpreterValue, ValueFactory, ValueKind};
+use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
 use std::rc::Rc;
 
 pub struct CoreDefinition {
@@ -58,7 +58,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
     let mut add_definition = |name: &str, value: InterpreterValue| {
         core_definitions.push(CoreDefinition {
             name: SharedString::from(name),
-            value: value.into(),
+            value,
         });
     };
     let value_factory = ValueFactory::new(type_factory);

@@ -4,13 +4,13 @@ use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::ast::types::Type;
-use crate::frontend::lexer::token::Token;
+use crate::frontend::lex::token::Token;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
-use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
-use crate::interpreter::value::{InterpreterValue, ValueKind};
+use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpret::value::{InterpreterValue, ValueKind};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -215,13 +215,13 @@ impl ResolverPass {
             Expr::Assign(assign) => {
                 let destination = &assign.destination;
                 self.resolve_expr(&mut assign.value)?;
-                let distance_and_symbol = self.get_definition_distance_and_symbol(&destination);
+                let distance_and_symbol = self.get_definition_distance_and_symbol(destination);
                 if let Some((distance, symbol)) = distance_and_symbol {
                     assign.distance = distance;
                     let destination_type = &symbol.ty;
                     if !destination_type.is_unknown() {
                         let expression_type = &assign.value.ty;
-                        if destination_type != &*expression_type {
+                        if destination_type != expression_type {
                             let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
                             diagnostic.add_primary_label(&expr.location);
                             diagnostic.add_label(
@@ -288,10 +288,10 @@ pub fn resolve_variables(
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend::parser::parser::Parser;
+    use crate::frontend::parse::parser::Parser;
     use crate::frontend::resolver::resolver_pass::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use crate::interpreter::core_definitions::TypeFactory;
+    use crate::interpret::core_definitions::TypeFactory;
     use expect_test::{expect, Expect};
 
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
