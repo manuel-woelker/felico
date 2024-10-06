@@ -52,8 +52,16 @@ impl TypeFactory {
         }
     }
 
-    pub fn function(&self, name: &str, parameter_types: Vec<Type>, return_type: Type) -> Type {
-        Type::function(name, parameter_types, return_type)
+    pub fn function(&self, parameter_types: Vec<Type>, return_type: Type) -> Type {
+        let name = "Fn(".to_string()
+            + &parameter_types
+                .iter()
+                .map(|ty| ty.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+            + ")"
+            + &return_type.to_string();
+        Type::function(&name, parameter_types, return_type)
     }
 
     pub fn tuple(&self, components: Vec<Type>) -> Type {
@@ -96,11 +104,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                     bail!("Expected number as argument to sqrt")
                 }
             },
-            type_factory.function(
-                "sqrt(f64) -> f64",
-                vec![type_factory.f64()],
-                type_factory.f64(),
-            ),
+            type_factory.function(vec![type_factory.f64()], type_factory.f64()),
         ),
     );
     let value_factory_clone = value_factory.clone();
@@ -115,11 +119,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                 }
                 Ok(value_factory_clone.unit())
             },
-            type_factory.function(
-                "debug_print(any)",
-                vec![type_factory.f64()],
-                type_factory.unit(),
-            ),
+            type_factory.function(vec![type_factory.f64()], type_factory.unit()),
         ),
     );
     core_definitions

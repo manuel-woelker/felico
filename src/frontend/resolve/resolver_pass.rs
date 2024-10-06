@@ -111,8 +111,7 @@ impl ResolverPass {
                     .iter()
                     .map(|parameter| self.resolve_type(&parameter.type_expression))
                     .collect::<FelicoResult<Vec<_>>>()?;
-                let function_type =
-                    type_factory.function(fun_stmt.name.lexeme(), parameter_types, return_type);
+                let function_type = type_factory.function(parameter_types, return_type);
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
                         let mut diagnostic = InterpreterDiagnostic::new(
@@ -398,14 +397,16 @@ mod tests {
                         ├── F64(3.0): ❬f64❭
                         └── Bool(true): ❬bool❭
                 "#]];
-                function_simple: "fun x(a: bool, b: i64) -> f64 {}" => expect![[r#"
+                function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
                     Program
-                    └── Declare fun 'x(a, b)': ❬x❭
-                        ├── Param a
-                        │   └── Read 'bool'
-                        ├── Param b
-                        │   └── Read 'i64'
-                        └── Return type: Read 'f64'
+                    ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
+                    │   ├── Param a
+                    │   │   └── Read 'bool'
+                    │   ├── Param b
+                    │   │   └── Read 'i64'
+                    │   └── Return type: Read 'f64'
+                    └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
+                        └── Read 'x': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
                 "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
