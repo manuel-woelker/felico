@@ -13,6 +13,13 @@ pub enum Expr {
     Call(CallExpr),
     Get(GetExpr),
     Set(SetExpr),
+    Tuple(TupleExpr),
+}
+
+impl Expr {
+    pub fn new_tuple(components: Vec<AstNode<Expr>>) -> Self {
+        Expr::Tuple(TupleExpr { components })
+    }
 }
 
 impl AstData for Expr {}
@@ -69,4 +76,9 @@ pub struct SetExpr {
     pub object: AstNode<Expr>,
     pub name: Token,
     pub value: AstNode<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TupleExpr {
+    pub components: Vec<AstNode<Expr>>,
 }

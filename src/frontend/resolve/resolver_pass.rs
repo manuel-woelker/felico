@@ -268,6 +268,14 @@ impl ResolverPass {
                     self.resolve_expr(arg)?
                 }
             }
+            Expr::Tuple(tuple) => {
+                let mut component_types = Vec::<Type>::new();
+                for component in &mut tuple.components {
+                    self.resolve_expr(component)?;
+                    component_types.push(component.ty.clone());
+                }
+                expr.ty = self.type_factory.tuple(component_types)
+            }
             Expr::Get(get) => {
                 self.resolve_expr(&mut get.object)?;
             }
@@ -379,6 +387,16 @@ mod tests {
                     │   └── F64(1.0): ❬f64❭
                     └── 'a' (Identifier) = : ❬f64❭
                         └── F64(3.0): ❬f64❭
+                "#]];
+                tuple_empty: "();" => expect![[r#"
+                    Program
+                    └── Tuple: ❬()❭
+                "#]];
+                tuple_pair: "(3, true);" => expect![[r#"
+                    Program
+                    └── Tuple: ❬(❬f64❭, ❬bool❭)❭
+                        ├── F64(3.0): ❬f64❭
+                        └── Bool(true): ❬bool❭
                 "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {

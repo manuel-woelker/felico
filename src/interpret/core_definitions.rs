@@ -55,6 +55,17 @@ impl TypeFactory {
     pub fn function(&self, name: &str, parameter_types: Vec<Type>, return_type: Type) -> Type {
         Type::function(name, parameter_types, return_type)
     }
+
+    pub fn tuple(&self, components: Vec<Type>) -> Type {
+        let name = "(".to_string()
+            + &components
+                .iter()
+                .map(|ty| ty.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+            + ")";
+        Type::tuple(&name, components)
+    }
 }
 
 pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {

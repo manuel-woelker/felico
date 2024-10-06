@@ -4,6 +4,7 @@ use crate::infra::result::FelicoResult;
 use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
 use crate::interpret::interpreter::Interpreter;
+use itertools::{Itertools, Position};
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
@@ -72,6 +73,14 @@ impl ValueFactory {
         }
     }
 
+    pub fn tuple(&self, components: Vec<InterpreterValue>) -> InterpreterValue {
+        let types: Vec<_> = components.iter().map(|val| val.ty.clone()).collect();
+        InterpreterValue {
+            val: ValueKind::Tuple(components),
+            ty: self.type_factory.tuple(types),
+        }
+    }
+
     pub fn new_native_callable(
         &self,
         name: &str,
@@ -94,6 +103,7 @@ impl ValueFactory {
 #[derive(Debug, Clone)]
 pub enum ValueKind {
     Unit,
+    Tuple(Vec<InterpreterValue>),
     String(String),
     Bool(bool),
     F64(f64),
@@ -118,6 +128,16 @@ impl Display for ValueKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ValueKind::Unit => f.write_str("()"),
+            ValueKind::Tuple(tuple) => {
+                f.write_str("(")?;
+                for (pos, component) in tuple.iter().with_position() {
+                    Display::fmt(component, f)?;
+                    if pos != Position::Last && pos != Position::Only {
+                        f.write_str(", ")?;
+                    }
+                }
+                f.write_str(")")
+            }
             ValueKind::String(s) => f.write_str(s),
             ValueKind::Bool(bool) => {
                 if *bool {

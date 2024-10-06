@@ -506,10 +506,27 @@ impl Parser {
                     return result;
                 }
                 TokenType::LeftParen => {
+                    let start_location = self.current_location();
                     self.advance();
-                    let result = self.parse_expr();
+                    if self.is_at(TokenType::RightParen) {
+                        // empty tuple
+                        self.advance();
+                        return self.create_node(self.current_location(), Expr::new_tuple(vec![]));
+                    }
+                    let mut components: Vec<AstNode<Expr>> = vec![];
+                    loop {
+                        let component = self.parse_expr()?;
+                        components.push(component);
+                        if !self.is_at(TokenType::Comma) {
+                            break;
+                        }
+                        self.advance();
+                    }
                     self.consume(TokenType::RightParen, "Expect closing ')' after expression")?;
-                    return result;
+                    if components.len() == 1 {
+                        return Ok(components.pop().unwrap());
+                    }
+                    return self.create_node(start_location, Expr::new_tuple(components));
                 }
                 _ => {
                     return self.create_diagnostic(
@@ -870,6 +887,16 @@ mod tests {
             Call     [3+4]
             └── Call     [3+3]
                 └── Read 'foo'     [0+3]
+        "#]];
+
+        tuple_empty: "()" => expect![[r#"
+            Tuple     [2+0]
+        "#]];
+
+        tuple_pair: "(3, true)" => expect![[r#"
+            Tuple     [0+9]
+            ├── F64(3.0)     [1+1]
+            └── Bool(true)     [4+4]
         "#]];
     );
 
