@@ -71,6 +71,7 @@ impl Lexer {
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
             },
+            value: None,
         };
         self.start_offset = self.current_offset;
         self.lexeme_collector.clear();
@@ -202,7 +203,13 @@ impl Iterator for Lexer {
                 ',' => TokenType::Comma,
                 '.' => TokenType::Dot,
                 '+' => TokenType::Plus,
-                '-' => TokenType::Minus,
+                '-' => {
+                    if self.matches('>') {
+                        TokenType::Arrow
+                    } else {
+                        TokenType::Minus
+                    }
+                }
                 ':' => TokenType::Colon,
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
@@ -407,6 +414,15 @@ mod tests {
             Slash      '/' 0+1
             Slash      '/' 2+1
             EOF        '' 3+0
+        "#]];
+        minus_greater: "- >" => expect![[r#"
+            Minus      '-' 0+1
+            Greater    '>' 2+1
+            EOF        '' 3+0
+        "#]];
+        arrow: "->" => expect![[r#"
+            Arrow      '->' 0+2
+            EOF        '' 2+0
         "#]];
         comment: "//" => expect![[r#"
             EOF        '' 2+0

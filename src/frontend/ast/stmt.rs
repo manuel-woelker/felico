@@ -53,6 +53,7 @@ impl FunParameter {
 pub struct FunStmt {
     pub name: Token,
     pub parameters: Vec<FunParameter>,
+    pub return_type: AstNode<Expr>,
     pub body: AstNode<Stmt>,
 }
 

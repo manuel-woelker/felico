@@ -12,6 +12,7 @@ use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
+use crate::infra::shared_string::SharedString;
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::TypeFactory;
 
@@ -134,13 +135,33 @@ impl Parser {
             TokenType::RightParen,
             "Expected ')' to close parameter list",
         )?;
-
+        let return_type = if self.is_at(TokenType::Arrow) {
+            self.advance();
+            self.parse_type_expression()?
+        } else {
+            self.create_node(
+                start_location.clone(),
+                Expr::Variable(VarUse {
+                    variable: Token {
+                        token_type: TokenType::Identifier,
+                        location: Location {
+                            source_file: self.source_file.clone(),
+                            start_byte: start_location.start_byte,
+                            end_byte: start_location.end_byte,
+                        },
+                        value: Some(SharedString::from("unit")),
+                    },
+                    distance: 0,
+                }),
+            )?
+        };
         let body = self.parse_block()?;
         self.create_node(
             start_location,
             Stmt::Fun(FunStmt {
                 name,
                 parameters,
+                return_type,
                 body,
             }),
         )
@@ -991,17 +1012,30 @@ mod tests {
                program_fun_empty: "fun foo() {}" => expect![[r#"
                    Program
                    └── Declare fun 'foo()'     [0+12]
+                       └── Return type: Read 'unit'     [0+11]
                "#]];
                program_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
                    Program
                    └── Declare fun 'foo(a)'     [0+22]
                        ├── Param a
                        │   └── Read 'bool'     [11+4]
+                       ├── Return type: Read 'unit'     [0+18]
                        └── Read 'a'     [18+1]     [18+2]
+               "#]];
+               program_fun_with_return_type: "fun not(a: bool) -> bool {return !a;} " => expect![[r#"
+                   Program
+                   └── Declare fun 'not(a)'     [0+38]
+                       ├── Param a
+                       │   └── Read 'bool'     [11+4]
+                       ├── Return type: Read 'bool'     [20+4]
+                       └── Return     [26+11]
+                           └── !     [33+3]
+                               └── Read 'a'     [34+1]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
                    └── Declare fun 'nop()'     [0+20]
+                       ├── Return type: Read 'unit'     [0+11]
                        └── Return     [11+8]
                            └── Unit     [11+7]
                "#]];
@@ -1010,6 +1044,7 @@ mod tests {
                    └── Declare fun 'three(a)'     [0+31]
                        ├── Param a
                        │   └── Read 'bool'     [13+4]
+                       ├── Return type: Read 'unit'     [0+20]
                        └── Return     [20+10]
                            └── F64(3.0)     [27+1]
                "#]];
@@ -1018,6 +1053,7 @@ mod tests {
                    └── Declare fun 'twice(a)'     [0+32]
                        ├── Param a
                        │   └── Read 'f64'     [13+3]
+                       ├── Return type: Read 'unit'     [0+19]
                        └── Return     [19+12]
                            └── +     [26+4]
                                ├── Read 'a'     [26+1]

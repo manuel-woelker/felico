@@ -150,6 +150,9 @@ impl<'a> AstPrinterWorker<'a> {
                     paramtree.push(self.expr_to_tree(&parameter.type_expression));
                     tree.push(paramtree);
                 }
+                let mut return_type_tree = self.expr_to_tree(&fun.return_type);
+                return_type_tree.root = "Return type: ".to_string() + &return_type_tree.root;
+                tree.push(return_type_tree);
                 tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
                 tree
             }

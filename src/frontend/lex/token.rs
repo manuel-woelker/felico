@@ -1,4 +1,5 @@
 use crate::infra::location::Location;
+use crate::infra::shared_string::SharedString;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -26,6 +27,7 @@ pub enum TokenType {
     GreaterEqual,
     Less,
     LessEqual,
+    Arrow,
 
     // Literals.
     Identifier,
@@ -60,6 +62,7 @@ impl Display for TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub location: Location,
+    pub value: Option<SharedString>,
 }
 
 impl Display for Token {
@@ -75,8 +78,12 @@ impl Display for Token {
 
 impl Token {
     pub fn lexeme(&self) -> &str {
-        let location = &self.location;
-        &self.location.source_file.source_code()
-            [location.start_byte as usize..location.end_byte as usize]
+        if let Some(value) = &self.value {
+            &value
+        } else {
+            let location = &self.location;
+            &self.location.source_file.source_code()
+                [location.start_byte as usize..location.end_byte as usize]
+        }
     }
 }
