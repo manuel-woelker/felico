@@ -398,6 +398,15 @@ mod tests {
                         ├── F64(3.0): ❬f64❭
                         └── Bool(true): ❬bool❭
                 "#]];
+                function_simple: "fun x(a: bool, b: i64) -> f64 {}" => expect![[r#"
+                    Program
+                    └── Declare fun 'x(a, b)': ❬x❭
+                        ├── Param a
+                        │   └── Read 'bool'
+                        ├── Param b
+                        │   └── Read 'i64'
+                        └── Return type: Read 'f64'
+                "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();

@@ -126,9 +126,10 @@ impl Parser {
                 self.consume(TokenType::Colon, "Expected ':' after parameter name")?;
                 let type_expression = self.parse_type_expression()?;
                 parameters.push(FunParameter::new(parameter_name, type_expression));
-                if self.current_token.token_type != TokenType::Comma {
+                if !self.is_at(TokenType::Comma) {
                     break;
                 }
+                self.advance()
             }
         }
         self.consume(
