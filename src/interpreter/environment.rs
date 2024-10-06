@@ -1,5 +1,5 @@
-use crate::interpreter::value::InterpreterValue;
 use crate::infra::result::{bail, FelicoResult};
+use crate::interpreter::value::InterpreterValue;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
@@ -16,7 +16,11 @@ pub struct Environment {
 
 impl Debug for Environment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Environment <{} entries>", self.inner.lock().unwrap().values.len())
+        write!(
+            f,
+            "Environment <{} entries>",
+            self.inner.lock().unwrap().values.len()
+        )
     }
 }
 impl Environment {
@@ -29,14 +33,18 @@ impl Environment {
         }
     }
     pub fn define(&self, name: &str, value: InterpreterValue) {
-        self.inner.lock().unwrap().values.insert(name.to_string(), value);
+        self.inner
+            .lock()
+            .unwrap()
+            .values
+            .insert(name.to_string(), value);
     }
 
     pub fn assign(&self, name: &str, value: InterpreterValue) -> FelicoResult<()> {
         let mut inner = self.inner.lock().unwrap();
         if let Some(destination) = inner.values.get_mut(name) {
             *destination = value;
-            return Ok(())
+            return Ok(());
         }
         if let Some(parent) = &inner.parent {
             parent.assign(name, value)?;
@@ -49,7 +57,7 @@ impl Environment {
     pub fn get(&self, name: &str) -> FelicoResult<InterpreterValue> {
         let inner = self.inner.lock().unwrap();
         if let Some(value) = inner.values.get(name) {
-            return Ok(value.clone())
+            return Ok(value.clone());
         }
         if let Some(parent) = &inner.parent {
             parent.get(name)
@@ -58,13 +66,21 @@ impl Environment {
         }
     }
 
-    pub(crate) fn get_at_distance(&self, name: &str, distance: i32) -> FelicoResult<InterpreterValue> {
+    pub(crate) fn get_at_distance(
+        &self,
+        name: &str,
+        distance: i32,
+    ) -> FelicoResult<InterpreterValue> {
         let environment = self.get_environment_at_distance(name, distance)?;
         let borrowed = environment.inner.lock().unwrap();
         if let Some(value) = borrowed.values.get(name) {
             Ok(value.clone())
         } else {
-            bail!("No variable named '{}' defined (get at distance {}) ", name, distance);
+            bail!(
+                "No variable named '{}' defined (get at distance {}) ",
+                name,
+                distance
+            );
         }
     }
 
@@ -82,19 +98,27 @@ impl Environment {
         Ok(environment)
     }
 
-    pub(crate) fn assign_at_distance(&self, name: &str, distance: i32, value: InterpreterValue) -> FelicoResult<()> {
+    pub(crate) fn assign_at_distance(
+        &self,
+        name: &str,
+        distance: i32,
+        value: InterpreterValue,
+    ) -> FelicoResult<()> {
         let environment = self.get_environment_at_distance(name, distance)?;
         let mut borrowed = environment.inner.lock().unwrap();
         if let Some(slot) = borrowed.values.get_mut(name) {
             *slot = value;
             Ok(())
         } else {
-            bail!("No variable named '{}' defined (get at distance {}) ", name, distance);
+            bail!(
+                "No variable named '{}' defined (get at distance {}) ",
+                name,
+                distance
+            );
         }
     }
 
-
-    pub fn child_environment(&self)-> Self {
+    pub fn child_environment(&self) -> Self {
         Self {
             inner: Arc::new(Mutex::new(EnvironmentInner {
                 values: Default::default(),
@@ -117,5 +141,4 @@ impl Environment {
             panic!("No parent environment")
         }
     }
-
 }

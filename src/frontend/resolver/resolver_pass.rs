@@ -22,7 +22,6 @@ struct Symbol {
     value: Option<InterpreterValue>,
 }
 
-
 struct ResolverPass {
     scopes: Vec<HashMap<String, Symbol>>,
     type_factory: TypeFactory,
@@ -37,12 +36,15 @@ impl ResolverPass {
             end_byte: 0,
         };
         for core_definition in get_core_definitions(&type_factory) {
-            global_scope.insert(core_definition.name.to_string(), Symbol {
-                declaration_site: location.clone(),
-                is_defined: true,
-                ty: core_definition.value.ty.clone(),
-                value: Some(core_definition.value.clone()),
-            });
+            global_scope.insert(
+                core_definition.name.to_string(),
+                Symbol {
+                    declaration_site: location.clone(),
+                    is_defined: true,
+                    ty: core_definition.value.ty.clone(),
+                    value: Some(core_definition.value.clone()),
+                },
+            );
         }
         ResolverPass {
             scopes: vec![global_scope, Default::default()],
@@ -70,7 +72,8 @@ impl ResolverPass {
                     let Expr::Variable(type_id) = &*expr.data else {
                         bail!("Unsupported expression in type position: {:?}", expr);
                     };
-                    let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
+                    let distance_and_symbol =
+                        self.get_definition_distance_and_symbol(&type_id.variable);
                     let Some((_distance, symbol)) = distance_and_symbol else {
                         bail!("Unknown symbol: {}", type_id.variable.lexeme());
                     };
@@ -78,7 +81,10 @@ impl ResolverPass {
                         bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
                     };
                     let ValueKind::Type(ty) = &value.val else {
-                        bail!("Type expression must be a type: {}", type_id.variable.lexeme());
+                        bail!(
+                            "Type expression must be a type: {}",
+                            type_id.variable.lexeme()
+                        );
                     };
                     ty.clone()
                 } else {
@@ -86,13 +92,22 @@ impl ResolverPass {
                 };
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
-                        let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Variable '{}' already declared", let_stmt.name.lexeme()));
+                        let mut diagnostic = InterpreterDiagnostic::new(
+                            &stmt.location.source_file,
+                            format!("Variable '{}' already declared", let_stmt.name.lexeme()),
+                        );
                         diagnostic.add_primary_label(&let_stmt.name.location);
-                        diagnostic.add_label(&value.get().declaration_site, "is already defined here");
+                        diagnostic
+                            .add_label(&value.get().declaration_site, "is already defined here");
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        slot.insert(Symbol { declaration_site: let_stmt.name.location.clone(), is_defined: false, ty, value: None });
+                        slot.insert(Symbol {
+                            declaration_site: let_stmt.name.location.clone(),
+                            is_defined: false,
+                            ty,
+                            value: None,
+                        });
                     }
                 }
                 self.resolve_expr(&mut let_stmt.expression)?;
@@ -108,19 +123,36 @@ impl ResolverPass {
                 let name = fun_stmt.name.lexeme();
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
-                        let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Function '{}' already declared", fun_stmt.name.lexeme()));
+                        let mut diagnostic = InterpreterDiagnostic::new(
+                            &stmt.location.source_file,
+                            format!("Function '{}' already declared", fun_stmt.name.lexeme()),
+                        );
                         diagnostic.add_primary_label(&fun_stmt.name.location);
-                        diagnostic.add_label(&value.get().declaration_site, "is already defined here");
+                        diagnostic
+                            .add_label(&value.get().declaration_site, "is already defined here");
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: type_factory.function(), value: None });
+                        slot.insert(Symbol {
+                            declaration_site: fun_stmt.name.location.clone(),
+                            is_defined: true,
+                            ty: type_factory.function(),
+                            value: None,
+                        });
                     }
                 }
                 self.scopes.push(Default::default());
                 let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
-                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: type_factory.unknown(), value: None });
+                    current_scope.insert(
+                        parameter.lexeme().to_string(),
+                        Symbol {
+                            declaration_site: parameter.location.clone(),
+                            is_defined: true,
+                            ty: type_factory.unknown(),
+                            value: None,
+                        },
+                    );
                 }
                 self.resolve_stmt(&mut fun_stmt.body)?;
                 self.scopes.pop();
@@ -157,26 +189,25 @@ impl ResolverPass {
             }
             Expr::Literal(literal) => {
                 expr.ty = match literal {
-                    LiteralExpr::String(_) => {
-                        self.type_factory.string()
-                    }
-                    LiteralExpr::Number(_) => {
-                        self.type_factory.f64()
-                    }
-                    LiteralExpr::Bool(_) => {
-                        self.type_factory.bool()
-                    }
-                    LiteralExpr::Unit => {
-                        self.type_factory.unit()
-                    }
+                    LiteralExpr::String(_) => self.type_factory.string(),
+                    LiteralExpr::Number(_) => self.type_factory.f64(),
+                    LiteralExpr::Bool(_) => self.type_factory.bool(),
+                    LiteralExpr::Unit => self.type_factory.unit(),
                 }
             }
             Expr::Variable(var_use) => {
-                let distance_and_symbol = self.get_definition_distance_and_symbol(&var_use.variable);
+                let distance_and_symbol =
+                    self.get_definition_distance_and_symbol(&var_use.variable);
                 if let Some((distance, _)) = distance_and_symbol {
                     var_use.distance = distance;
                 } else {
-                    let mut diagnostic = InterpreterDiagnostic::new(&var_use.variable.location.source_file, format!("Variable '{}' is not defined here", var_use.variable.lexeme()));
+                    let mut diagnostic = InterpreterDiagnostic::new(
+                        &var_use.variable.location.source_file,
+                        format!(
+                            "Variable '{}' is not defined here",
+                            var_use.variable.lexeme()
+                        ),
+                    );
                     diagnostic.add_primary_label(&var_use.variable.location);
                     return Err(diagnostic.into());
                 }
@@ -193,12 +224,18 @@ impl ResolverPass {
                         if destination_type != &*expression_type {
                             let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
                             diagnostic.add_primary_label(&expr.location);
-                            diagnostic.add_label(&symbol.declaration_site, format!("is declared as {} here", destination_type));
+                            diagnostic.add_label(
+                                &symbol.declaration_site,
+                                format!("is declared as {} here", destination_type),
+                            );
                             return Err(diagnostic.into());
                         }
                     }
                 } else {
-                    let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Variable '{}' is not defined here", destination.lexeme()));
+                    let mut diagnostic = InterpreterDiagnostic::new(
+                        &destination.location.source_file,
+                        format!("Variable '{}' is not defined here", destination.lexeme()),
+                    );
                     diagnostic.add_primary_label(&destination.location);
                     return Err(diagnostic.into());
                 }
@@ -221,7 +258,10 @@ impl ResolverPass {
     }
 
     fn current_scope(&mut self) -> &mut HashMap<String, Symbol> {
-        self.scopes.iter_mut().last().expect("Scope Stack should not be empty")
+        self.scopes
+            .iter_mut()
+            .last()
+            .expect("Scope Stack should not be empty")
     }
 
     fn get_definition_distance_and_symbol(&self, variable: &Token) -> Option<(i32, &Symbol)> {
@@ -239,7 +279,10 @@ impl ResolverPass {
     }
 }
 
-pub fn resolve_variables(ast: &mut AstNode<Program>, type_factory: &TypeFactory) -> FelicoResult<()> {
+pub fn resolve_variables(
+    ast: &mut AstNode<Program>,
+    type_factory: &TypeFactory,
+) -> FelicoResult<()> {
     ResolverPass::new(type_factory.clone()).resolve_program(ast)
 }
 
@@ -248,8 +291,8 @@ mod tests {
     use crate::frontend::parser::parser::Parser;
     use crate::frontend::resolver::resolver_pass::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use expect_test::{expect, Expect};
     use crate::interpreter::core_definitions::TypeFactory;
+    use expect_test::{expect, Expect};
 
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();

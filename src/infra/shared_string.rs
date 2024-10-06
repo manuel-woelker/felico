@@ -2,7 +2,6 @@ use arcstr::ArcStr;
 
 pub type SharedString = ArcStr;
 
-
 #[cfg(test)]
 mod tests {
     use crate::infra::shared_string::SharedString;
@@ -43,5 +42,4 @@ mod tests {
         assert_eq!("foo", format!("{}", s2));
         assert_eq!(s, s2);
     }
-
 }

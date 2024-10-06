@@ -1,11 +1,11 @@
 use crate::frontend::ast::stmt::FunStmt;
+use crate::frontend::ast::types::Type;
 use crate::infra::result::FelicoResult;
+use crate::interpreter::core_definitions::TypeFactory;
 use crate::interpreter::environment::Environment;
 use crate::interpreter::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use crate::frontend::ast::types::Type;
-use crate::interpreter::core_definitions::TypeFactory;
 
 #[derive(Clone)]
 pub struct InterpreterValue {
@@ -37,7 +37,7 @@ impl ValueFactory {
             ty: self.type_factory.bool(),
         }
     }
-    pub fn unit(&self, ) -> InterpreterValue {
+    pub fn unit(&self) -> InterpreterValue {
         InterpreterValue {
             val: ValueKind::Unit,
             ty: self.type_factory.unit(),
@@ -64,15 +64,19 @@ impl ValueFactory {
         }
     }
 
-
-    pub fn new_native_callable(&self, name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + 'static) -> InterpreterValue {
+    pub fn new_native_callable(
+        &self,
+        name: &str,
+        arity: usize,
+        fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>
+            + 'static,
+    ) -> InterpreterValue {
         self.callable(Callable {
             name: name.to_string(),
             arity,
             fun: Rc::new(CallableFun::Native(Box::new(fun))),
         })
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +88,6 @@ pub enum ValueKind {
     Callable(Callable),
     Type(Type),
 }
-
 
 impl Display for InterpreterValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -98,16 +101,11 @@ impl Debug for InterpreterValue {
     }
 }
 
-
 impl Display for ValueKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValueKind::Unit => {
-                f.write_str("()")
-            }
-            ValueKind::String(s) => {
-                f.write_str(s)
-            }
+            ValueKind::Unit => f.write_str("()"),
+            ValueKind::String(s) => f.write_str(s),
             ValueKind::Bool(bool) => {
                 if *bool {
                     f.write_str("true")
@@ -128,7 +126,6 @@ impl Display for ValueKind {
     }
 }
 
-
 #[derive(Clone)]
 pub struct Callable {
     pub name: String,
@@ -146,10 +143,8 @@ pub struct DefinedFunction {
     pub closure: Environment,
 }
 
-
 impl Debug for Callable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Callable '{}/{}'", self.name, self.arity)
     }
 }
-

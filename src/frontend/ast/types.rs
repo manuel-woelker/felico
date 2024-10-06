@@ -1,6 +1,6 @@
+use crate::infra::shared_string::SharedString;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use crate::infra::shared_string::SharedString;
 
 #[derive(Clone)]
 pub struct Type {
@@ -9,11 +9,11 @@ pub struct Type {
 
 impl Type {
     pub fn is_unknown(&self) -> bool {
-       if let TypeKind::Unknown = self.inner.kind {
-           true
-       } else {
-           false
-       }
+        if let TypeKind::Unknown = self.inner.kind {
+            true
+        } else {
+            false
+        }
     }
 }
 

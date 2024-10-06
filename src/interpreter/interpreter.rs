@@ -1,19 +1,21 @@
-use crate::frontend::ast::AstData;
 use crate::frontend::ast::expr::{Expr, LiteralExpr};
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt};
-use crate::interpreter::environment::Environment;
-use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind};
+use crate::frontend::ast::AstData;
 use crate::frontend::lexer::token::TokenType;
 use crate::frontend::parser::parser::{parse_expression, parse_program};
 use crate::frontend::resolver::resolver_pass::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::result::{FelicoResult};
+use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFileHandle;
+use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpreter::environment::Environment;
+use crate::interpreter::value::{
+    Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
+};
 use std::ops::Deref;
 use std::rc::Rc;
-use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
 
 type PrintFn = Box<dyn Fn(&InterpreterValue) -> ()>;
 
@@ -49,7 +51,7 @@ impl Interpreter {
         Ok(Self {
             source_file,
             environment,
-            print_fn: Box::new(|value|  {
+            print_fn: Box::new(|value| {
                 print!("{}", value);
             }),
             fuel: 1000,
@@ -67,7 +69,6 @@ impl Interpreter {
         (self.print_fn)(value);
     }
 
-
     pub fn set_fuel(&mut self, fuel: i64) {
         self.fuel = fuel;
     }
@@ -75,9 +76,13 @@ impl Interpreter {
     fn spend_fuel<T: AstData>(&mut self, stmt: &AstNode<T>) -> FelicoResult<()> {
         self.fuel -= 1;
         if self.fuel <= 0 {
-            return self.create_diagnostic(stmt, "Out of fuel! Execution took to many loops/function calls.", |diagnostic| {
-                diagnostic.add_primary_label(&stmt.location);
-            });
+            return self.create_diagnostic(
+                stmt,
+                "Out of fuel! Execution took to many loops/function calls.",
+                |diagnostic| {
+                    diagnostic.add_primary_label(&stmt.location);
+                },
+            );
         }
         Ok(())
     }
@@ -100,37 +105,35 @@ impl Interpreter {
 
     fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
         Ok(match expr.data.deref() {
-            Expr::Literal(LiteralExpr::Unit) => {
-                self.value_factory.unit()
-            }
+            Expr::Literal(LiteralExpr::Unit) => self.value_factory.unit(),
             Expr::Literal(LiteralExpr::String(string)) => {
                 self.value_factory.new_string(string.clone())
             }
-            Expr::Literal(LiteralExpr::Number(number)) => {
-                self.value_factory.f64(*number)
-            }
-            Expr::Literal(LiteralExpr::Bool(bool)) => {
-                self.value_factory.bool(*bool)
-            }
+            Expr::Literal(LiteralExpr::Number(number)) => self.value_factory.f64(*number),
+            Expr::Literal(LiteralExpr::Bool(bool)) => self.value_factory.bool(*bool),
             Expr::Unary(unary) => {
                 let sub_expression = self.evaluate_expr(&unary.right)?;
                 match unary.operator.token_type {
-                    TokenType::Minus => {
-                        match sub_expression.val {
-                            ValueKind::Number(number) => {
-                                self.value_factory.f64(-number)
-                            }
-                            _ => {
-                                return self.create_diagnostic(expr, format!("Value '{:?}' cannot be negated", sub_expression), |diagnostic| {
+                    TokenType::Minus => match sub_expression.val {
+                        ValueKind::Number(number) => self.value_factory.f64(-number),
+                        _ => {
+                            return self.create_diagnostic(
+                                expr,
+                                format!("Value '{:?}' cannot be negated", sub_expression),
+                                |diagnostic| {
                                     diagnostic.add_primary_label(&expr.location);
-                                });
-                            }
+                                },
+                            );
                         }
-                    }
+                    },
                     _ => {
-                        return self.create_diagnostic(expr, format!("Unsupported unary operator {}", unary.operator.token_type), |diagnostic| {
-                            diagnostic.add_primary_label(&expr.location);
-                        });
+                        return self.create_diagnostic(
+                            expr,
+                            format!("Unsupported unary operator {}", unary.operator.token_type),
+                            |diagnostic| {
+                                diagnostic.add_primary_label(&expr.location);
+                            },
+                        );
                     }
                 }
             }
@@ -144,26 +147,37 @@ impl Interpreter {
                                 if left {
                                     return Ok(self.value_factory.bool(true));
                                 }
-                            } else { // AND
+                            } else {
+                                // AND
                                 if !left {
                                     return Ok(self.value_factory.bool(false));
                                 }
                             }
                             let right_value = self.evaluate_expr(&binary.right)?;
                             return match right_value.val {
-                                ValueKind::Bool(_) => {
-                                    Ok(right_value)
-                                } // Ok
-                                _ => {
-                                    self.create_diagnostic(expr, format!("Unsupported operand for boolean {} operation: {}", binary.operator.token_type, right_value), |diagnostic| {
+                                ValueKind::Bool(_) => Ok(right_value), // Ok
+                                _ => self.create_diagnostic(
+                                    expr,
+                                    format!(
+                                        "Unsupported operand for boolean {} operation: {}",
+                                        binary.operator.token_type, right_value
+                                    ),
+                                    |diagnostic| {
                                         diagnostic.add_primary_label(&binary.right.location);
-                                    })
-                                }
-                            }
+                                    },
+                                ),
+                            };
                         } else {
-                            return self.create_diagnostic(expr, format!("Unsupported operand for boolean {} operation: {}", binary.operator.token_type, left_value), |diagnostic| {
-                                diagnostic.add_primary_label(&binary.left.location);
-                            });
+                            return self.create_diagnostic(
+                                expr,
+                                format!(
+                                    "Unsupported operand for boolean {} operation: {}",
+                                    binary.operator.token_type, left_value
+                                ),
+                                |diagnostic| {
+                                    diagnostic.add_primary_label(&binary.left.location);
+                                },
+                            );
                         }
                     }
                     _ => {}
@@ -172,68 +186,72 @@ impl Interpreter {
                 match (left_value.val, right_value.val) {
                     (ValueKind::Number(left), ValueKind::Number(right)) => {
                         match binary.operator.token_type {
-                            TokenType::Minus => {
-                                self.value_factory.f64(left - right)
-                            }
-                            TokenType::Plus => {
-                                self.value_factory.f64(left + right)
-                            }
-                            TokenType::Star => {
-                                self.value_factory.f64(left * right)
-                            }
-                            TokenType::Slash => {
-                                self.value_factory.f64(left / right)
-                            }
-                            TokenType::EqualEqual => {
-                                self.value_factory.bool(left == right)
-                            }
-                            TokenType::BangEqual => {
-                                self.value_factory.bool(left != right)
-                            }
-                            TokenType::Greater => {
-                                self.value_factory.bool(left > right)
-                            }
-                            TokenType::GreaterEqual => {
-                                self.value_factory.bool(left >= right)
-                            }
-                            TokenType::Less => {
-                                self.value_factory.bool(left < right)
-                            }
-                            TokenType::LessEqual => {
-                                self.value_factory.bool(left <= right)
-                            }
+                            TokenType::Minus => self.value_factory.f64(left - right),
+                            TokenType::Plus => self.value_factory.f64(left + right),
+                            TokenType::Star => self.value_factory.f64(left * right),
+                            TokenType::Slash => self.value_factory.f64(left / right),
+                            TokenType::EqualEqual => self.value_factory.bool(left == right),
+                            TokenType::BangEqual => self.value_factory.bool(left != right),
+                            TokenType::Greater => self.value_factory.bool(left > right),
+                            TokenType::GreaterEqual => self.value_factory.bool(left >= right),
+                            TokenType::Less => self.value_factory.bool(left < right),
+                            TokenType::LessEqual => self.value_factory.bool(left <= right),
                             _ => {
-                                return self.create_diagnostic(expr, format!("Unsupported binary operator for numbers: {}", binary.operator.lexeme()), |diagnostic| {
-                                    diagnostic.add_primary_label(&binary.operator.location);
-                                });
+                                return self.create_diagnostic(
+                                    expr,
+                                    format!(
+                                        "Unsupported binary operator for numbers: {}",
+                                        binary.operator.lexeme()
+                                    ),
+                                    |diagnostic| {
+                                        diagnostic.add_primary_label(&binary.operator.location);
+                                    },
+                                );
                             }
                         }
                     }
-                    (ValueKind::String(left), right) => {
-                        match binary.operator.token_type {
-                            TokenType::Plus => {
-                                return Ok(self.value_factory.new_string(left + &format!("{}", right)))
-                            }
-                            _ => {
-                                return self.create_diagnostic(expr, format!("Unsupported binary operator for string: {}", binary.operator.lexeme()), |diagnostic| {
-                                    diagnostic.add_primary_label(&binary.operator.location);
-                                });
-                            }
+                    (ValueKind::String(left), right) => match binary.operator.token_type {
+                        TokenType::Plus => {
+                            return Ok(self.value_factory.new_string(left + &format!("{}", right)))
                         }
-                    }
+                        _ => {
+                            return self.create_diagnostic(
+                                expr,
+                                format!(
+                                    "Unsupported binary operator for string: {}",
+                                    binary.operator.lexeme()
+                                ),
+                                |diagnostic| {
+                                    diagnostic.add_primary_label(&binary.operator.location);
+                                },
+                            );
+                        }
+                    },
                     (left, right) => {
-                        return self.create_diagnostic(expr, format!("Operator {:?} not defined for values {:?} and {:?}", binary.operator.token_type, left, right), |diagnostic| {
-                            diagnostic.add_primary_label(&expr.location);
-                        });
+                        return self.create_diagnostic(
+                            expr,
+                            format!(
+                                "Operator {:?} not defined for values {:?} and {:?}",
+                                binary.operator.token_type, left, right
+                            ),
+                            |diagnostic| {
+                                diagnostic.add_primary_label(&expr.location);
+                            },
+                        );
                     }
                 }
-                }
-            Expr::Variable(var_use) => {
-                self.environment.get_at_distance(var_use.variable.lexeme(), var_use.distance)?.clone()
             }
+            Expr::Variable(var_use) => self
+                .environment
+                .get_at_distance(var_use.variable.lexeme(), var_use.distance)?
+                .clone(),
             Expr::Assign(assign) => {
                 let value = self.evaluate_expr(&assign.value)?;
-                self.environment.assign_at_distance(&assign.destination.lexeme(), assign.distance, value.clone())?;
+                self.environment.assign_at_distance(
+                    &assign.destination.lexeme(),
+                    assign.distance,
+                    value.clone(),
+                )?;
                 value
             }
             Expr::Get(_get) => {
@@ -311,53 +329,63 @@ impl Interpreter {
                         arguments.push(self.evaluate_expr(expr)?);
                     }
                     let result = match &callable.fun.as_ref() {
-                        CallableFun::Native(fun) => {
-                            match fun(self, arguments) {
-                                Ok(result) => {
-                                    result
-                                }
-                                Err(err) => {
-                                    return self.create_diagnostic(expr, format!("Error in native call to {}(): {}", callable.name, err), |diagnostic| {
+                        CallableFun::Native(fun) => match fun(self, arguments) {
+                            Ok(result) => result,
+                            Err(err) => {
+                                return self.create_diagnostic(
+                                    expr,
+                                    format!("Error in native call to {}(): {}", callable.name, err),
+                                    |diagnostic| {
                                         diagnostic.add_primary_label(&call.callee.location);
-                                    });
-                                }
+                                    },
+                                );
                             }
-                        }
+                        },
                         CallableFun::Defined(defined_function) => {
                             let old_environment = self.environment.clone();
                             self.environment = defined_function.closure.clone().child_environment();
-                            defined_function.fun_stmt.parameters.iter().zip(arguments.into_iter()).for_each(|(name, value)| {
-                                self.environment.define(name.lexeme(), value);
-                            });
+                            defined_function
+                                .fun_stmt
+                                .parameters
+                                .iter()
+                                .zip(arguments.into_iter())
+                                .for_each(|(name, value)| {
+                                    self.environment.define(name.lexeme(), value);
+                                });
                             let result = self.evaluate_stmt(&defined_function.fun_stmt.body)?;
                             self.environment = old_environment;
                             match result {
-                                StmtResult::Continue => {
-                                    self.value_factory.unit()
-                                }
-                                StmtResult::Return(value) => {
-                                    value
-                                }
+                                StmtResult::Continue => self.value_factory.unit(),
+                                StmtResult::Return(value) => value,
                             }
                         }
                     };
                     self.available_stack += 1;
                     result
                 } else {
-                    return self.create_diagnostic(expr, format!("Expression '{:?}' is not callable", callee), |diagnostic| {
-                        diagnostic.add_primary_label(&call.callee.location);
-                    });
+                    return self.create_diagnostic(
+                        expr,
+                        format!("Expression '{:?}' is not callable", callee),
+                        |diagnostic| {
+                            diagnostic.add_primary_label(&call.callee.location);
+                        },
+                    );
                 }
             }
         })
     }
 
-    fn create_diagnostic<T, S: Into<String>, A: AstData>(&self, ast_node: &AstNode<A>, message: S,  mut f: impl FnMut(&mut InterpreterDiagnostic) -> ()) -> FelicoResult<T> {
-        let mut diagnostic = InterpreterDiagnostic::new(&ast_node.location.source_file, message.into());
+    fn create_diagnostic<T, S: Into<String>, A: AstData>(
+        &self,
+        ast_node: &AstNode<A>,
+        message: S,
+        mut f: impl FnMut(&mut InterpreterDiagnostic) -> (),
+    ) -> FelicoResult<T> {
+        let mut diagnostic =
+            InterpreterDiagnostic::new(&ast_node.location.source_file, message.into());
         f(&mut diagnostic);
         Err(diagnostic.into())
     }
-
 
     fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<StmtResult> {
         match stmt.data.deref() {
@@ -378,29 +406,34 @@ impl Interpreter {
                 self.environment.exit();
                 return Ok(result);
             }
-            Stmt::If(if_stmt) => {
-                match self.evaluate_expr(&if_stmt.condition)?.val {
-                    ValueKind::Bool(true) => {
-                        let result = self.evaluate_stmt(&if_stmt.then_stmt)?;
+            Stmt::If(if_stmt) => match self.evaluate_expr(&if_stmt.condition)?.val {
+                ValueKind::Bool(true) => {
+                    let result = self.evaluate_stmt(&if_stmt.then_stmt)?;
+                    if result.is_return() {
+                        return Ok(result);
+                    }
+                }
+                ValueKind::Bool(false) => {
+                    if let Some(else_stmt) = &if_stmt.else_stmt {
+                        let result = self.evaluate_stmt(else_stmt)?;
                         if result.is_return() {
                             return Ok(result);
                         }
                     }
-                    ValueKind::Bool(false) => {
-                        if let Some(else_stmt) = &if_stmt.else_stmt {
-                            let result = self.evaluate_stmt(else_stmt)?;
-                            if result.is_return() {
-                                return Ok(result);
-                            }
-                        }
-                    }
-                    other => {
-                        return self.create_diagnostic(&if_stmt.condition, format!("Expected true or false in if condition, but found '{}' instead", other), |diagnostic| {
-                            diagnostic.add_primary_label(&if_stmt.condition.location);
-                        });
-                    }
                 }
-            }
+                other => {
+                    return self.create_diagnostic(
+                        &if_stmt.condition,
+                        format!(
+                            "Expected true or false in if condition, but found '{}' instead",
+                            other
+                        ),
+                        |diagnostic| {
+                            diagnostic.add_primary_label(&if_stmt.condition.location);
+                        },
+                    );
+                }
+            },
             Stmt::While(while_stmt) => {
                 loop {
                     match self.evaluate_expr(&while_stmt.condition)?.val {
@@ -457,7 +490,12 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
     let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input))?;
     let output_buffer = std::sync::Arc::new(std::sync::RwLock::new(String::new()));
     let output_buffer_clone = output_buffer.clone();
-    interpreter.set_print_fn(Box::new(move |value| output_buffer.write().unwrap().push_str(&format!("{}", value))));
+    interpreter.set_print_fn(Box::new(move |value| {
+        output_buffer
+            .write()
+            .unwrap()
+            .push_str(&format!("{}", value))
+    }));
     interpreter.evaluate_program()?;
     let guard = output_buffer_clone.write().unwrap();
     Ok(guard.deref().clone())
@@ -465,10 +503,10 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::eval::eval_expression;
-    use crate::interpreter::interpreter::{run_program_to_string, Interpreter};
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::infra::source_file::SourceFileHandle;
+    use crate::interpreter::eval::eval_expression;
+    use crate::interpreter::interpreter::{run_program_to_string, Interpreter};
     use expect_test::{expect, Expect};
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {

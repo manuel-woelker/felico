@@ -1,8 +1,8 @@
 use crate::frontend::ast::expr::Expr;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::AstData;
-use std::fmt::Debug;
 use crate::frontend::lexer::token::Token;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -21,7 +21,6 @@ impl AstData for Stmt {}
 pub struct ReturnStmt {
     pub expression: AstNode<Expr>,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ExprStmt {
@@ -48,7 +47,6 @@ impl AstData for FunStmt {}
 pub struct BlockStmt {
     pub stmts: Vec<AstNode<Stmt>>,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct IfStmt {

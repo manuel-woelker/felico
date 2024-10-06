@@ -1,3 +1,4 @@
+use crate::infra::result::FelicoResult;
 use miette::{MietteError, MietteSpanContents, SourceCode, SourceSpan, SpanContents};
 use std::fmt::Debug;
 use std::fs::File;
@@ -5,7 +6,6 @@ use std::io::Read;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
-use crate::infra::result::FelicoResult;
 
 #[derive(Debug)]
 pub struct SourceFile {
@@ -22,7 +22,6 @@ impl SourceFile {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct SourceFileHandle {
     inner: Arc<SourceFile>,
@@ -30,7 +29,12 @@ pub struct SourceFileHandle {
 
 impl SourceFileHandle {
     pub fn from_path<T: AsRef<Path>>(path: T) -> FelicoResult<Self> {
-        let filename = path.as_ref().as_os_str().to_owned().into_string().map_err(|_| format!("Failed to convert filename {:?}", path.as_ref()))?;
+        let filename = path
+            .as_ref()
+            .as_os_str()
+            .to_owned()
+            .into_string()
+            .map_err(|_| format!("Failed to convert filename {:?}", path.as_ref()))?;
         let mut source_code = String::new();
         File::open(path)?.read_to_string(&mut source_code)?;
         Ok(Self::from_string(filename, source_code))
@@ -44,7 +48,6 @@ impl SourceFileHandle {
             }),
         }
     }
-
 }
 
 impl Deref for SourceFileHandle {
@@ -63,7 +66,8 @@ impl SourceCode for SourceFileHandle {
         context_lines_after: usize,
     ) -> Result<Box<dyn SpanContents<'a> + 'a>, MietteError> {
         let inner_contents =
-            self.source_code.read_span(span, context_lines_before, context_lines_after)?;
+            self.source_code
+                .read_span(span, context_lines_before, context_lines_after)?;
         let contents = MietteSpanContents::new_named(
             self.filename.clone(),
             inner_contents.data(),

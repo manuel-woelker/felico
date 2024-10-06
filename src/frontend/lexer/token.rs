@@ -1,18 +1,31 @@
-use std::fmt::{Debug, Display, Formatter};
 use crate::infra::location::Location;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TokenType {
     // Single-character tokens.
-    LeftParen, RightParen,
-    LeftBrace, RightBrace,
-    Comma, Dot, Minus, Plus, Semicolon, Slash, Star, Colon,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    Colon,
 
     // One or two character tokens.
-    Bang, BangEqual,
-    Equal, EqualEqual,
-    Greater, GreaterEqual,
-    Less, LessEqual,
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 
     // Literals.
     Identifier,
@@ -20,9 +33,17 @@ pub enum TokenType {
     Number,
 
     // Keywords.
-    And, Or, Else, False, Fun, For, If,
-    Return, True,
-    Let, While,
+    And,
+    Or,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    Return,
+    True,
+    Let,
+    While,
 
     UnexpectedCharacter,
 
@@ -44,9 +65,7 @@ pub struct Token {
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.token_type {
-            TokenType::EOF => {
-                f.write_str("End of file")
-            }
+            TokenType::EOF => f.write_str("End of file"),
             _other => {
                 write!(f, "'{}' ({})", self.lexeme(), self.token_type)
             }
@@ -57,8 +76,7 @@ impl Display for Token {
 impl Token {
     pub fn lexeme(&self) -> &str {
         let location = &self.location;
-        &self.location.source_file.source_code()[location.start_byte as usize..location.end_byte as usize]
+        &self.location.source_file.source_code()
+            [location.start_byte as usize..location.end_byte as usize]
     }
-
-
 }

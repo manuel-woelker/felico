@@ -3,8 +3,8 @@ use std::fmt::{Debug, Formatter};
 use std::str::Chars;
 
 use crate::frontend::lexer::token::{Token, TokenType};
+use crate::infra::location::{ByteOffset, Location};
 use crate::infra::result::FelicoResult;
-use crate::infra::location::{Location, ByteOffset};
 use crate::infra::source_file::SourceFileHandle;
 use ouroboros::self_referencing;
 
@@ -12,7 +12,6 @@ use ouroboros::self_referencing;
 struct OwningCharIter {
     source_file: SourceFileHandle,
     #[borrows(source_file)]
-
     #[covariant]
     chars: Chars<'this>,
 }
@@ -22,11 +21,12 @@ impl OwningCharIter {
         OwningCharIterBuilder {
             source_file: source_file.clone(),
             chars_builder: |s| s.source_code().chars(),
-        }.build()
+        }
+        .build()
     }
 
     #[inline]
-    fn next(&mut self) -> Option<char>{
+    fn next(&mut self) -> Option<char> {
         self.with_chars_mut(|chars| chars.next())
     }
 }
@@ -36,7 +36,6 @@ impl Debug for OwningCharIter {
         Ok(())
     }
 }
-
 
 #[derive(Debug)]
 pub struct Lexer {
@@ -207,51 +206,61 @@ impl Iterator for Lexer {
                 ':' => TokenType::Colon,
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
-                '!' => if self.matches('=') {
-                    TokenType::BangEqual
-                } else {
-                    TokenType::Bang
-                }
-                '=' => if self.matches('=') {
-                    TokenType::EqualEqual
-                } else {
-                    TokenType::Equal
-                }
-                '<' => if self.matches('=') {
-                    TokenType::LessEqual
-                } else {
-                    TokenType::Less
-                }
-                '>' => if self.matches('=') {
-                    TokenType::GreaterEqual
-                } else {
-                    TokenType::Greater
-                }
-                '&' => if self.matches('&') {
-                    TokenType::And
-                } else {
-                    TokenType::UnexpectedCharacter
-                }
-                '|' => if self.matches('|') {
-                    TokenType::Or
-                } else {
-                    TokenType::UnexpectedCharacter
-                }
-                '/' => if self.matches('/') {
-                    while self.next_char != '\n' && !self.is_at_end() {
-                        self.advance();
+                '!' => {
+                    if self.matches('=') {
+                        TokenType::BangEqual
+                    } else {
+                        TokenType::Bang
                     }
-                    self.ignore_chars();
-                    continue;
-                } else {
-                    TokenType::Slash
                 }
-                '0'..='9' => {
-                    return Some(self.lex_number())
+                '=' => {
+                    if self.matches('=') {
+                        TokenType::EqualEqual
+                    } else {
+                        TokenType::Equal
+                    }
                 }
-                'a'..='z'|'A'..='Z'|'_' => {
-                    return Some(self.lex_identifier_or_keyword())
+                '<' => {
+                    if self.matches('=') {
+                        TokenType::LessEqual
+                    } else {
+                        TokenType::Less
+                    }
                 }
+                '>' => {
+                    if self.matches('=') {
+                        TokenType::GreaterEqual
+                    } else {
+                        TokenType::Greater
+                    }
+                }
+                '&' => {
+                    if self.matches('&') {
+                        TokenType::And
+                    } else {
+                        TokenType::UnexpectedCharacter
+                    }
+                }
+                '|' => {
+                    if self.matches('|') {
+                        TokenType::Or
+                    } else {
+                        TokenType::UnexpectedCharacter
+                    }
+                }
+                '/' => {
+                    if self.matches('/') {
+                        while self.next_char != '\n' && !self.is_at_end() {
+                            self.advance();
+                        }
+                        self.ignore_chars();
+                        continue;
+                    } else {
+                        TokenType::Slash
+                    }
+                }
+                '0'..='9' => return Some(self.lex_number()),
+                'a'..='z' | 'A'..='Z' | '_' => return Some(self.lex_identifier_or_keyword()),
                 ' ' | '\t' | '\r' => {
                     self.ignore_chars();
                     continue;
@@ -275,15 +284,12 @@ fn is_digit(c: char) -> bool {
 }
 
 fn is_alpha(c: char) -> bool {
-    (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        c == '_'
+    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
 
 fn is_alpha_numeric(c: char) -> bool {
     is_alpha(c) || is_digit(c)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -291,22 +297,32 @@ mod tests {
     use expect_test::{expect, Expect};
     /*
 
-        TODO: test non-utf8
-            #[test]
-            fn lex_non_utf8() {
-                let result = Lexer::new(SourceFileHandle::from_string("foo", || Box::new(Cursor::new(b"\xc3\x28")))));
-                let err = result.err().expect("Should error");
-                let expected = expect!["Could not read file 'foo': Could not read to string: stream did not contain valid UTF-8"];
-                expected.assert_eq(&err.to_string());
-            }
-        */
+    TODO: test non-utf8
+        #[test]
+        fn lex_non_utf8() {
+            let result = Lexer::new(SourceFileHandle::from_string("foo", || Box::new(Cursor::new(b"\xc3\x28")))));
+            let err = result.err().expect("Should error");
+            let expected = expect!["Could not read file 'foo': Could not read to string: stream did not contain valid UTF-8"];
+            expected.assert_eq(&err.to_string());
+        }
+    */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
         let s = Lexer::new(SourceFileHandle::from_string(name, input)).unwrap();
         let result = s.collect::<Vec<_>>();
-        let result_tokens = result.iter().map(|token| format!("{:<10} '{}' {}+{}", token.token_type, token.lexeme(), token.location.start_byte, token.location.end_byte - token.location.start_byte)).fold(String::new(), |a, b| a + &b + "\n");
+        let result_tokens = result
+            .iter()
+            .map(|token| {
+                format!(
+                    "{:<10} '{}' {}+{}",
+                    token.token_type,
+                    token.lexeme(),
+                    token.location.start_byte,
+                    token.location.end_byte - token.location.start_byte
+                )
+            })
+            .fold(String::new(), |a, b| a + &b + "\n");
         expected.assert_eq(&result_tokens);
     }
-
 
     macro_rules! test_lex {
     ( $($label:ident: $input:expr => $expect:expr;)+ ) => {

@@ -49,12 +49,8 @@ impl<'a> AstPrinter<'a> {
 
     fn expr_to_tree(&self, ast: &AstNode<Expr>) -> Tree<String> {
         let tree = match &ast.data.as_ref() {
-            Expr::Literal(literal) => {
-                Tree::new(format!("{:?}", literal))
-            }
-            Expr::Variable(var_use) => {
-                Tree::new(format!("Read '{}'", var_use.variable.lexeme()))
-            }
+            Expr::Literal(literal) => Tree::new(format!("{:?}", literal)),
+            Expr::Variable(var_use) => Tree::new(format!("Read '{}'", var_use.variable.lexeme())),
             Expr::Unary(unary) => {
                 let mut tree = Tree::new(format!("{}", unary.operator.lexeme()));
                 tree.push(self.expr_to_tree(&unary.right));
@@ -96,9 +92,7 @@ impl<'a> AstPrinter<'a> {
 
     fn stmt_to_tree(&self, ast: &AstNode<Stmt>) -> Tree<String> {
         let tree = match &ast.data.as_ref() {
-            Stmt::Expression(expr) => {
-                self.expr_to_tree(&expr.expression)
-            }
+            Stmt::Expression(expr) => self.expr_to_tree(&expr.expression),
             Stmt::Return(return_stmt) => {
                 let mut tree = Tree::new("Return".into());
                 tree.push(self.expr_to_tree(&return_stmt.expression));
@@ -110,8 +104,15 @@ impl<'a> AstPrinter<'a> {
                 tree
             }
             Stmt::Fun(fun) => {
-                let mut tree = Tree::new(format!("Declare fun '{}({})'", fun.name.lexeme(), fun.parameters.iter().map(|p| p.lexeme()).collect::<Vec<&str>>()
-                    .join(",")));
+                let mut tree = Tree::new(format!(
+                    "Declare fun '{}({})'",
+                    fun.name.lexeme(),
+                    fun.parameters
+                        .iter()
+                        .map(|p| p.lexeme())
+                        .collect::<Vec<&str>>()
+                        .join(",")
+                ));
                 tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
                 tree
             }
@@ -152,9 +153,12 @@ impl<'a> AstPrinter<'a> {
     fn add_location<T: AstData>(&self, mut tree: Tree<String>, ast: &AstNode<T>) -> Tree<String> {
         if self.include_locations {
             let location = &ast.location;
-            tree.root += &format!("     [{}+{}]", location.start_byte, location.end_byte - location.start_byte)
+            tree.root += &format!(
+                "     [{}+{}]",
+                location.start_byte,
+                location.end_byte - location.start_byte
+            )
         }
         tree
     }
 }
-

@@ -17,7 +17,6 @@ pub enum Expr {
 
 impl AstData for Expr {}
 
-
 #[derive(Debug, Clone)]
 pub struct VarUse {
     pub variable: Token,
@@ -28,7 +27,7 @@ pub struct VarUse {
 pub struct BinaryExpr {
     pub operator: Token,
     pub left: AstNode<Expr>,
-    pub right: AstNode<Expr>
+    pub right: AstNode<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,11 +37,10 @@ pub struct AssignExpr {
     pub distance: i32,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct UnaryExpr {
     pub operator: Token,
-    pub right: AstNode<Expr>
+    pub right: AstNode<Expr>,
 }
 
 #[derive(Debug, Clone)]

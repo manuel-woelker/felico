@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use crate::frontend::ast::types::{PrimitiveType, Type, TypeKind};
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
 use crate::interpreter::value::{InterpreterValue, ValueFactory, ValueKind};
+use std::rc::Rc;
 
 pub struct CoreDefinition {
     pub name: SharedString,
@@ -37,7 +37,6 @@ struct TypeFactoryInner {
 
 factory_fns!(bool, unit, f64, function, ty, string, unknown);
 
-
 impl TypeFactory {
     pub fn new() -> Self {
         Self {
@@ -52,7 +51,6 @@ impl TypeFactory {
             }),
         }
     }
-
 }
 
 pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
@@ -67,19 +65,25 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
 
     add_definition("bool", value_factory.new_type(type_factory.bool()));
     let value_factory_clone = value_factory.clone();
-    add_definition("sqrt", value_factory.new_native_callable("sqrt", 1, move |_interpreter, arguments| {
-        if let ValueKind::Number(arg) = arguments[0].val {
-            Ok(value_factory_clone.f64(arg.sqrt()))
-        } else {
-            bail!("Expected number as argument to sqrt")
-        }
-    }));
+    add_definition(
+        "sqrt",
+        value_factory.new_native_callable("sqrt", 1, move |_interpreter, arguments| {
+            if let ValueKind::Number(arg) = arguments[0].val {
+                Ok(value_factory_clone.f64(arg.sqrt()))
+            } else {
+                bail!("Expected number as argument to sqrt")
+            }
+        }),
+    );
     let value_factory_clone = value_factory.clone();
-    add_definition("debug_print", value_factory.new_native_callable("debug_print", 1, move |interpreter, arguments| {
-        for argument in &arguments {
-            interpreter.print(argument);
-        }
-        Ok(value_factory_clone.unit())
-    }));
+    add_definition(
+        "debug_print",
+        value_factory.new_native_callable("debug_print", 1, move |interpreter, arguments| {
+            for argument in &arguments {
+                interpreter.print(argument);
+            }
+            Ok(value_factory_clone.unit())
+        }),
+    );
     core_definitions
 }

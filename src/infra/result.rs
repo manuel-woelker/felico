@@ -1,11 +1,14 @@
+use crate::infra::diagnostic::InterpreterDiagnostic;
 use error_stack::Report;
 use std::fmt::{Debug, Display, Formatter};
-use crate::infra::diagnostic::InterpreterDiagnostic;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FelicoError {
     #[error("IO Error: {cause}")]
-    Io { #[from] cause: std::io::Error },
+    Io {
+        #[from]
+        cause: std::io::Error,
+    },
 
     #[error("{0:#?}")]
     Diagnostic(#[from] InterpreterDiagnostic),
@@ -14,10 +17,10 @@ pub enum FelicoError {
     Message { message: String },
 
     #[error("{inner}")]
-    Generic { inner: Box<dyn std::error::Error + Sync + Send + 'static> },
-
+    Generic {
+        inner: Box<dyn std::error::Error + Sync + Send + 'static>,
+    },
 }
-
 
 // Wrap error_stack::Report for better encapsulation, and to implement Into Transformations
 pub struct FelicoReport {
@@ -25,7 +28,6 @@ pub struct FelicoReport {
 }
 
 pub type FelicoResult<T> = Result<T, FelicoReport>;
-
 
 impl Debug for FelicoReport {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -45,7 +47,7 @@ impl<T: Into<FelicoError>> From<T> for FelicoReport {
     #[track_caller]
     fn from(value: T) -> Self {
         FelicoReport {
-            report: Report::new(value.into())
+            report: Report::new(value.into()),
         }
     }
 }
@@ -57,13 +59,14 @@ impl From<String> for FelicoError {
     }
 }
 
-impl <'a> From<&'a str> for FelicoError {
+impl<'a> From<&'a str> for FelicoError {
     #[track_caller]
     fn from(message: &'a str) -> Self {
-        FelicoError::Message { message: message.to_string() }
+        FelicoError::Message {
+            message: message.to_string(),
+        }
     }
 }
-
 
 pub trait FelicoResultExt<T, E>: Sized {
     #[track_caller]
@@ -72,7 +75,7 @@ pub trait FelicoResultExt<T, E>: Sized {
     fn with_whatever_context(self, f: impl FnOnce(&E) -> String) -> FelicoResult<T>;
 }
 
-impl <T, E: Into<FelicoReport>> FelicoResultExt<T, E> for Result<T, E> {
+impl<T, E: Into<FelicoReport>> FelicoResultExt<T, E> for Result<T, E> {
     fn whatever_context(self, message: &str) -> FelicoResult<T> {
         self.with_whatever_context(|_| message.to_string())
     }
@@ -80,26 +83,27 @@ impl <T, E: Into<FelicoReport>> FelicoResultExt<T, E> for Result<T, E> {
     #[track_caller]
     fn with_whatever_context(self, f: impl FnOnce(&E) -> String) -> FelicoResult<T> {
         match self {
-            Ok(result) => {
-                Ok(result)
-            }
+            Ok(result) => Ok(result),
             Err(e) => {
                 let message = f(&e);
                 let stack = e.into();
-                let stack = FelicoReport {report: stack.report.change_context(FelicoError::Message {message})};
+                let stack = FelicoReport {
+                    report: stack
+                        .report
+                        .change_context(FelicoError::Message { message }),
+                };
                 Err(stack)
             }
         }
     }
-
-
 }
 
 #[track_caller]
 pub fn failed<T: Into<String>>(message: T) -> FelicoReport {
     FelicoError::Message {
         message: message.into(),
-    }.into()
+    }
+    .into()
 }
 
 #[allow(unused)]
