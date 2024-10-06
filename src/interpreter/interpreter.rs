@@ -4,7 +4,7 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::interpreter::environment::Environment;
-use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue, ValueKind};
+use crate::interpreter::value::{Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind};
 use crate::frontend::lexer::token::TokenType;
 use crate::frontend::parser::parser::{parse_expression, parse_program};
 use crate::frontend::resolver::resolver_pass::resolve_variables;
@@ -12,15 +12,17 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
 use std::ops::Deref;
-use std::sync::Arc;
-use crate::interpreter::core_definitions::get_core_definitions;
+use std::rc::Rc;
+use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
 
 type PrintFn = Box<dyn Fn(&InterpreterValue) -> ()>;
 
 pub struct Interpreter {
     source_file: SourceFileHandle,
+    type_factory: TypeFactory,
+    value_factory: ValueFactory,
     environment: Environment,
-    pub(crate) print_fn: PrintFn,
+    print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
 }
@@ -39,10 +41,10 @@ impl StmtResult {
 impl Interpreter {
     pub fn new(source_file: SourceFileHandle) -> FelicoResult<Self> {
         let mut environment = Environment::new();
-        for core_definition in get_core_definitions() {
+        let type_factory = TypeFactory::new();
+        for core_definition in get_core_definitions(&type_factory) {
             environment.define(&core_definition.name, core_definition.value.clone());
         }
-
         environment.enter_new();
         Ok(Self {
             source_file,
@@ -52,12 +54,19 @@ impl Interpreter {
             }),
             fuel: 1000,
             available_stack: 20,
+            value_factory: ValueFactory::new(&type_factory),
+            type_factory,
         })
     }
 
     pub fn set_print_fn(&mut self, print_fn: PrintFn) {
         self.print_fn = print_fn;
     }
+
+    pub fn print(&self, value: &InterpreterValue) -> () {
+        (self.print_fn)(value);
+    }
+
 
     pub fn set_fuel(&mut self, fuel: i64) {
         self.fuel = fuel;
@@ -74,8 +83,8 @@ impl Interpreter {
     }
 
     pub fn evaluate_program(mut self) -> FelicoResult<()> {
-        let mut program = parse_program(self.source_file.clone())?;
-        resolve_variables(&mut program)?;
+        let mut program = parse_program(self.source_file.clone(), &self.type_factory)?;
+        resolve_variables(&mut program, &self.type_factory)?;
         self.evaluate_prgrm(&program)
     }
 
@@ -92,16 +101,16 @@ impl Interpreter {
     fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
         Ok(match expr.data.deref() {
             Expr::Literal(LiteralExpr::Unit) => {
-                InterpreterValue::unit()
+                self.value_factory.unit()
             }
             Expr::Literal(LiteralExpr::String(string)) => {
-                InterpreterValue::new_string(string.clone())
+                self.value_factory.new_string(string.clone())
             }
             Expr::Literal(LiteralExpr::Number(number)) => {
-                InterpreterValue::f64(*number)
+                self.value_factory.f64(*number)
             }
             Expr::Literal(LiteralExpr::Bool(bool)) => {
-                InterpreterValue::bool(*bool)
+                self.value_factory.bool(*bool)
             }
             Expr::Unary(unary) => {
                 let sub_expression = self.evaluate_expr(&unary.right)?;
@@ -109,7 +118,7 @@ impl Interpreter {
                     TokenType::Minus => {
                         match sub_expression.val {
                             ValueKind::Number(number) => {
-                                InterpreterValue::f64(-number)
+                                self.value_factory.f64(-number)
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Value '{:?}' cannot be negated", sub_expression), |diagnostic| {
@@ -133,11 +142,11 @@ impl Interpreter {
                         if let ValueKind::Bool(left) = left_value.val {
                             if binary.operator.token_type == TokenType::Or {
                                 if left {
-                                    return Ok(InterpreterValue::bool(true));
+                                    return Ok(self.value_factory.bool(true));
                                 }
                             } else { // AND
                                 if !left {
-                                    return Ok(InterpreterValue::bool(false));
+                                    return Ok(self.value_factory.bool(false));
                                 }
                             }
                             let right_value = self.evaluate_expr(&binary.right)?;
@@ -164,34 +173,34 @@ impl Interpreter {
                     (ValueKind::Number(left), ValueKind::Number(right)) => {
                         match binary.operator.token_type {
                             TokenType::Minus => {
-                                InterpreterValue::f64(left - right)
+                                self.value_factory.f64(left - right)
                             }
                             TokenType::Plus => {
-                                InterpreterValue::f64(left + right)
+                                self.value_factory.f64(left + right)
                             }
                             TokenType::Star => {
-                                InterpreterValue::f64(left * right)
+                                self.value_factory.f64(left * right)
                             }
                             TokenType::Slash => {
-                                InterpreterValue::f64(left / right)
+                                self.value_factory.f64(left / right)
                             }
                             TokenType::EqualEqual => {
-                                InterpreterValue::bool(left == right)
+                                self.value_factory.bool(left == right)
                             }
                             TokenType::BangEqual => {
-                                InterpreterValue::bool(left != right)
+                                self.value_factory.bool(left != right)
                             }
                             TokenType::Greater => {
-                                InterpreterValue::bool(left > right)
+                                self.value_factory.bool(left > right)
                             }
                             TokenType::GreaterEqual => {
-                                InterpreterValue::bool(left >= right)
+                                self.value_factory.bool(left >= right)
                             }
                             TokenType::Less => {
-                                InterpreterValue::bool(left < right)
+                                self.value_factory.bool(left < right)
                             }
                             TokenType::LessEqual => {
-                                InterpreterValue::bool(left <= right)
+                                self.value_factory.bool(left <= right)
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Unsupported binary operator for numbers: {}", binary.operator.lexeme()), |diagnostic| {
@@ -203,7 +212,7 @@ impl Interpreter {
                     (ValueKind::String(left), right) => {
                         match binary.operator.token_type {
                             TokenType::Plus => {
-                                return Ok(InterpreterValue::new_string(left + &format!("{}", right)))
+                                return Ok(self.value_factory.new_string(left + &format!("{}", right)))
                             }
                             _ => {
                                 return self.create_diagnostic(expr, format!("Unsupported binary operator for string: {}", binary.operator.lexeme()), |diagnostic| {
@@ -231,16 +240,16 @@ impl Interpreter {
                 todo!("Get not supported");
                 /*
                 let object = self.evaluate_expr(&get.object)?;
-                return if let InterpreterValue::Object(instance) = &object {
+                return if let self.value_factory.Object(instance) = &object {
                     if let Some(value) = instance.borrow().fields.get(get.name.lexeme()) {
                         return Ok(value.clone());
                     }
                     if let Some(method) = instance.borrow().class.method_map.get(get.name.lexeme()) {
-                        if let InterpreterValue::Callable(callable) = &method {
+                        if let self.value_factory.Callable(callable) = &method {
                             if let CallableFun::Defined(fun) = &*callable.fun {
                                 let closure = fun.closure.child_environment();
                                 closure.define("this", object.clone());
-                                return Ok(InterpreterValue::Callable(Callable {
+                                return Ok(self.value_factory.Callable(Callable {
                                     name: callable.name.clone(),
                                     arity: callable.arity,
                                     fun: Rc::new(CallableFun::Defined(DefinedFunction {
@@ -269,7 +278,7 @@ impl Interpreter {
                 todo!("Set not supported");
                 /*
                 let object = self.evaluate_expr(&set.object)?;
-                return if let InterpreterValue::Object(instance) = object {
+                return if let self.value_factory.Object(instance) = object {
                     let value = self.evaluate_expr(&set.value)?;
                     instance.borrow_mut().fields.insert(set.name.lexeme().to_string(), value.clone());
                     Ok(value)
@@ -324,7 +333,7 @@ impl Interpreter {
                             self.environment = old_environment;
                             match result {
                                 StmtResult::Continue => {
-                                    InterpreterValue::unit()
+                                    self.value_factory.unit()
                                 }
                                 StmtResult::Return(value) => {
                                     value
@@ -422,10 +431,10 @@ impl Interpreter {
     }
 
     fn create_fun_callable(&mut self, fun: &FunStmt) -> InterpreterValue {
-        let callable = InterpreterValue::callable(Callable {
+        let callable = self.value_factory.callable(Callable {
             name: fun.name.lexeme().to_string(),
             arity: fun.parameters.len(),
-            fun: Arc::new(CallableFun::Defined(DefinedFunction {
+            fun: Rc::new(CallableFun::Defined(DefinedFunction {
                 fun_stmt: fun.clone(),
                 closure: self.environment.clone(),
             })),

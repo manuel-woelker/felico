@@ -3,13 +3,14 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
+use crate::frontend::ast::types::Type;
 use crate::frontend::lexer::token::Token;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
-use crate::interpreter::core_definitions::{get_core_definitions, TYPE_BOOL, TYPE_F64, TYPE_FUNCTION, TYPE_STRING, TYPE_UNIT, TYPE_UNKNOWN};
-use crate::interpreter::value::{InterpreterValue, Type, ValueKind};
+use crate::interpreter::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpreter::value::{InterpreterValue, ValueKind};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -24,17 +25,18 @@ struct Symbol {
 
 struct ResolverPass {
     scopes: Vec<HashMap<String, Symbol>>,
+    type_factory: TypeFactory,
 }
 
 impl ResolverPass {
-    fn new() -> Self {
+    fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: HashMap<String, Symbol> = Default::default();
         let location = Location {
             source_file: SourceFileHandle::from_string("native", "native_code"),
             start_byte: 0,
             end_byte: 0,
         };
-        for core_definition in get_core_definitions() {
+        for core_definition in get_core_definitions(&type_factory) {
             global_scope.insert(core_definition.name.to_string(), Symbol {
                 declaration_site: location.clone(),
                 is_defined: true,
@@ -44,6 +46,7 @@ impl ResolverPass {
         }
         ResolverPass {
             scopes: vec![global_scope, Default::default()],
+            type_factory,
         }
     }
     pub(crate) fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
@@ -58,6 +61,7 @@ impl ResolverPass {
     }
 
     fn resolve_stmt(&mut self, stmt: &mut AstNode<Stmt>) -> FelicoResult<()> {
+        let type_factory = self.type_factory.clone();
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
                 let name = let_stmt.name.lexeme();
@@ -78,7 +82,7 @@ impl ResolverPass {
                     };
                     ty.clone()
                 } else {
-                    TYPE_UNKNOWN.clone()
+                    self.type_factory.unknown()
                 };
                 match self.current_scope().entry(name.to_string()) {
                     Entry::Occupied(value) => {
@@ -110,13 +114,13 @@ impl ResolverPass {
                         return Err(diagnostic.into());
                     }
                     Entry::Vacant(slot) => {
-                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: TYPE_FUNCTION.clone(), value: None });
+                        slot.insert(Symbol { declaration_site: fun_stmt.name.location.clone(), is_defined: true, ty: type_factory.function(), value: None });
                     }
                 }
                 self.scopes.push(Default::default());
                 let current_scope = self.current_scope();
                 for parameter in &fun_stmt.parameters {
-                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: TYPE_UNKNOWN.clone(), value: None });
+                    current_scope.insert(parameter.lexeme().to_string(), Symbol { declaration_site: parameter.location.clone(), is_defined: true, ty: type_factory.unknown(), value: None });
                 }
                 self.resolve_stmt(&mut fun_stmt.body)?;
                 self.scopes.pop();
@@ -154,16 +158,16 @@ impl ResolverPass {
             Expr::Literal(literal) => {
                 expr.ty = match literal {
                     LiteralExpr::String(_) => {
-                        TYPE_STRING.clone()
+                        self.type_factory.string()
                     }
                     LiteralExpr::Number(_) => {
-                        TYPE_F64.clone()
+                        self.type_factory.f64()
                     }
                     LiteralExpr::Bool(_) => {
-                        TYPE_BOOL.clone()
+                        self.type_factory.bool()
                     }
                     LiteralExpr::Unit => {
-                        TYPE_UNIT.clone()
+                        self.type_factory.unit()
                     }
                 }
             }
@@ -184,7 +188,7 @@ impl ResolverPass {
                 if let Some((distance, symbol)) = distance_and_symbol {
                     assign.distance = distance;
                     let destination_type = &symbol.ty;
-                    if destination_type != &*TYPE_UNKNOWN {
+                    if !destination_type.is_unknown() {
                         let expression_type = &assign.value.ty;
                         if destination_type != &*expression_type {
                             let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
@@ -235,8 +239,8 @@ impl ResolverPass {
     }
 }
 
-pub fn resolve_variables(ast: &mut AstNode<Program>) -> FelicoResult<()> {
-    ResolverPass::new().resolve_program(ast)
+pub fn resolve_variables(ast: &mut AstNode<Program>, type_factory: &TypeFactory) -> FelicoResult<()> {
+    ResolverPass::new(type_factory.clone()).resolve_program(ast)
 }
 
 #[cfg(test)]
@@ -245,11 +249,13 @@ mod tests {
     use crate::frontend::resolver::resolver_pass::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use expect_test::{expect, Expect};
+    use crate::interpreter::core_definitions::TypeFactory;
 
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input).unwrap();
+        let type_factory = &TypeFactory::new();
+        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let mut ast = parser.parse_program().unwrap();
-        let result = resolve_variables(&mut ast);
+        let result = resolve_variables(&mut ast, type_factory);
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }

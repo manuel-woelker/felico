@@ -9,6 +9,7 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
 use crate::infra::location::Location;
 use crate::infra::source_file::SourceFileHandle;
+use crate::interpreter::core_definitions::TypeFactory;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -16,10 +17,11 @@ pub struct Parser {
     current_token: Token,
     next_token: Token,
     source_file: SourceFileHandle,
+    type_factory: TypeFactory,
 }
 
 impl Parser {
-    pub fn new(source_file: SourceFileHandle) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFileHandle, type_factory: &TypeFactory) -> FelicoResult<Self> {
         let mut lexer = Lexer::new(source_file.clone()).whatever_context("oops")?;
         let current_token = lexer.next().ok_or_else(|| failed("Expected at least one token"))?;
         let next_token = lexer.next().unwrap_or(current_token.clone());
@@ -28,11 +30,12 @@ impl Parser {
             current_token,
             next_token,
             source_file,
+            type_factory: type_factory.clone(),
         })
     }
 
-    pub fn new_in_memory(filename: &str, source_code: &str) -> FelicoResult<Self> {
-        Self::new(SourceFileHandle::from_string(filename, source_code))
+    pub fn new_in_memory(filename: &str, source_code: &str, type_factory: &TypeFactory) -> FelicoResult<Self> {
+        Self::new(SourceFileHandle::from_string(filename, source_code), type_factory)
     }
 
     pub fn advance(&mut self) {
@@ -480,7 +483,7 @@ impl Parser {
         if start.start_byte != end.end_byte {
             location.end_byte = end.end_byte;
         }
-        Ok(AstNode::new(data, location))
+        Ok(AstNode::new(data, location, self.type_factory.unknown()))
     }
 
     fn current_location(&self) -> Location {
@@ -494,12 +497,12 @@ impl Parser {
 }
 
 pub fn parse_expression(code_source: SourceFileHandle) -> FelicoResult<AstNode<Expr>> {
-    let parser = Parser::new(code_source)?;
+    let parser = Parser::new(code_source, &TypeFactory::new())?;
     parser.parse_expression()
 }
 
-pub fn parse_program(code_source: SourceFileHandle) -> FelicoResult<AstNode<Program>> {
-    let parser = Parser::new(code_source)?;
+pub fn parse_program(code_source: SourceFileHandle, type_factory: &TypeFactory) -> FelicoResult<AstNode<Program>> {
+    let parser = Parser::new(code_source, type_factory)?;
     parser.parse_program()
 }
 
@@ -513,7 +516,7 @@ mod tests {
     use std::io::Cursor;
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input).unwrap();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
         let expr = parser.parse_expression().unwrap();
         let mut buffer = Cursor::new(Vec::<u8>::new());
         print_expr_ast(&expr, &mut buffer).unwrap();
@@ -731,7 +734,7 @@ mod tests {
 
 
     fn test_parse_program(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input).unwrap();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
         let program = parser.parse_program().unwrap();
         let mut buffer = Cursor::new(Vec::<u8>::new());
         print_program_ast(&program, &mut buffer).unwrap();
@@ -912,7 +915,7 @@ mod tests {
     );
 
     fn test_parse_program_error(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input).unwrap();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
         let result = parser.parse_program();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);

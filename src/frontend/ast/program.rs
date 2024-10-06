@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct Program {
-    pub(crate) stmts: Vec<AstNode<Stmt>>,
+    pub stmts: Vec<AstNode<Stmt>>,
 }
 
 impl AstData for Program {}

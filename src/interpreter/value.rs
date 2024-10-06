@@ -3,9 +3,9 @@ use crate::infra::result::FelicoResult;
 use crate::interpreter::environment::Environment;
 use crate::interpreter::interpreter::Interpreter;
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
-use crate::infra::shared_string::SharedString;
-use crate::interpreter::core_definitions::{TYPE_BOOL, TYPE_F64, TYPE_FUNCTION, TYPE_TYPE};
+use std::rc::Rc;
+use crate::frontend::ast::types::Type;
+use crate::interpreter::core_definitions::TypeFactory;
 
 #[derive(Clone)]
 pub struct InterpreterValue {
@@ -13,46 +13,66 @@ pub struct InterpreterValue {
     pub ty: Type,
 }
 
+#[derive(Clone)]
+pub struct ValueFactory {
+    type_factory: TypeFactory,
+}
 
-impl InterpreterValue {
-    pub fn f64(value: f64) -> Self {
+impl ValueFactory {
+    pub fn new(type_factory: &TypeFactory) -> Self {
         Self {
+            type_factory: type_factory.clone(),
+        }
+    }
+
+    pub fn f64(&self, value: f64) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::Number(value),
-            ty: TYPE_F64.clone(),
+            ty: self.type_factory.f64(),
         }
     }
-    pub fn bool(value: bool) -> Self {
-        Self {
+    pub fn bool(&self, value: bool) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::Bool(value),
-            ty: TYPE_BOOL.clone(),
+            ty: self.type_factory.bool(),
         }
     }
-    pub fn unit() -> Self {
-        Self {
+    pub fn unit(&self, ) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::Unit,
-            ty: TYPE_BOOL.clone(),
+            ty: self.type_factory.unit(),
         }
     }
-    pub fn callable(callable: Callable) -> Self {
-        Self {
+    pub fn callable(&self, callable: Callable) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::Callable(callable),
-            ty: TYPE_FUNCTION.clone(),
+            ty: self.type_factory.function(),
         }
     }
 
-    pub fn new_type(ty: Type) -> Self {
-        Self {
+    pub fn new_type(&self, ty: Type) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::Type(ty),
-            ty: TYPE_TYPE.clone(),
+            ty: self.type_factory.ty(),
         }
     }
 
-    pub fn new_string(s: String) -> Self {
-        Self {
+    pub fn new_string(&self, s: String) -> InterpreterValue {
+        InterpreterValue {
             val: ValueKind::String(s),
-            ty: TYPE_TYPE.clone(),
+            ty: self.type_factory.string(),
         }
     }
+
+
+    pub fn new_native_callable(&self, name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + 'static) -> InterpreterValue {
+        self.callable(Callable {
+            name: name.to_string(),
+            arity,
+            fun: Rc::new(CallableFun::Native(Box::new(fun))),
+        })
+    }
+
 }
 
 #[derive(Debug, Clone)]
@@ -113,11 +133,11 @@ impl Display for ValueKind {
 pub struct Callable {
     pub name: String,
     pub arity: usize,
-    pub fun: Arc<CallableFun>,
+    pub fun: Rc<CallableFun>,
 }
 
 pub enum CallableFun {
-    Native(Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + Send + Sync>),
+    Native(Box<dyn Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue>>),
     Defined(DefinedFunction),
 }
 
@@ -133,84 +153,3 @@ impl Debug for Callable {
     }
 }
 
-pub fn create_native_callable(name: &str, arity: usize, fun: impl Fn(&mut Interpreter, Vec<InterpreterValue>) -> FelicoResult<InterpreterValue> + Send + Sync + 'static) -> InterpreterValue {
-    InterpreterValue::callable(Callable {
-        name: name.to_string(),
-        arity,
-        fun: Arc::new(CallableFun::Native(Box::new(fun))),
-    })
-}
-
-#[derive(Clone)]
-pub struct Type {
-    inner: Arc<TypeInner>,
-}
-
-impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "❬{}❭", self.inner.name)
-    }
-}
-
-impl Display for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "❬{}❭", self.inner.name)
-    }
-}
-
-impl Type {
-    pub fn new<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
-        Self {
-            inner: Arc::new(TypeInner {
-                name: name.into(),
-                kind,
-            }),
-        }
-    }
-
-    pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
-        Self {
-            inner: Arc::new(TypeInner {
-                name: SharedString::from(name),
-                kind: TypeKind::Primitive(primitive_type),
-            }),
-        }
-    }
-
-    pub fn name(&self) -> &SharedString {
-        &self.inner.name
-    }
-}
-
-impl PartialEq for Type {
-    fn eq(&self, other: &Type) -> bool {
-        self.inner.kind == other.inner.kind
-    }
-}
-
-
-#[derive(Debug)]
-pub struct TypeInner {
-    name: SharedString,
-    kind: TypeKind,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum TypeKind {
-    Unknown,
-    Primitive(PrimitiveType),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum PrimitiveType {
-    Bool,
-    Unit,
-    F64,
-    String,
-}
-
-impl From<Type> for InterpreterValue {
-    fn from(value: Type) -> Self {
-        InterpreterValue::new_type(value)
-    }
-}
