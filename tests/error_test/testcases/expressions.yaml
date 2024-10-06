@@ -1,6 +1,6 @@
 testcases:
   - name: empty string
-    input: |-      
+    input: |-
       debug_print("");
     output: ""
 

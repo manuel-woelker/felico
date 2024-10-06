@@ -1,10 +1,10 @@
 # 😺 felico 😻
- 
+
 A fun, hobby programming language experiment
 
 This is an experimental programming language project,
 mostly inspired by Rust and Zig,
-mostly intended to try out some ideas about programming language design. 
+mostly intended to try out some ideas about programming language design.
 
 ## Goals
 
@@ -37,13 +37,13 @@ Fast feedback loops are more fun, and more friendly to the user since they respe
 
 ## Desired features
 
- * Static typing
- * Context (for side effects, allocation, etc.)
- * Comptime metaprogramming
- * Mutable XOR Shared?
- * Automatic resource cleanup
+* Static typing
+* Context (for side effects, allocation, etc.)
+* Comptime metaprogramming
+* Mutable XOR Shared?
+* Automatic resource cleanup
 
 ## Undesired features
 
- * Exceptions
- * Garbage collection
+* Exceptions
+* Garbage collection
