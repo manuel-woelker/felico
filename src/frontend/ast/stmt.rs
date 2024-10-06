@@ -9,6 +9,7 @@ pub enum Stmt {
     Return(ReturnStmt),
     Expression(ExprStmt),
     Let(LetStmt),
+    Struct(StructStmt),
     Fun(FunStmt),
     Block(BlockStmt),
     If(IfStmt),
@@ -76,3 +77,17 @@ pub struct WhileStmt {
     pub condition: AstNode<Expr>,
     pub body_stmt: AstNode<Stmt>,
 }
+
+#[derive(Debug, Clone)]
+pub struct StructStmt {
+    pub name: Token,
+    pub fields: Vec<AstNode<StructStmtField>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructStmtField {
+    pub name: Token,
+    pub type_expression: AstNode<Expr>,
+}
+
+impl AstData for StructStmtField {}

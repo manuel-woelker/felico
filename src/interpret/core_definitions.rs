@@ -1,7 +1,9 @@
-use crate::frontend::ast::types::{PrimitiveType, Type, TypeKind};
+use crate::frontend::ast::types::{PrimitiveType, StructField, StructType, Type, TypeKind};
+use crate::frontend::lex::token::Token;
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
 use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct CoreDefinition {
@@ -73,6 +75,16 @@ impl TypeFactory {
                 .join(", ")
             + ")";
         Type::tuple(&name, components)
+    }
+
+    pub fn make_struct(&self, name: &Token, fields: HashMap<SharedString, StructField>) -> Type {
+        Type::new(
+            name.lexeme(),
+            TypeKind::Struct(StructType {
+                name: name.clone(),
+                fields,
+            }),
+        )
     }
 }
 

@@ -60,6 +60,7 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "true" => TokenType::True,
     "let" => TokenType::Let,
     "while" => TokenType::While,
+    "struct" => TokenType::Struct,
 };
 
 impl Lexer {
@@ -558,6 +559,10 @@ mod tests {
         keyword_else: "else" => expect![[r#"
             Else       'else' 0+4
             EOF        '' 4+0
+        "#]];
+        keyword_struct: "struct" => expect![[r#"
+            Struct     'struct' 0+6
+            EOF        '' 6+0
         "#]];
 
         keyword_false: "false" => expect![[r#"

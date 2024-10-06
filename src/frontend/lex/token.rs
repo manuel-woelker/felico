@@ -46,6 +46,7 @@ pub enum TokenType {
     True,
     Let,
     While,
+    Struct,
 
     UnexpectedCharacter,
 

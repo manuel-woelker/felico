@@ -467,6 +467,9 @@ impl Interpreter {
                 let result = self.evaluate_expr(&return_stmt.expression)?;
                 return Ok(StmtResult::Return(result));
             }
+            Stmt::Struct(_) => {
+                todo!("implement struct");
+            }
         }
         Ok(StmtResult::Continue)
     }

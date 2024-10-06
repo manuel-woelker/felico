@@ -1,4 +1,6 @@
+use crate::frontend::lex::token::Token;
 use crate::infra::shared_string::SharedString;
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
@@ -87,6 +89,14 @@ pub enum TypeKind {
     Tuple(Vec<Type>),
     Type,
     Function(FunctionType),
+    Struct(StructType),
+}
+
+impl Eq for StructType {}
+impl PartialEq for StructType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.value.is_some() && self.name.value == other.name.value
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -94,6 +104,30 @@ pub struct FunctionType {
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
 }
+
+#[derive(Debug)]
+pub struct StructType {
+    pub name: Token,
+    pub fields: HashMap<SharedString, StructField>,
+}
+
+#[derive(Debug)]
+pub struct StructField {
+    name_token: Token,
+    name: SharedString,
+    ty: Type,
+}
+
+impl StructField {
+    pub fn new(name_token: &Token, ty: &Type) -> Self {
+        Self {
+            name: SharedString::from(name_token.lexeme()),
+            name_token: name_token.clone(),
+            ty: ty.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum PrimitiveType {
     Bool,

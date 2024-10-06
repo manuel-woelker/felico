@@ -3,12 +3,13 @@ use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::types::{Type, TypeKind};
+use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
+use crate::infra::shared_string::SharedString;
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
@@ -113,6 +114,17 @@ impl ResolverPass {
             }
             Stmt::Expression(expr_stmt) => {
                 self.resolve_expr(&mut expr_stmt.expression)?;
+            }
+            Stmt::Struct(struct_stmt) => {
+                let mut fields = HashMap::new();
+                for field in &mut struct_stmt.fields {
+                    self.resolve_expr(&mut field.data.type_expression)?;
+                    field.ty = self.resolve_type(&field.data.type_expression)?;
+                    let name = SharedString::from(field.data.name.lexeme());
+                    fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
+                }
+                stmt.ty = type_factory.make_struct(&struct_stmt.name, fields);
+                // TODO: add to symbol table
             }
             Stmt::Fun(fun_stmt) => {
                 let name = fun_stmt.name.lexeme();
@@ -481,6 +493,26 @@ mod tests {
                         ├── Read 'a': ❬bool❭
                         └── Read 'b': ❬i64❭
                 "#]];
+               program_struct_simple: "
+               struct Foo {
+                    bar: bool,
+                    baz: f64
+                }
+               " => expect![[r#"
+                   Program
+                   └── Struct 'Foo': ❬Foo❭
+                       ├── Field bar: ❬bool❭
+                       │   └── Read 'bool': ❬Type❭
+                       └── Field baz: ❬f64❭
+                           └── Read 'f64': ❬Type❭
+               "#]];
+                program_struct_empty: "
+               struct Empty {}
+               " => expect![[r#"
+                   Program
+                   └── Struct 'Empty': ❬Empty❭
+               "#]];
+
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();

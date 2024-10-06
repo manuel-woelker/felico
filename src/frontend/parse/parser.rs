@@ -4,7 +4,8 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
-    BlockStmt, ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, WhileStmt,
+    BlockStmt, ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, StructStmt,
+    StructStmtField, WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -79,6 +80,10 @@ impl Parser {
                 self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
                 Ok(node)
             }
+            TokenType::Struct => {
+                let node = self.parse_struct_stmt()?;
+                Ok(node)
+            }
             TokenType::Fun => {
                 let node = self.parse_fun_stmt("function")?;
                 Ok(node)
@@ -90,8 +95,7 @@ impl Parser {
     fn parse_let_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         let start_location = self.current_location();
         self.consume(TokenType::Let, "let expected")?;
-        let name = self.current_token.clone();
-        self.consume(TokenType::Identifier, "Expected identifier after let")?;
+        let name = self.consume(TokenType::Identifier, "Expected identifier after let")?;
         let type_expression = if self.is_at(TokenType::Colon) {
             self.advance();
             Some(self.parse_type_expression()?)
@@ -108,6 +112,37 @@ impl Parser {
                 type_expression,
             }),
         )
+    }
+
+    fn parse_struct_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+        let start_location = self.current_location();
+        self.consume(TokenType::Struct, "struct expected")?;
+        let name = self.consume(TokenType::Identifier, "Expected identifier after struct")?;
+        self.consume(TokenType::LeftBrace, "Expected '{'")?;
+        let mut fields: Vec<AstNode<StructStmtField>> = vec![];
+        loop {
+            if self.is_at(TokenType::RightBrace) {
+                break;
+            }
+            let field_start_location = self.current_location();
+            let field_name =
+                self.consume(TokenType::Identifier, "Expected field name in struct")?;
+            self.consume(TokenType::Colon, "Expected ':' after field name")?;
+            let type_expression = self.parse_type_expression()?;
+            fields.push(self.create_node(
+                field_start_location,
+                StructStmtField {
+                    name: field_name,
+                    type_expression,
+                },
+            )?);
+            if !self.is_at(TokenType::Comma) {
+                break;
+            }
+            self.advance();
+        }
+        self.consume(TokenType::RightBrace, "Expected '}' to complete class")?;
+        self.create_node(start_location, Stmt::Struct(StructStmt { name, fields }))
     }
 
     fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<Stmt>> {
@@ -1097,6 +1132,25 @@ mod tests {
                    └── Set b     [0+8]     [0+8]
                        ├── Read 'a'     [0+1]
                        └── F64(3.0)     [6+1]
+               "#]];
+               program_struct_simple: "
+               struct Foo {
+                    bar: bool,
+                    baz: f64
+                }
+               " => expect![[r#"
+                   Program
+                   └── Struct 'Foo'     [16+106]
+                       ├── Field bar     [49+10]
+                       │   └── Read 'bool'     [54+4]
+                       └── Field baz     [80+26]
+                           └── Read 'f64'     [85+3]
+               "#]];
+                program_struct_empty: "
+               struct Empty {}
+               " => expect![[r#"
+                   Program
+                   └── Struct 'Empty'     [16+31]
                "#]];
 
     );

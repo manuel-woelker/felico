@@ -163,6 +163,16 @@ impl<'a> AstPrinterWorker<'a> {
                 tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
                 tree
             }
+            Stmt::Struct(struct_stmt) => {
+                let mut tree = Tree::new(format!("Struct '{}'", struct_stmt.name.lexeme()));
+                for field in &struct_stmt.fields {
+                    let mut field_tree = Tree::new(format!("Field {}", field.data.name.lexeme()));
+                    field_tree.push(self.expr_to_tree(&field.data.type_expression));
+                    let field_tree = self.add_location(field_tree, field);
+                    tree.push(field_tree);
+                }
+                tree
+            }
             Stmt::Block(block) => {
                 let mut tree = Tree::new("Block".into());
                 for stmt in &block.stmts {
