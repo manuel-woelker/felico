@@ -289,7 +289,7 @@ pub fn resolve_variables(
 #[cfg(test)]
 mod tests {
     use crate::frontend::parse::parser::Parser;
-    use crate::frontend::resolver::resolver_pass::resolve_variables;
+    use crate::frontend::resolve::resolver_pass::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::interpret::core_definitions::TypeFactory;
     use expect_test::{expect, Expect};

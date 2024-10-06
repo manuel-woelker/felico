@@ -5,7 +5,7 @@ use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_program};
-use crate::frontend::resolver::resolver_pass::resolve_variables;
+use crate::frontend::resolve::resolver_pass::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFileHandle;
