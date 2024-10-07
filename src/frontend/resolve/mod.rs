@@ -1,2 +1,2 @@
-pub mod resolver_pass;
+pub mod resolver;
 mod type_checker;

@@ -24,13 +24,13 @@ struct Symbol {
     value: Option<InterpreterValue>,
 }
 
-struct ResolverPass {
+struct Resolver {
     scopes: Vec<HashMap<String, Symbol>>,
     type_factory: TypeFactory,
     type_checker: TypeChecker,
 }
 
-impl ResolverPass {
+impl Resolver {
     fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: HashMap<String, Symbol> = Default::default();
         let location = Location {
@@ -49,13 +49,13 @@ impl ResolverPass {
                 },
             );
         }
-        ResolverPass {
+        Resolver {
             scopes: vec![global_scope, Default::default()],
             type_factory,
             type_checker: TypeChecker::new(),
         }
     }
-    pub(crate) fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
+    pub fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
         self.resolve_stmts(&mut program.data.stmts)
     }
 
@@ -377,14 +377,14 @@ pub fn resolve_variables(
     ast: &mut AstNode<Program>,
     type_factory: &TypeFactory,
 ) -> FelicoResult<()> {
-    ResolverPass::new(type_factory.clone()).resolve_program(ast)
+    Resolver::new(type_factory.clone()).resolve_program(ast)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::frontend::ast::print_ast::AstPrinter;
     use crate::frontend::parse::parser::Parser;
-    use crate::frontend::resolve::resolver_pass::resolve_variables;
+    use crate::frontend::resolve::resolver::resolve_variables;
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::interpret::core_definitions::TypeFactory;
     use expect_test::{expect, Expect};
