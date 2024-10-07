@@ -61,7 +61,7 @@ impl TypeFactory {
                 .map(|ty| ty.to_string())
                 .collect::<Vec<String>>()
                 .join(", ")
-            + ")"
+            + ") -> "
             + &return_type.to_string();
         Type::function(&name, parameter_types, return_type)
     }

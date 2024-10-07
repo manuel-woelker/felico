@@ -1,2 +1,3 @@
+pub mod module_manifest;
 pub mod resolver;
-mod type_checker;
+pub mod type_checker;

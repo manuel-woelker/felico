@@ -10,11 +10,12 @@ use crate::frontend::ast::stmt::{
 };
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
+use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoResult};
-use crate::infra::shared_string::SharedString;
+use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
@@ -73,6 +74,23 @@ impl Resolver {
     }
     pub fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
         self.resolve_stmts(&mut program.data.stmts)
+    }
+
+    pub fn get_module_manifest(&self) -> FelicoResult<ModuleManifest> {
+        let module_entries: HashMap<Name, ModuleEntry> = self.scopes[1]
+            .iter()
+            .map(|(name, symbol)| {
+                let name = SharedString::from(name);
+                (
+                    name.clone(),
+                    ModuleEntry {
+                        name,
+                        ty: symbol.ty.clone(),
+                    },
+                )
+            })
+            .collect();
+        Ok(ModuleManifest { module_entries })
     }
 
     fn resolve_stmts(&mut self, stmts: &mut Vec<AstNode<Stmt>>) -> FelicoResult<()> {
@@ -510,135 +528,178 @@ pub fn resolve_variables(
 mod tests {
     use crate::frontend::ast::print_ast::AstPrinter;
     use crate::frontend::parse::parser::Parser;
-    use crate::frontend::resolve::resolver::resolve_variables;
+    use crate::frontend::resolve::resolver::{resolve_variables, Resolver};
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
     use crate::interpret::core_definitions::TypeFactory;
     use expect_test::{expect, Expect};
 
-    fn test_resolve_program(name: &str, input: &str, expected: Expect) {
+    fn test_resolve_program(
+        name: &str,
+        input: &str,
+        expected_ast: Expect,
+        expected_manifest: Expect,
+    ) {
         let type_factory = &TypeFactory::new();
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let mut program = parser.parse_program().unwrap();
-        resolve_variables(&mut program, type_factory).unwrap();
+        let mut resolver = Resolver::new(type_factory.clone());
+        resolver.resolve_program(&mut program).unwrap();
         let printed_ast = AstPrinter::new()
             .with_locations(false)
             .with_types(true)
             .print(&program)
             .unwrap();
 
-        expected.assert_eq(&printed_ast);
+        expected_ast.assert_eq(&printed_ast);
+        expected_manifest.assert_eq(&format!("{:#?}", resolver.get_module_manifest().unwrap()));
     }
 
     macro_rules! test_program {
-    ( $($label:ident: $input:expr => $expect:expr;)+ ) => {
+    ( $($label:ident: $input:expr => $expected_ast:expr,$expected_manifest:expr;)+ ) => {
         $(
             #[test]
             fn $label() {
-                test_resolve_program(stringify!($label), $input, $expect);
+                test_resolve_program(stringify!($label), $input, $expected_ast, $expected_manifest);
             }
         )*
         }
     }
 
     test_program!(
-                let_explicit_type: "let a: bool = true;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)': ❬bool❭
-                        └── Bool(true): ❬bool❭
-                "#]];
-                let_inferred_type: "let a = 3;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)': ❬f64❭
-                        └── F64(3.0): ❬f64❭
-                "#]];
-                let_inferred_type_from_binary_expression: "let a = 1 + 2;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)': ❬f64❭
-                        └── +: ❬f64❭
-                            ├── F64(1.0): ❬f64❭
-                            └── F64(2.0): ❬f64❭
-                "#]];
-                let_inferred_type_from_unary_expression: "let a = -1;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)': ❬f64❭
-                        └── -: ❬f64❭
-                            └── F64(1.0): ❬f64❭
-                "#]];
-                let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
-                    Program
-                    ├── Let ''a' (Identifier)': ❬f64❭
-                    │   └── F64(1.0): ❬f64❭
-                    └── Let ''b' (Identifier)': ❬f64❭
-                        └── Read 'a': ❬f64❭
-                "#]];
-                assign_type: "let a = 1;a = 3;" => expect![[r#"
-                    Program
-                    ├── Let ''a' (Identifier)': ❬f64❭
-                    │   └── F64(1.0): ❬f64❭
-                    └── 'a' (Identifier) = : ❬f64❭
-                        └── F64(3.0): ❬f64❭
-                "#]];
-                tuple_empty: "();" => expect![[r#"
-                    Program
-                    └── Tuple: ❬()❭
-                "#]];
-                tuple_pair: "(3, true);" => expect![[r#"
-                    Program
-                    └── Tuple: ❬(❬f64❭, ❬bool❭)❭
-                        ├── F64(3.0): ❬f64❭
-                        └── Bool(true): ❬bool❭
-                "#]];
-                call_type_native: "sqrt(3);" => expect![[r#"
-                    Program
-                    └── Call: ❬f64❭
-                        ├── Read 'sqrt': ❬Fn(❬f64❭)❬f64❭❭
-                        └── F64(3.0): ❬f64❭
-                "#]];
-                function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
-                    Program
-                    ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
-                    │   ├── Param a
-                    │   │   └── Read 'bool'
-                    │   ├── Param b
-                    │   │   └── Read 'i64'
-                    │   └── Return type: Read 'f64'
-                    └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
-                        └── Read 'x': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
-                "#]];
-                function_arg_type: "fun x(a: bool, b: i64) -> f64 {
-                    a;
-                    b;
-                }" => expect![[r#"
-                    Program
-                    └── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭)❬f64❭❭
-                        ├── Param a
-                        │   └── Read 'bool'
-                        ├── Param b
-                        │   └── Read 'i64'
-                        ├── Return type: Read 'f64'
-                        ├── Read 'a': ❬bool❭
-                        └── Read 'b': ❬i64❭
-                "#]];
-               program_struct_simple: "
-               struct Foo {
-                    bar: bool,
-                    baz: f64
-                }
-               " => expect![[r#"
-                   Program
-                   └── Struct 'Foo': ❬Foo❭
-                       ├── Field bar: ❬bool❭
-                       │   └── Read 'bool': ❬Type❭
-                       └── Field baz: ❬f64❭
-                           └── Read 'f64': ❬Type❭
-               "#]];
-                program_struct_empty: "
-               struct Empty {}
-               " => expect![[r#"
-                   Program
-                   └── Struct 'Empty': ❬Empty❭
-               "#]];
+        let_explicit_type: "let a: bool = true;" => expect![[r#"
+            Program
+            └── Let ''a' (Identifier)': ❬bool❭
+                └── Bool(true): ❬bool❭
+        "#]],expect![[r#"
+            Module
+              a: ❬bool❭
+        "#]];
 
+        let_inferred_type: "let a = 3;" => expect![[r#"
+                Program
+                └── Let ''a' (Identifier)': ❬f64❭
+                    └── F64(3.0): ❬f64❭
+            "#]],expect![[r#"
+                Module
+                  a: ❬f64❭
+            "#]];
+        let_inferred_type_from_binary_expression: "let a = 1 + 2;" => expect![[r#"
+                Program
+                └── Let ''a' (Identifier)': ❬f64❭
+                    └── +: ❬f64❭
+                        ├── F64(1.0): ❬f64❭
+                        └── F64(2.0): ❬f64❭
+            "#]],expect![[r#"
+                Module
+                  a: ❬f64❭
+            "#]];
+        let_inferred_type_from_unary_expression: "let a = -1;" => expect![[r#"
+                Program
+                └── Let ''a' (Identifier)': ❬f64❭
+                    └── -: ❬f64❭
+                        └── F64(1.0): ❬f64❭
+            "#]],expect![[r#"
+                Module
+                  a: ❬f64❭
+            "#]];
+        let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
+                Program
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── F64(1.0): ❬f64❭
+                └── Let ''b' (Identifier)': ❬f64❭
+                    └── Read 'a': ❬f64❭
+            "#]],expect![[r#"
+                Module
+                  a: ❬f64❭
+                  b: ❬f64❭
+            "#]];
+        assign_type: "let a = 1;a = 3;" => expect![[r#"
+                Program
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── F64(1.0): ❬f64❭
+                └── 'a' (Identifier) = : ❬f64❭
+                    └── F64(3.0): ❬f64❭
+            "#]],expect![[r#"
+                Module
+                  a: ❬f64❭
+            "#]];
+        tuple_empty: "();" => expect![[r#"
+                Program
+                └── Tuple: ❬()❭
+            "#]],expect![[r#"
+                Module
+            "#]];
+        tuple_pair: "(3, true);" => expect![[r#"
+                Program
+                └── Tuple: ❬(❬f64❭, ❬bool❭)❭
+                    ├── F64(3.0): ❬f64❭
+                    └── Bool(true): ❬bool❭
+            "#]],expect![[r#"
+                Module
+            "#]];
+        call_type_native: "sqrt(3);" => expect![[r#"
+            Program
+            └── Call: ❬f64❭
+                ├── Read 'sqrt': ❬Fn(❬f64❭) -> ❬f64❭❭
+                └── F64(3.0): ❬f64❭
+        "#]],expect![[r#"
+                Module
+            "#]];
+        function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
+            Program
+            ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+            │   ├── Param a
+            │   │   └── Read 'bool'
+            │   ├── Param b
+            │   │   └── Read 'i64'
+            │   └── Return type: Read 'f64'
+            └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                └── Read 'x': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+        "#]],expect![[r#"
+                Module
+                  a: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                  x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+            "#]];
+        function_arg_type: "fun x(a: bool, b: i64) -> f64 {
+                a;
+                b;
+            }" => expect![[r#"
+                Program
+                └── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                    ├── Param a
+                    │   └── Read 'bool'
+                    ├── Param b
+                    │   └── Read 'i64'
+                    ├── Return type: Read 'f64'
+                    ├── Read 'a': ❬bool❭
+                    └── Read 'b': ❬i64❭
+            "#]],expect![[r#"
+                Module
+                  x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+            "#]];
+       program_struct_simple: "
+           struct Foo {
+                bar: bool,
+                baz: f64
+            }
+           " => expect![[r#"
+               Program
+               └── Struct 'Foo': ❬Foo❭
+                   ├── Field bar: ❬bool❭
+                   │   └── Read 'bool': ❬Type❭
+                   └── Field baz: ❬f64❭
+                       └── Read 'f64': ❬Type❭
+           "#]],expect![[r#"
+               Module
+           "#]];
+        program_struct_empty: "
+           struct Empty {}
+           " => expect![[r#"
+               Program
+               └── Struct 'Empty': ❬Empty❭
+           "#]],expect![[r#"
+               Module
+           "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();

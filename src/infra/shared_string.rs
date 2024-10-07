@@ -1,6 +1,7 @@
 use arcstr::ArcStr;
 
 pub type SharedString = ArcStr;
+pub type Name = SharedString;
 
 #[cfg(test)]
 mod tests {
