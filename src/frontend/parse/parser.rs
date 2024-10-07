@@ -251,9 +251,7 @@ impl Parser {
     fn parse_if(&mut self) -> FelicoResult<AstNode<Stmt>> {
         let start_location = self.current_location();
         self.consume(TokenType::If, "Expected 'if'")?;
-        self.consume(TokenType::LeftParen, "Expected '(' after if")?;
         let condition = self.parse_expr()?;
-        self.consume(TokenType::RightParen, "Expected ')' after if condition")?;
         let then_stmt = self.parse_stmt()?;
         let else_stmt = if self.is_at(TokenType::Else) {
             self.advance();
@@ -1049,6 +1047,19 @@ mod tests {
                        ├── Read 'a'     [6+1]     [6+2]
                        └── Read 'b'     [14+1]     [14+2]
                "#]];
+               program_if_no_parentheses: "if c a;" => expect![[r#"
+                   Program
+                   └── If     [0+7]
+                       ├── Read 'c'     [3+1]
+                       └── Read 'a'     [5+1]     [5+2]
+               "#]];
+               program_if_else_no_parentheses: "if c a; else b;" => expect![[r#"
+                   Program
+                   └── If     [0+15]
+                       ├── Read 'c'     [3+1]
+                       ├── Read 'a'     [5+1]     [5+2]
+                       └── Read 'b'     [13+1]     [13+2]
+               "#]];
 
                program_while: "while(a) b;" => expect![[r#"
                    Program
@@ -1195,11 +1206,10 @@ mod tests {
     }
 
     test_parse_error!(
-        naked_if_condition: "if x" => expect![[r#"
-            × Expected '(' after if, found 'x' (Identifier) instead
-               ╭─[naked_if_condition:1:4]
+        incomplete_if_statement: "if x" => expect![[r#"
+            × Unexpected token 'EOF' in expression
+               ╭─[incomplete_if_statement:1:5]
              1 │ if x
-               ·    ─
                ╰────"#]];
         unclosed_parens: "(3 4" => expect![[r#"
             × Expect closing ')' after expression, found '4' (Number) instead
