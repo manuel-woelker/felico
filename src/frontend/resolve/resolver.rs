@@ -1,8 +1,13 @@
-use crate::frontend::ast::expr::{Expr, LiteralExpr};
+use crate::frontend::ast::expr::{
+    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, TupleExpr, UnaryExpr,
+    VarUse,
+};
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
-use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::stmt::Stmt::Let;
+use crate::frontend::ast::stmt::{
+    BlockStmt, FunStmt, IfStmt, LetStmt, Stmt, StructStmt, WhileStmt,
+};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::type_checker::TypeChecker;
@@ -28,6 +33,17 @@ struct Resolver {
     scopes: Vec<HashMap<String, Symbol>>,
     type_factory: TypeFactory,
     type_checker: TypeChecker,
+}
+
+// Ast information extract during resolution to make separate borrows
+struct CommonAstInfo<'a> {
+    location: &'a Location,
+    ty: &'a mut Type,
+}
+impl<'a> CommonAstInfo<'a> {
+    fn new(location: &'a Location, ty: &'a mut Type) -> Self {
+        Self { location, ty }
+    }
 }
 
 impl Resolver {
@@ -67,47 +83,10 @@ impl Resolver {
     }
 
     fn resolve_stmt(&mut self, stmt: &mut AstNode<Stmt>) -> FelicoResult<()> {
-        let type_factory = self.type_factory.clone();
+        let mut ast_info = CommonAstInfo::new(&stmt.location, &mut stmt.ty);
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
-                let name = let_stmt.name.lexeme();
-                self.resolve_expr(&mut let_stmt.expression)?;
-                let expression_type = &let_stmt.expression.ty;
-                let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
-                    self.resolve_type(&type_expr)?
-                } else {
-                    let_stmt.expression.ty.clone()
-                };
-                if !self
-                    .type_checker
-                    .is_assignable_to(&expression_type, &variable_type)
-                {
-                    let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
-                    diagnostic.add_primary_label(&stmt.location);
-                    return Err(diagnostic.into());
-                }
-                stmt.ty = variable_type.clone();
-                match self.current_scope().entry(name.to_string()) {
-                    Entry::Occupied(value) => {
-                        let mut diagnostic = InterpreterDiagnostic::new(
-                            &stmt.location.source_file,
-                            format!("Variable '{}' already declared", let_stmt.name.lexeme()),
-                        );
-                        diagnostic.add_primary_label(&let_stmt.name.location);
-                        diagnostic
-                            .add_label(&value.get().declaration_site, "is already defined here");
-                        return Err(diagnostic.into());
-                    }
-                    Entry::Vacant(slot) => {
-                        slot.insert(Symbol {
-                            declaration_site: let_stmt.name.location.clone(),
-                            is_defined: false,
-                            ty: variable_type,
-                            value: None,
-                        });
-                    }
-                }
-                self.current_scope().get_mut(name).unwrap().is_defined = true;
+                self.resolve_let_stmt(let_stmt, &mut ast_info)?;
             }
             Stmt::Return(return_stmt) => {
                 self.resolve_expr(&mut return_stmt.expression)?;
@@ -116,80 +95,159 @@ impl Resolver {
                 self.resolve_expr(&mut expr_stmt.expression)?;
             }
             Stmt::Struct(struct_stmt) => {
-                let mut fields = HashMap::new();
-                for field in &mut struct_stmt.fields {
-                    self.resolve_expr(&mut field.data.type_expression)?;
-                    field.ty = self.resolve_type(&field.data.type_expression)?;
-                    let name = SharedString::from(field.data.name.lexeme());
-                    fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
-                }
-                stmt.ty = type_factory.make_struct(&struct_stmt.name, fields);
-                // TODO: add to symbol table
+                self.resolve_struct_stmt(struct_stmt, &mut ast_info)?;
             }
             Stmt::Fun(fun_stmt) => {
-                let name = fun_stmt.name.lexeme();
-                let return_type = self.resolve_type(&fun_stmt.return_type)?;
-                let parameter_types: Vec<Type> = fun_stmt
-                    .parameters
-                    .iter()
-                    .map(|parameter| self.resolve_type(&parameter.type_expression))
-                    .collect::<FelicoResult<Vec<_>>>()?;
-                let function_type = type_factory.function(parameter_types, return_type);
-                match self.current_scope().entry(name.to_string()) {
-                    Entry::Occupied(value) => {
-                        let mut diagnostic = InterpreterDiagnostic::new(
-                            &stmt.location.source_file,
-                            format!("Function '{}' already declared", fun_stmt.name.lexeme()),
-                        );
-                        diagnostic.add_primary_label(&fun_stmt.name.location);
-                        diagnostic
-                            .add_label(&value.get().declaration_site, "is already defined here");
-                        return Err(diagnostic.into());
-                    }
-                    Entry::Vacant(slot) => {
-                        stmt.ty = function_type.clone();
-                        slot.insert(Symbol {
-                            declaration_site: fun_stmt.name.location.clone(),
-                            is_defined: true,
-                            ty: function_type,
-                            value: None,
-                        });
-                    }
-                }
-                self.scopes.push(Default::default());
-                for parameter in &fun_stmt.parameters {
-                    let ty = self.resolve_type(&parameter.type_expression)?.clone();
-                    self.current_scope().insert(
-                        parameter.name.lexeme().to_string(),
-                        Symbol {
-                            declaration_site: parameter.name.location.clone(),
-                            is_defined: true,
-                            ty,
-                            value: None,
-                        },
-                    );
-                }
-                self.resolve_stmt(&mut fun_stmt.body)?;
-                self.scopes.pop();
-                self.current_scope().get_mut(name).unwrap().is_defined = true;
+                self.resolve_fun_stmt(fun_stmt, &mut ast_info)?;
             }
             Stmt::Block(block) => {
-                self.scopes.push(Default::default());
-                self.resolve_stmts(&mut block.stmts)?;
-                self.scopes.pop();
+                self.resolve_block_stmt(block)?;
             }
             Stmt::If(if_stmt) => {
-                self.resolve_expr(&mut if_stmt.condition)?;
-                self.resolve_stmt(&mut if_stmt.then_stmt)?;
-                if let Some(stmt) = &mut if_stmt.else_stmt {
-                    self.resolve_stmt(stmt)?;
-                }
+                self.resolve_if_stmt(if_stmt)?;
             }
             Stmt::While(while_stmt) => {
-                self.resolve_expr(&mut while_stmt.condition)?;
-                self.resolve_stmt(&mut while_stmt.body_stmt)?;
+                self.resolve_while_stmt(while_stmt)?;
             }
         }
+        Ok(())
+    }
+
+    fn resolve_while_stmt(&mut self, while_stmt: &mut WhileStmt) -> FelicoResult<()> {
+        self.resolve_expr(&mut while_stmt.condition)?;
+        self.resolve_stmt(&mut while_stmt.body_stmt)?;
+        Ok(())
+    }
+
+    fn resolve_if_stmt(&mut self, if_stmt: &mut IfStmt) -> FelicoResult<()> {
+        self.resolve_expr(&mut if_stmt.condition)?;
+        self.resolve_stmt(&mut if_stmt.then_stmt)?;
+        if let Some(stmt) = &mut if_stmt.else_stmt {
+            self.resolve_stmt(stmt)?;
+        }
+        Ok(())
+    }
+
+    fn resolve_block_stmt(&mut self, block: &mut BlockStmt) -> FelicoResult<()> {
+        self.scopes.push(Default::default());
+        self.resolve_stmts(&mut block.stmts)?;
+        self.scopes.pop();
+        Ok(())
+    }
+
+    fn resolve_fun_stmt(
+        &mut self,
+        fun_stmt: &mut FunStmt,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let type_factory = self.type_factory.clone();
+        let name = fun_stmt.name.lexeme();
+        let return_type = self.resolve_type(&fun_stmt.return_type)?;
+        let parameter_types: Vec<Type> = fun_stmt
+            .parameters
+            .iter()
+            .map(|parameter| self.resolve_type(&parameter.type_expression))
+            .collect::<FelicoResult<Vec<_>>>()?;
+        let function_type = type_factory.function(parameter_types, return_type);
+        match self.current_scope().entry(name.to_string()) {
+            Entry::Occupied(value) => {
+                let mut diagnostic = InterpreterDiagnostic::new(
+                    &ast_info.location.source_file,
+                    format!("Function '{}' already declared", fun_stmt.name.lexeme()),
+                );
+                diagnostic.add_primary_label(&fun_stmt.name.location);
+                diagnostic.add_label(&value.get().declaration_site, "is already defined here");
+                return Err(diagnostic.into());
+            }
+            Entry::Vacant(slot) => {
+                *ast_info.ty = function_type.clone();
+                slot.insert(Symbol {
+                    declaration_site: fun_stmt.name.location.clone(),
+                    is_defined: true,
+                    ty: function_type,
+                    value: None,
+                });
+            }
+        }
+        self.scopes.push(Default::default());
+        for parameter in &fun_stmt.parameters {
+            let ty = self.resolve_type(&parameter.type_expression)?.clone();
+            self.current_scope().insert(
+                parameter.name.lexeme().to_string(),
+                Symbol {
+                    declaration_site: parameter.name.location.clone(),
+                    is_defined: true,
+                    ty,
+                    value: None,
+                },
+            );
+        }
+        self.resolve_stmt(&mut fun_stmt.body)?;
+        self.scopes.pop();
+        self.current_scope().get_mut(name).unwrap().is_defined = true;
+        Ok(())
+    }
+
+    fn resolve_struct_stmt(
+        &mut self,
+        struct_stmt: &mut StructStmt,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let type_factory = self.type_factory.clone();
+        let mut fields = HashMap::new();
+        for field in &mut struct_stmt.fields {
+            self.resolve_expr(&mut field.data.type_expression)?;
+            field.ty = self.resolve_type(&field.data.type_expression)?;
+            let name = SharedString::from(field.data.name.lexeme());
+            fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
+        }
+        *ast_info.ty = type_factory.make_struct(&struct_stmt.name, fields);
+        // TODO: add to symbol table
+        Ok(())
+    }
+
+    fn resolve_let_stmt(
+        &mut self,
+        let_stmt: &mut LetStmt,
+        stmt: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let name = let_stmt.name.lexeme();
+        self.resolve_expr(&mut let_stmt.expression)?;
+        let expression_type = &let_stmt.expression.ty;
+        let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
+            self.resolve_type(&type_expr)?
+        } else {
+            let_stmt.expression.ty.clone()
+        };
+        if !self
+            .type_checker
+            .is_assignable_to(&expression_type, &variable_type)
+        {
+            let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
+            diagnostic.add_primary_label(&stmt.location);
+            return Err(diagnostic.into());
+        }
+        *stmt.ty = variable_type.clone();
+        match self.current_scope().entry(name.to_string()) {
+            Entry::Occupied(value) => {
+                let mut diagnostic = InterpreterDiagnostic::new(
+                    &stmt.location.source_file,
+                    format!("Variable '{}' already declared", let_stmt.name.lexeme()),
+                );
+                diagnostic.add_primary_label(&let_stmt.name.location);
+                diagnostic.add_label(&value.get().declaration_site, "is already defined here");
+                return Err(diagnostic.into());
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(Symbol {
+                    declaration_site: let_stmt.name.location.clone(),
+                    is_defined: false,
+                    ty: variable_type,
+                    value: None,
+                });
+            }
+        }
+        self.current_scope().get_mut(name).unwrap().is_defined = true;
         Ok(())
     }
 
@@ -215,133 +273,201 @@ impl Resolver {
     }
 
     fn resolve_expr(&mut self, expr: &mut AstNode<Expr>) -> FelicoResult<()> {
+        let mut ast_info = CommonAstInfo::new(&expr.location, &mut expr.ty);
         match expr.data.deref_mut() {
             Expr::Unary(unary) => {
-                self.resolve_expr(&mut unary.right)?;
-                expr.ty = unary.right.ty.clone();
+                self.resolve_unary_expr(unary, &mut ast_info)?;
             }
             Expr::Binary(binary) => {
-                self.resolve_expr(&mut binary.left)?;
-                self.resolve_expr(&mut binary.right)?;
-                if binary.left.ty == binary.right.ty {
-                    expr.ty = binary.left.ty.clone();
-                }
+                self.resolve_binary_expr(binary, &mut ast_info)?;
             }
             Expr::Literal(literal) => {
-                expr.ty = match literal {
-                    LiteralExpr::Str(_) => self.type_factory.str(),
-                    LiteralExpr::F64(_) => self.type_factory.f64(),
-                    LiteralExpr::I64(_) => self.type_factory.i64(),
-                    LiteralExpr::Bool(_) => self.type_factory.bool(),
-                    LiteralExpr::Unit => self.type_factory.unit(),
-                }
-            }
-            Expr::Variable(var_use) => {
-                let distance_and_symbol =
-                    self.get_definition_distance_and_symbol(&var_use.variable);
-                if let Some((distance, symbol)) = distance_and_symbol {
-                    var_use.distance = distance;
-                    expr.ty = symbol.ty.clone();
-                } else {
-                    let mut diagnostic = InterpreterDiagnostic::new(
-                        &var_use.variable.location.source_file,
-                        format!(
-                            "Variable '{}' is not defined here",
-                            var_use.variable.lexeme()
-                        ),
-                    );
-                    diagnostic.add_primary_label(&var_use.variable.location);
-                    return Err(diagnostic.into());
-                }
+                self.resolve_literal_expr(literal, &mut ast_info)?;
             }
             Expr::Assign(assign) => {
-                let destination = &assign.destination;
-                self.resolve_expr(&mut assign.value)?;
-                let distance_and_symbol = self.get_definition_distance_and_symbol(destination);
-                if let Some((distance, symbol)) = distance_and_symbol {
-                    assign.distance = distance;
-                    let destination_type = &symbol.ty;
-                    expr.ty = symbol.ty.clone();
+                self.resolve_assign_expr(assign, &mut ast_info)?;
+            }
+            Expr::Call(call) => {
+                self.resolve_call_expr(call, &mut ast_info)?;
+            }
+            Expr::Variable(var_use) => self.resolve_var_use_expr(var_use, &mut ast_info)?,
+            Expr::Tuple(tuple) => {
+                self.resolve_tuple_expr(tuple, &mut ast_info)?;
+            }
+            Expr::Get(get) => {
+                self.resolve_get_expr(get)?;
+            }
+            Expr::Set(set) => {
+                self.resolve_set_expr(set)?;
+            }
+        }
+        Ok(())
+    }
 
-                    if !destination_type.is_unknown() {
-                        let expression_type = &assign.value.ty;
-                        if !self
-                            .type_checker
-                            .is_assignable_to(expression_type, destination_type)
-                        {
-                            let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
-                            diagnostic.add_primary_label(&expr.location);
-                            diagnostic.add_label(
-                                &symbol.declaration_site,
-                                format!("is declared as {} here", destination_type),
-                            );
-                            return Err(diagnostic.into());
-                        }
-                    }
-                } else {
-                    let mut diagnostic = InterpreterDiagnostic::new(
-                        &destination.location.source_file,
-                        format!("Variable '{}' is not defined here", destination.lexeme()),
+    fn resolve_set_expr(&mut self, set: &mut SetExpr) -> FelicoResult<()> {
+        self.resolve_expr(&mut set.value)?;
+        self.resolve_expr(&mut set.object)?;
+        Ok(())
+    }
+
+    fn resolve_get_expr(&mut self, get: &mut GetExpr) -> FelicoResult<()> {
+        self.resolve_expr(&mut get.object)
+    }
+
+    fn resolve_tuple_expr(
+        &mut self,
+        tuple: &mut TupleExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let mut component_types = Vec::<Type>::new();
+        for component in &mut tuple.components {
+            self.resolve_expr(component)?;
+            component_types.push(component.ty.clone());
+        }
+        *ast_info.ty = self.type_factory.tuple(component_types);
+        Ok(())
+    }
+
+    fn resolve_call_expr(
+        &mut self,
+        call: &mut CallExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.resolve_expr(&mut call.callee)?;
+        for arg in &mut call.arguments {
+            self.resolve_expr(arg)?
+        }
+        let TypeKind::Function(function_type) = call.callee.ty.kind() else {
+            return self.fail_fast(
+                &call.callee.location,
+                format!(
+                    "Expected a function to call, but instead found type {}",
+                    call.callee.ty
+                ),
+            );
+        };
+        if function_type.parameter_types.len() != call.arguments.len() {
+            return self.fail_fast(
+                &ast_info.location,
+                format!(
+                    "Wrong number of arguments in call - expected: {}, actual {}",
+                    function_type.parameter_types.len(),
+                    call.arguments.len()
+                ),
+            );
+        }
+        for (parameter, argument) in function_type.parameter_types.iter().zip(&call.arguments) {
+            if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
+                return self.fail_fast(
+                    &argument.location,
+                    format!(
+                        "Cannot coerce argument of type {} as parameter of type {} in function invocation",
+                        argument.ty, parameter,
+                    ),
+                );
+            }
+        }
+        *ast_info.ty = function_type.return_type.clone();
+        Ok(())
+    }
+
+    fn resolve_assign_expr(
+        &mut self,
+        assign: &mut AssignExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let destination = &assign.destination;
+        self.resolve_expr(&mut assign.value)?;
+        let distance_and_symbol = self.get_definition_distance_and_symbol(destination);
+        if let Some((distance, symbol)) = distance_and_symbol {
+            assign.distance = distance;
+            let destination_type = &symbol.ty;
+            *ast_info.ty = symbol.ty.clone();
+
+            if !destination_type.is_unknown() {
+                let expression_type = &assign.value.ty;
+                if !self
+                    .type_checker
+                    .is_assignable_to(expression_type, destination_type)
+                {
+                    let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
+                    diagnostic.add_primary_label(&ast_info.location);
+                    diagnostic.add_label(
+                        &symbol.declaration_site,
+                        format!("is declared as {} here", destination_type),
                     );
-                    diagnostic.add_primary_label(&destination.location);
                     return Err(diagnostic.into());
                 }
             }
-            Expr::Call(call) => {
-                self.resolve_expr(&mut call.callee)?;
-                for arg in &mut call.arguments {
-                    self.resolve_expr(arg)?
-                }
-                let TypeKind::Function(function_type) = call.callee.ty.kind() else {
-                    return self.fail_fast(
-                        &call.callee.location,
-                        format!(
-                            "Expected a function to call, but instead found type {}",
-                            call.callee.ty
-                        ),
-                    );
-                };
-                if function_type.parameter_types.len() != call.arguments.len() {
-                    return self.fail_fast(
-                        &expr.location,
-                        format!(
-                            "Wrong number of arguments in call - expected: {}, actual {}",
-                            function_type.parameter_types.len(),
-                            call.arguments.len()
-                        ),
-                    );
-                }
-                for (parameter, argument) in
-                    function_type.parameter_types.iter().zip(&call.arguments)
-                {
-                    if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
-                        return self.fail_fast(
-                            &argument.location,
-                            format!(
-                                "Cannot coerce argument of type {} as parameter of type {} in function invocation",
-                                argument.ty, parameter,
-                            ),
-                        );
-                    }
-                }
-                expr.ty = function_type.return_type.clone();
-            }
-            Expr::Tuple(tuple) => {
-                let mut component_types = Vec::<Type>::new();
-                for component in &mut tuple.components {
-                    self.resolve_expr(component)?;
-                    component_types.push(component.ty.clone());
-                }
-                expr.ty = self.type_factory.tuple(component_types)
-            }
-            Expr::Get(get) => {
-                self.resolve_expr(&mut get.object)?;
-            }
-            Expr::Set(set) => {
-                self.resolve_expr(&mut set.value)?;
-                self.resolve_expr(&mut set.object)?;
-            }
+        } else {
+            let mut diagnostic = InterpreterDiagnostic::new(
+                &destination.location.source_file,
+                format!("Variable '{}' is not defined here", destination.lexeme()),
+            );
+            diagnostic.add_primary_label(&destination.location);
+            return Err(diagnostic.into());
         }
+        Ok(())
+    }
+
+    fn resolve_var_use_expr(
+        &mut self,
+        var_use: &mut VarUse,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let distance_and_symbol = self.get_definition_distance_and_symbol(&var_use.variable);
+        if let Some((distance, symbol)) = distance_and_symbol {
+            var_use.distance = distance;
+            *ast_info.ty = symbol.ty.clone();
+        } else {
+            let mut diagnostic = InterpreterDiagnostic::new(
+                &var_use.variable.location.source_file,
+                format!(
+                    "Variable '{}' is not defined here",
+                    var_use.variable.lexeme()
+                ),
+            );
+            diagnostic.add_primary_label(&var_use.variable.location);
+            return Err(diagnostic.into());
+        }
+        Ok(())
+    }
+
+    fn resolve_literal_expr(
+        &mut self,
+        literal: &mut LiteralExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        *ast_info.ty = match literal {
+            LiteralExpr::Str(_) => self.type_factory.str(),
+            LiteralExpr::F64(_) => self.type_factory.f64(),
+            LiteralExpr::I64(_) => self.type_factory.i64(),
+            LiteralExpr::Bool(_) => self.type_factory.bool(),
+            LiteralExpr::Unit => self.type_factory.unit(),
+        };
+        Ok(())
+    }
+
+    fn resolve_binary_expr(
+        &mut self,
+        binary: &mut BinaryExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.resolve_expr(&mut binary.left)?;
+        self.resolve_expr(&mut binary.right)?;
+        if binary.left.ty == binary.right.ty {
+            *ast_info.ty = binary.left.ty.clone();
+        }
+        Ok(())
+    }
+
+    fn resolve_unary_expr(
+        &mut self,
+        unary: &mut UnaryExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.resolve_expr(&mut unary.right)?;
+        *ast_info.ty = unary.right.ty.clone();
         Ok(())
     }
 
