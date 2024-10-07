@@ -1146,6 +1146,19 @@ mod tests {
                        └── Field baz     [80+26]
                            └── Read 'f64'     [85+3]
                "#]];
+               program_struct_trailing_comma: "
+               struct Foo {
+                    bar: bool,
+                    baz: f64,
+                }
+               " => expect![[r#"
+                   Program
+                   └── Struct 'Foo'     [16+107]
+                       ├── Field bar     [49+10]
+                       │   └── Read 'bool'     [54+4]
+                       └── Field baz     [80+9]
+                           └── Read 'f64'     [85+3]
+               "#]];
                 program_struct_empty: "
                struct Empty {}
                " => expect![[r#"
