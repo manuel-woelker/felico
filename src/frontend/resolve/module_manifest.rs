@@ -1,4 +1,4 @@
-use crate::frontend::ast::types::Type;
+use crate::frontend::ast::types::{Type, TypeKind};
 use crate::infra::shared_string::Name;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -21,5 +21,21 @@ impl Debug for ModuleManifest {
             write!(f, "  {}: {}\n", entry.name, entry.ty)?;
         }
         Ok(())
+    }
+}
+
+impl ModuleManifest {
+    pub fn as_pretty_string(&self) -> String {
+        use std::fmt::Write;
+        let mut string = String::from("Module\n");
+        for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
+            write!(string, "  {}: {}\n", entry.name, entry.ty).unwrap();
+            if let TypeKind::Struct(struct_type) = entry.ty.kind() {
+                for (name, field) in &struct_type.fields {
+                    write!(string, "    {}: {}\n", name, field.ty).unwrap();
+                }
+            }
+        }
+        string
     }
 }

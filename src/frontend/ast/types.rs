@@ -113,9 +113,9 @@ pub struct StructType {
 
 #[derive(Debug)]
 pub struct StructField {
-    name_token: Token,
-    name: SharedString,
-    ty: Type,
+    pub name_token: Token,
+    pub name: SharedString,
+    pub ty: Type,
 }
 
 impl StructField {

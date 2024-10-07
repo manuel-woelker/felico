@@ -560,7 +560,7 @@ mod tests {
             .unwrap();
 
         expected_ast.assert_eq(&printed_ast);
-        expected_manifest.assert_eq(&format!("{:#?}", resolver.get_module_manifest().unwrap()));
+        expected_manifest.assert_eq(&resolver.get_module_manifest().unwrap().as_pretty_string());
     }
 
     macro_rules! test_program {
@@ -701,6 +701,8 @@ mod tests {
            "#]],expect![[r#"
                Module
                  Foo: ❬Foo❭
+                   baz: ❬f64❭
+                   bar: ❬bool❭
            "#]];
         program_struct_empty: "
            struct Empty {}
