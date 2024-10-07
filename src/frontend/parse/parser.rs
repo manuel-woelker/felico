@@ -114,33 +114,47 @@ impl Parser {
         )
     }
 
-    fn parse_struct_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
-        let start_location = self.current_location();
-        self.consume(TokenType::Struct, "struct expected")?;
-        let name = self.consume(TokenType::Identifier, "Expected identifier after struct")?;
-        self.consume(TokenType::LeftBrace, "Expected '{'")?;
-        let mut fields: Vec<AstNode<StructStmtField>> = vec![];
+    fn parse_separated<T>(
+        &mut self,
+        parse_fn: impl Fn(&mut Parser) -> FelicoResult<Option<T>>,
+    ) -> FelicoResult<Vec<T>> {
+        let mut result: Vec<T> = Vec::new();
         loop {
-            if self.is_at(TokenType::RightBrace) {
+            if let Some(item) = parse_fn(self)? {
+                result.push(item);
+            } else {
                 break;
             }
-            let field_start_location = self.current_location();
-            let field_name =
-                self.consume(TokenType::Identifier, "Expected field name in struct")?;
-            self.consume(TokenType::Colon, "Expected ':' after field name")?;
-            let type_expression = self.parse_type_expression()?;
-            fields.push(self.create_node(
-                field_start_location,
-                StructStmtField {
-                    name: field_name,
-                    type_expression,
-                },
-            )?);
             if !self.is_at(TokenType::Comma) {
                 break;
             }
             self.advance();
         }
+        Ok(result)
+    }
+
+    fn parse_struct_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+        let start_location = self.current_location();
+        self.consume(TokenType::Struct, "struct expected")?;
+        let name = self.consume(TokenType::Identifier, "Expected identifier after struct")?;
+        self.consume(TokenType::LeftBrace, "Expected '{'")?;
+        let fields = self.parse_separated(|parser| {
+            if !parser.is_at(TokenType::Identifier) {
+                return Ok(None);
+            }
+            let field_start_location = parser.current_location();
+            let field_name =
+                parser.consume(TokenType::Identifier, "Expected field name in struct")?;
+            parser.consume(TokenType::Colon, "Expected ':' after field name")?;
+            let type_expression = parser.parse_type_expression()?;
+            Ok(Some(parser.create_node(
+                field_start_location,
+                StructStmtField {
+                    name: field_name,
+                    type_expression,
+                },
+            )?))
+        })?;
         self.consume(TokenType::RightBrace, "Expected '}' to complete class")?;
         self.create_node(start_location, Stmt::Struct(StructStmt { name, fields }))
     }
@@ -150,22 +164,18 @@ impl Parser {
         self.consume(TokenType::Fun, "fun expected")?;
         let name = self.consume(TokenType::Identifier, "Expected function identifier")?;
         self.consume(TokenType::LeftParen, "Expected '('")?;
-        let mut parameters = vec![];
-        if self.current_token.token_type != TokenType::RightParen {
-            loop {
-                if parameters.len() > 255 {
-                    bail!("Too many parameters");
-                }
-                let parameter_name =
-                    self.consume(TokenType::Identifier, "Expected parameter identifier")?;
-                self.consume(TokenType::Colon, "Expected ':' after parameter name")?;
-                let type_expression = self.parse_type_expression()?;
-                parameters.push(FunParameter::new(parameter_name, type_expression));
-                if !self.is_at(TokenType::Comma) {
-                    break;
-                }
-                self.advance()
+        let parameters = self.parse_separated(|parser| {
+            if !parser.is_at(TokenType::Identifier) {
+                return Ok(None);
             }
+            let parameter_name =
+                parser.consume(TokenType::Identifier, "Expected parameter identifier")?;
+            parser.consume(TokenType::Colon, "Expected ':' after parameter name")?;
+            let type_expression = parser.parse_type_expression()?;
+            Ok(Some(FunParameter::new(parameter_name, type_expression)))
+        })?;
+        if parameters.len() > 255 {
+            bail!("Too many parameters in function");
         }
         self.consume(
             TokenType::RightParen,
@@ -549,15 +559,12 @@ impl Parser {
                         self.advance();
                         return self.create_node(self.current_location(), Expr::new_tuple(vec![]));
                     }
-                    let mut components: Vec<AstNode<Expr>> = vec![];
-                    loop {
-                        let component = self.parse_expr()?;
-                        components.push(component);
-                        if !self.is_at(TokenType::Comma) {
-                            break;
+                    let mut components = self.parse_separated(|parser| {
+                        if parser.is_at(TokenType::RightParen) {
+                            return Ok(None);
                         }
-                        self.advance();
-                    }
+                        Ok(Some(parser.parse_expr()?))
+                    })?;
                     self.consume(TokenType::RightParen, "Expect closing ')' after expression")?;
                     if components.len() == 1 {
                         return Ok(components.pop().unwrap());
@@ -645,19 +652,14 @@ impl Parser {
         callee: AstNode<Expr>,
         start_location: Location,
     ) -> FelicoResult<AstNode<Expr>> {
-        let mut arguments: Vec<AstNode<Expr>> = vec![];
-        if self.current_token.token_type != TokenType::RightParen {
-            loop {
-                if arguments.len() >= 255 {
-                    bail!("Too many arguments in call expression");
-                }
-                arguments.push(self.parse_expr()?);
-                if self.is_at(TokenType::Comma) {
-                    self.advance();
-                } else {
-                    break;
-                }
+        let arguments = self.parse_separated(|parser| {
+            if parser.is_at(TokenType::RightParen) {
+                return Ok(None);
             }
+            Ok(Some(parser.parse_expr()?))
+        })?;
+        if arguments.len() >= 255 {
+            bail!("Too many arguments in call expression");
         }
         self.consume(
             TokenType::RightParen,
@@ -919,6 +921,12 @@ mod tests {
             ├── Read 'bar'     [4+3]
             └── Read 'baz'     [8+3]
         "#]];
+        expression_call_with_trailing_comma: "foo(bar,baz,)" => expect![[r#"
+            Call     [3+10]
+            ├── Read 'foo'     [0+3]
+            ├── Read 'bar'     [4+3]
+            └── Read 'baz'     [8+3]
+        "#]];
         expression_call_twice: "foo()()" => expect![[r#"
             Call     [3+4]
             └── Call     [3+3]
@@ -1085,15 +1093,15 @@ mod tests {
                        ├── Return type: Read 'unit'     [0+18]
                        └── Read 'a'     [18+1]     [18+2]
                "#]];
-               program_fun_with_return_type: "fun not(a: bool) -> bool {return !a;} " => expect![[r#"
+               program_fun_with_return_type: "fun not(a: bool,) -> bool {return !a;} " => expect![[r#"
                    Program
-                   └── Declare fun 'not(a)'     [0+38]
+                   └── Declare fun 'not(a)'     [0+39]
                        ├── Param a
                        │   └── Read 'bool'     [11+4]
-                       ├── Return type: Read 'bool'     [20+4]
-                       └── Return     [26+11]
-                           └── !     [33+3]
-                               └── Read 'a'     [34+1]
+                       ├── Return type: Read 'bool'     [21+4]
+                       └── Return     [27+11]
+                           └── !     [34+3]
+                               └── Read 'a'     [35+1]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
