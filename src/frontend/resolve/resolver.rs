@@ -30,7 +30,7 @@ struct Symbol {
     value: Option<InterpreterValue>,
 }
 
-struct Resolver {
+pub struct Resolver {
     scopes: Vec<HashMap<String, Symbol>>,
     type_factory: TypeFactory,
     type_checker: TypeChecker,
@@ -167,30 +167,20 @@ impl Resolver {
             .map(|parameter| self.resolve_type(&parameter.type_expression))
             .collect::<FelicoResult<Vec<_>>>()?;
         let function_type = type_factory.function(parameter_types, return_type);
-        match self.current_scope().entry(name.to_string()) {
-            Entry::Occupied(value) => {
-                let mut diagnostic = InterpreterDiagnostic::new(
-                    &ast_info.location.source_file,
-                    format!("Function '{}' already declared", fun_stmt.name.lexeme()),
-                );
-                diagnostic.add_primary_label(&fun_stmt.name.location);
-                diagnostic.add_label(&value.get().declaration_site, "is already defined here");
-                return Err(diagnostic.into());
-            }
-            Entry::Vacant(slot) => {
-                *ast_info.ty = function_type.clone();
-                slot.insert(Symbol {
-                    declaration_site: fun_stmt.name.location.clone(),
-                    is_defined: true,
-                    ty: function_type,
-                    value: None,
-                });
-            }
-        }
+        self.add_symbol_to_scope(
+            name.to_string(),
+            Symbol {
+                declaration_site: fun_stmt.name.location.clone(),
+                is_defined: true,
+                ty: function_type.clone(),
+                value: None,
+            },
+        )?;
+        *ast_info.ty = function_type;
         self.scopes.push(Default::default());
         for parameter in &fun_stmt.parameters {
             let ty = self.resolve_type(&parameter.type_expression)?.clone();
-            self.current_scope().insert(
+            self.add_symbol_to_scope(
                 parameter.name.lexeme().to_string(),
                 Symbol {
                     declaration_site: parameter.name.location.clone(),
@@ -198,11 +188,10 @@ impl Resolver {
                     ty,
                     value: None,
                 },
-            );
+            )?;
         }
         self.resolve_stmt(&mut fun_stmt.body)?;
         self.scopes.pop();
-        self.current_scope().get_mut(name).unwrap().is_defined = true;
         Ok(())
     }
 
@@ -220,7 +209,15 @@ impl Resolver {
             fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
         }
         *ast_info.ty = type_factory.make_struct(&struct_stmt.name, fields);
-        // TODO: add to symbol table
+        self.add_symbol_to_scope(
+            struct_stmt.name.lexeme().into(),
+            Symbol {
+                declaration_site: struct_stmt.name.location.clone(),
+                is_defined: true,
+                ty: ast_info.ty.clone(),
+                value: None,
+            },
+        )?;
         Ok(())
     }
 
@@ -230,6 +227,15 @@ impl Resolver {
         stmt: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         let name = let_stmt.name.lexeme();
+        self.add_symbol_to_scope(
+            name.to_string(),
+            Symbol {
+                declaration_site: let_stmt.name.location.clone(),
+                is_defined: false,
+                ty: self.type_factory.unknown(),
+                value: None,
+            },
+        )?;
         self.resolve_expr(&mut let_stmt.expression)?;
         let expression_type = &let_stmt.expression.ty;
         let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
@@ -246,26 +252,9 @@ impl Resolver {
             return Err(diagnostic.into());
         }
         *stmt.ty = variable_type.clone();
-        match self.current_scope().entry(name.to_string()) {
-            Entry::Occupied(value) => {
-                let mut diagnostic = InterpreterDiagnostic::new(
-                    &stmt.location.source_file,
-                    format!("Variable '{}' already declared", let_stmt.name.lexeme()),
-                );
-                diagnostic.add_primary_label(&let_stmt.name.location);
-                diagnostic.add_label(&value.get().declaration_site, "is already defined here");
-                return Err(diagnostic.into());
-            }
-            Entry::Vacant(slot) => {
-                slot.insert(Symbol {
-                    declaration_site: let_stmt.name.location.clone(),
-                    is_defined: false,
-                    ty: variable_type,
-                    value: None,
-                });
-            }
-        }
-        self.current_scope().get_mut(name).unwrap().is_defined = true;
+        let symbol = self.current_scope().get_mut(name).unwrap();
+        symbol.is_defined = true;
+        symbol.ty = variable_type;
         Ok(())
     }
 
@@ -502,9 +491,11 @@ impl Resolver {
         for scope in self.scopes.iter().rev() {
             distance += 1;
             if let Some(entry) = scope.get(name) {
-                if entry.is_defined {
-                    return Some((distance, entry));
-                }
+                return if entry.is_defined {
+                    Some((distance, entry))
+                } else {
+                    None
+                };
             }
         }
         None
@@ -514,6 +505,24 @@ impl Resolver {
         let mut diagnostic = InterpreterDiagnostic::new(&location.source_file, message.into());
         diagnostic.add_primary_label(location);
         Err(diagnostic.into())
+    }
+
+    fn add_symbol_to_scope(&mut self, name: String, symbol: Symbol) -> FelicoResult<()> {
+        match self.current_scope().entry(name.clone()) {
+            Entry::Occupied(value) => {
+                let mut diagnostic = InterpreterDiagnostic::new(
+                    &symbol.declaration_site.source_file,
+                    format!("The name '{}' already declared", name),
+                );
+                diagnostic.add_primary_label(&symbol.declaration_site);
+                diagnostic.add_label(&value.get().declaration_site, "is already declared here");
+                return Err(diagnostic.into());
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(symbol);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -603,26 +612,26 @@ mod tests {
                   a: ❬f64❭
             "#]];
         let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
-                Program
-                ├── Let ''a' (Identifier)': ❬f64❭
-                │   └── F64(1.0): ❬f64❭
-                └── Let ''b' (Identifier)': ❬f64❭
-                    └── Read 'a': ❬f64❭
-            "#]],expect![[r#"
-                Module
-                  a: ❬f64❭
-                  b: ❬f64❭
-            "#]];
+            Program
+            ├── Let ''a' (Identifier)': ❬f64❭
+            │   └── F64(1.0): ❬f64❭
+            └── Let ''b' (Identifier)': ❬f64❭
+                └── Read 'a': ❬f64❭
+        "#]],expect![[r#"
+            Module
+              a: ❬f64❭
+              b: ❬f64❭
+        "#]];
         assign_type: "let a = 1;a = 3;" => expect![[r#"
-                Program
-                ├── Let ''a' (Identifier)': ❬f64❭
-                │   └── F64(1.0): ❬f64❭
-                └── 'a' (Identifier) = : ❬f64❭
-                    └── F64(3.0): ❬f64❭
-            "#]],expect![[r#"
-                Module
-                  a: ❬f64❭
-            "#]];
+            Program
+            ├── Let ''a' (Identifier)': ❬f64❭
+            │   └── F64(1.0): ❬f64❭
+            └── 'a' (Identifier) = : ❬f64❭
+                └── F64(3.0): ❬f64❭
+        "#]],expect![[r#"
+            Module
+              a: ❬f64❭
+        "#]];
         tuple_empty: "();" => expect![[r#"
                 Program
                 └── Tuple: ❬()❭
@@ -656,10 +665,10 @@ mod tests {
             └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
                 └── Read 'x': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
         "#]],expect![[r#"
-                Module
-                  a: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-                  x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-            "#]];
+            Module
+              a: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+              x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+        "#]];
         function_arg_type: "fun x(a: bool, b: i64) -> f64 {
                 a;
                 b;
@@ -691,6 +700,7 @@ mod tests {
                        └── Read 'f64': ❬Type❭
            "#]],expect![[r#"
                Module
+                 Foo: ❬Foo❭
            "#]];
         program_struct_empty: "
            struct Empty {}
@@ -699,6 +709,7 @@ mod tests {
                └── Struct 'Empty': ❬Empty❭
            "#]],expect![[r#"
                Module
+                 Empty: ❬Empty❭
            "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
@@ -722,14 +733,42 @@ mod tests {
     }
 
     test_resolve_error!(
+        let_self_referential: "let a: bool = a;" => expect![[r#"
+            × Variable 'a' is not defined here
+               ╭─[let_self_referential:1:15]
+             1 │ let a: bool = a;
+               ·               ─
+               ╰────"#]];
+        let_self_referential_quasi: r#"
+        let a = "outer";
+        {
+          let a = a;
+        }
+        "# => expect![[r#"
+            × Variable 'a' is not defined here
+               ╭─[let_self_referential_quasi:4:19]
+             3 │         {
+             4 │           let a = a;
+               ·                   ─
+             5 │         }
+               ╰────"#]];
         double_declaration: "let x = 0;\ndebug_print(x);\nlet x = true;" => expect![[r#"
-            × Variable 'x' already declared
+            × The name 'x' already declared
                ╭─[double_declaration:3:5]
              1 │ let x = 0;
                ·     ┬
-               ·     ╰── is already defined here
+               ·     ╰── is already declared here
              2 │ debug_print(x);
              3 │ let x = true;
+               ·     ─
+               ╰────"#]];
+        double_declaration_with_function: "let x = 0;\nfun x() {}" => expect![[r#"
+            × The name 'x' already declared
+               ╭─[double_declaration_with_function:2:5]
+             1 │ let x = 0;
+               ·     ┬
+               ·     ╰── is already declared here
+             2 │ fun x() {}
                ·     ─
                ╰────"#]];
         use_undefined_variable: "debug_print(x);" => expect![[r#"
