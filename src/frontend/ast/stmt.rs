@@ -11,7 +11,6 @@ pub enum Stmt {
     Let(LetStmt),
     Struct(StructStmt),
     Fun(FunStmt),
-    Block(BlockStmt),
     If(IfStmt),
     While(WhileStmt),
 }
@@ -55,15 +54,10 @@ pub struct FunStmt {
     pub name: Token,
     pub parameters: Vec<FunParameter>,
     pub return_type: AstNode<Expr>,
-    pub body: AstNode<Stmt>,
+    pub body: AstNode<Expr>,
 }
 
 impl AstData for FunStmt {}
-
-#[derive(Debug, Clone)]
-pub struct BlockStmt {
-    pub stmts: Vec<AstNode<Stmt>>,
-}
 
 #[derive(Debug, Clone)]
 pub struct IfStmt {

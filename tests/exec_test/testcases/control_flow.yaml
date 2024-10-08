@@ -101,21 +101,3 @@ testcases:
       }
     output: |-
       321
-
-  - name: for with let
-    input: |-
-      for(let i = 1; i <= 3; i = i + 1) 
-        debug_print(i);
-    output: |-
-      123
-
-  - name: for with condition only
-    input: |-
-      let i = 1;
-      for(; i <= 5;) {
-        debug_print(i);
-        i = i + 1;
-      }
-    output: |-
-      12345
-

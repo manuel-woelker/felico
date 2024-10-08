@@ -118,13 +118,21 @@ impl<'a> AstPrinterWorker<'a> {
                 tree.push(self.expr_to_tree(&set.value));
                 tree
             }
+            Expr::Block(block) => {
+                let mut tree = Tree::new("Block".into());
+                for stmt in &block.stmts {
+                    tree.push(self.stmt_to_tree(stmt));
+                }
+                tree.push(self.expr_to_tree(&block.result_expression));
+                tree
+            }
         };
         self.add_location(tree, ast)
     }
 
     fn stmt_to_tree(&self, ast: &AstNode<Stmt>) -> Tree<String> {
         let tree = match &ast.data.as_ref() {
-            Stmt::Expression(expr) => self.expr_to_tree(&expr.expression),
+            Stmt::Expression(expr) => return self.expr_to_tree(&expr.expression),
             Stmt::Return(return_stmt) => {
                 let mut tree = Tree::new("Return".into());
                 tree.push(self.expr_to_tree(&return_stmt.expression));
@@ -153,7 +161,7 @@ impl<'a> AstPrinterWorker<'a> {
                 let mut return_type_tree = self.expr_to_tree(&fun.return_type);
                 return_type_tree.root = "Return type: ".to_string() + &return_type_tree.root;
                 tree.push(return_type_tree);
-                tree.leaves.append(&mut self.stmt_to_tree(&fun.body).leaves);
+                tree.leaves.append(&mut self.expr_to_tree(&fun.body).leaves);
                 tree
             }
             Stmt::Struct(struct_stmt) => {
@@ -163,13 +171,6 @@ impl<'a> AstPrinterWorker<'a> {
                     field_tree.push(self.expr_to_tree(&field.data.type_expression));
                     let field_tree = self.add_location(field_tree, field);
                     tree.push(field_tree);
-                }
-                tree
-            }
-            Stmt::Block(block) => {
-                let mut tree = Tree::new("Block".into());
-                for stmt in &block.stmts {
-                    tree.push(self.stmt_to_tree(stmt));
                 }
                 tree
             }

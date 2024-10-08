@@ -1,12 +1,11 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr,
+    VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::stmt::{
-    BlockStmt, FunStmt, IfStmt, LetStmt, Stmt, StructStmt, WhileStmt,
-};
+use crate::frontend::ast::stmt::{FunStmt, IfStmt, LetStmt, Stmt, StructStmt, WhileStmt};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
@@ -117,9 +116,6 @@ impl Resolver {
             Stmt::Fun(fun_stmt) => {
                 self.resolve_fun_stmt(fun_stmt, &mut ast_info)?;
             }
-            Stmt::Block(block) => {
-                self.resolve_block_stmt(block)?;
-            }
             Stmt::If(if_stmt) => {
                 self.resolve_if_stmt(if_stmt)?;
             }
@@ -145,9 +141,10 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_block_stmt(&mut self, block: &mut BlockStmt) -> FelicoResult<()> {
+    fn resolve_block_expr(&mut self, block: &mut BlockExpr) -> FelicoResult<()> {
         self.scopes.push(Default::default());
         self.resolve_stmts(&mut block.stmts)?;
+        self.resolve_expr(&mut block.result_expression)?;
         self.scopes.pop();
         Ok(())
     }
@@ -189,7 +186,7 @@ impl Resolver {
                 },
             )?;
         }
-        self.resolve_stmt(&mut fun_stmt.body)?;
+        self.resolve_expr(&mut fun_stmt.body)?;
         self.scopes.pop();
         Ok(())
     }
@@ -302,6 +299,9 @@ impl Resolver {
             }
             Expr::Set(set) => {
                 self.resolve_set_expr(set)?;
+            }
+            Expr::Block(block) => {
+                self.resolve_block_expr(block)?;
             }
         }
         Ok(())
@@ -629,7 +629,8 @@ mod tests {
             │   │   └── Read 'bool'
             │   ├── Param b
             │   │   └── Read 'i64'
-            │   └── Return type: Read 'f64'
+            │   ├── Return type: Read 'f64'
+            │   └── Unit: ❬Unit❭
             └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
                 └── Read 'x': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
         "#]],expect![[r#"
@@ -649,7 +650,8 @@ mod tests {
                     │   └── Read 'i64'
                     ├── Return type: Read 'f64'
                     ├── Read 'a': ❬bool❭
-                    └── Read 'b': ❬i64❭
+                    ├── Read 'b': ❬i64❭
+                    └── Unit: ❬Unit❭
             "#]],expect![[r#"
                 Module
                   x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭

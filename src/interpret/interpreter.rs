@@ -255,6 +255,20 @@ impl Interpreter {
                 )?;
                 value
             }
+
+            Expr::Block(block) => {
+                self.environment.enter_new();
+                let stmt_result = self.evaluate_stmts(&block.stmts[..])?;
+                // TODO: handle early returns
+                let result = if let StmtResult::Return(value) = stmt_result {
+                    value
+                } else {
+                    self.evaluate_expr(&block.result_expression)?
+                };
+                self.environment.exit();
+                return Ok(result);
+            }
+
             Expr::Get(_get) => {
                 todo!("Get not supported");
                 /*
@@ -353,12 +367,9 @@ impl Interpreter {
                                 .for_each(|(parameter, value)| {
                                     self.environment.define(parameter.name.lexeme(), value);
                                 });
-                            let result = self.evaluate_stmt(&defined_function.fun_stmt.body)?;
+                            let result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
                             self.environment = old_environment;
-                            match result {
-                                StmtResult::Continue => self.value_factory.unit(),
-                                StmtResult::Return(value) => value,
-                            }
+                            result
                         }
                     };
                     self.available_stack += 1;
@@ -400,12 +411,6 @@ impl Interpreter {
             Stmt::Fun(fun) => {
                 let callable = self.create_fun_callable(fun, stmt);
                 self.environment.define(fun.name.lexeme(), callable);
-            }
-            Stmt::Block(block) => {
-                self.environment.enter_new();
-                let result = self.evaluate_stmts(&block.stmts[..])?;
-                self.environment.exit();
-                return Ok(result);
             }
             Stmt::If(if_stmt) => match self.evaluate_expr(&if_stmt.condition)?.val {
                 ValueKind::Bool(true) => {
@@ -649,12 +654,6 @@ mod tests {
              1 │ while(3) {}
                ·       ─
                ╰────"#]];
-        wrong_type_in_for: "for(;3;) {}" => expect![[r#"
-            × Expected true or false in loop condition, but found '3' instead
-               ╭─[wrong_type_in_for:1:6]
-             1 │ for(;3;) {}
-               ·      ─
-               ╰────"#]];
         sqrt_true: "sqrt(true);" => expect![[r#"
             × Cannot coerce argument of type ❬bool❭ as parameter of type ❬f64❭ in function invocation
                ╭─[sqrt_true:1:6]
@@ -666,12 +665,6 @@ mod tests {
                ╭─[endless_loop:1:7]
              1 │ while(true) {}
                ·       ────
-               ╰────"#]];
-        endless_for: "for(;true;) {}" => expect![[r#"
-            × Out of fuel! Execution took to many loops/function calls.
-               ╭─[endless_for:1:6]
-             1 │ for(;true;) {}
-               ·      ────
                ╰────"#]];
         endless_recursion: "fun a() {a();} a();" => expect![[r#"
             × Stack size exceeded.

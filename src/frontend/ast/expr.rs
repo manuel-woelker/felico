@@ -1,4 +1,5 @@
 use crate::frontend::ast::node::AstNode;
+use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::Token;
 use std::fmt::Debug;
@@ -13,6 +14,7 @@ pub enum Expr {
     Call(CallExpr),
     Get(GetExpr),
     Set(SetExpr),
+    Block(BlockExpr),
 }
 
 impl AstData for Expr {}
@@ -74,4 +76,10 @@ pub struct SetExpr {
 #[derive(Debug, Clone)]
 pub struct TupleExpr {
     pub components: Vec<AstNode<Expr>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockExpr {
+    pub stmts: Vec<AstNode<Stmt>>,
+    pub result_expression: AstNode<Expr>,
 }

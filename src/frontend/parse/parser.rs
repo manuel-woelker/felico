@@ -1,10 +1,11 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr,
+    VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
-    BlockStmt, ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, StructStmt,
+    ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, StructStmt,
     StructStmtField, WhileStmt,
 };
 use crate::frontend::ast::AstData;
@@ -201,7 +202,7 @@ impl Parser {
                 }),
             )?
         };
-        let body = self.parse_block()?;
+        let body = self.parse_block_expr()?;
         self.create_node(
             start_location,
             Stmt::Fun(FunStmt {
@@ -215,14 +216,19 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         match self.current_token.token_type {
-            TokenType::LeftBrace => self.parse_block(),
             TokenType::If => self.parse_if(),
             TokenType::While => self.parse_while(),
-            TokenType::For => self.parse_for(),
+            //            TokenType::For => self.parse_for(),
             TokenType::Return => self.parse_return(),
             _ => {
                 let node = self.parse_expr_stmt()?;
-                self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
+                if let Stmt::Expression(expression) = &*node.data {
+                    if !matches!(*expression.expression.data, Expr::Block(_)) {
+                        self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
+                    };
+                } else {
+                    bail!("Expected expression statement")
+                }
                 Ok(node)
             }
         }
@@ -284,60 +290,60 @@ impl Parser {
             }),
         )
     }
-
-    fn parse_for(&mut self) -> FelicoResult<AstNode<Stmt>> {
-        let start_location = self.current_location();
-        self.consume(TokenType::For, "Expected 'for'")?;
-        self.consume(TokenType::LeftParen, "Expected '(' after for")?;
-        let initializer = match self.current_token.token_type {
-            TokenType::Let => Some(self.parse_let_stmt()?),
-            TokenType::Semicolon => None,
-            _ => Some(self.parse_expr_stmt()?),
-        };
-        self.consume(TokenType::Semicolon, "Expected ';' in for statement")?;
-        let condition_location = self.current_location();
-        let condition = match self.current_token.token_type {
-            TokenType::Semicolon => {
-                self.create_node(condition_location, Expr::Literal(LiteralExpr::Bool(true)))?
+    /*
+        fn parse_for(&mut self) -> FelicoResult<AstNode<Stmt>> {
+            let start_location = self.current_location();
+            self.consume(TokenType::For, "Expected 'for'")?;
+            self.consume(TokenType::LeftParen, "Expected '(' after for")?;
+            let initializer = match self.current_token.token_type {
+                TokenType::Let => Some(self.parse_let_stmt()?),
+                TokenType::Semicolon => None,
+                _ => Some(self.parse_expr_stmt()?),
+            };
+            self.consume(TokenType::Semicolon, "Expected ';' in for statement")?;
+            let condition_location = self.current_location();
+            let condition = match self.current_token.token_type {
+                TokenType::Semicolon => {
+                    self.create_node(condition_location, Expr::Literal(LiteralExpr::Bool(true)))?
+                }
+                _ => self.parse_expr()?,
+            };
+            self.consume(TokenType::Semicolon, "Expected ';' in for statement")?;
+            let increment = match self.current_token.token_type {
+                TokenType::RightParen => None,
+                _ => Some((self.current_location(), self.parse_expr()?)),
+            };
+            self.consume(TokenType::RightParen, "Expected ')' in for statement")?;
+            let mut body_stmt = self.parse_stmt()?;
+            if let Some((start, expression)) = increment {
+                let increment_stmt =
+                    self.create_node(start, Stmt::Expression(ExprStmt { expression }))?;
+                body_stmt = self.create_node(
+                    body_stmt.location.clone(),
+                    Stmt::Expression(ExprStmt {})Block(BlockExpr {
+                        stmts: vec![body_stmt, increment_stmt],
+                    }),
+                )?
             }
-            _ => self.parse_expr()?,
-        };
-        self.consume(TokenType::Semicolon, "Expected ';' in for statement")?;
-        let increment = match self.current_token.token_type {
-            TokenType::RightParen => None,
-            _ => Some((self.current_location(), self.parse_expr()?)),
-        };
-        self.consume(TokenType::RightParen, "Expected ')' in for statement")?;
-        let mut body_stmt = self.parse_stmt()?;
-        if let Some((start, expression)) = increment {
-            let increment_stmt =
-                self.create_node(start, Stmt::Expression(ExprStmt { expression }))?;
-            body_stmt = self.create_node(
-                body_stmt.location.clone(),
-                Stmt::Block(BlockStmt {
-                    stmts: vec![body_stmt, increment_stmt],
+            let mut while_stmt = self.create_node(
+                start_location.clone(),
+                Stmt::While(WhileStmt {
+                    condition,
+                    body_stmt,
                 }),
-            )?
+            )?;
+            if let Some(initializer) = initializer {
+                while_stmt = self.create_node(
+                    start_location,
+                    Stmt::Block(BlockExpr {
+                        stmts: vec![initializer, while_stmt],
+                    }),
+                )?
+            }
+            Ok(while_stmt)
         }
-        let mut while_stmt = self.create_node(
-            start_location.clone(),
-            Stmt::While(WhileStmt {
-                condition,
-                body_stmt,
-            }),
-        )?;
-        if let Some(initializer) = initializer {
-            while_stmt = self.create_node(
-                start_location,
-                Stmt::Block(BlockStmt {
-                    stmts: vec![initializer, while_stmt],
-                }),
-            )?
-        }
-        Ok(while_stmt)
-    }
-
-    pub fn parse_block(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    */
+    pub fn parse_block_expr(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         self.consume(TokenType::LeftBrace, "Expected left brace ('{')")?;
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
@@ -345,8 +351,19 @@ impl Parser {
         while self.current_token.token_type != TokenType::RightBrace {
             stmts.push(self.parse_decl()?)
         }
+        // TODO: handle result expression
+        let result_location = self.current_location();
+        let result_expression =
+            self.create_node(result_location, Expr::Literal(LiteralExpr::Unit))?;
+
         self.consume(TokenType::RightBrace, "Expected right brace ('}')")?;
-        self.create_node(start_location, Stmt::Block(BlockStmt { stmts }))
+        self.create_node(
+            start_location,
+            Expr::Block(BlockExpr {
+                stmts,
+                result_expression,
+            }),
+        )
     }
 
     pub fn parse_expression(mut self) -> FelicoResult<AstNode<Expr>> {
@@ -555,6 +572,7 @@ impl Parser {
                     self.consume(TokenType::RightParen, "Expect closing ')' after expression")?;
                     return Ok(expression);
                 }
+                TokenType::LeftBrace => return self.parse_block_expr(),
                 _ => {
                     return self.create_diagnostic(
                         format!(
@@ -944,27 +962,27 @@ mod tests {
                 "#]];
                 program_bool_true: "true;" => expect![[r#"
                     Program
-                    └── Bool(true)     [0+4]     [0+5]
+                    └── Bool(true)     [0+4]
                 "#]];
                 program_addition: "1+2;" => expect![[r#"
                     Program
-                    └── +     [0+4]     [0+4]
+                    └── +     [0+4]
                         ├── F64(1.0)     [0+1]
                         └── F64(2.0)     [2+1]
                 "#]];
                 program_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
                     Program
-                    ├── Str("Hello")     [0+7]     [0+8]
-                    └── Str("World")     [9+7]     [9+8]
+                    ├── Str("Hello")     [0+7]
+                    └── Str("World")     [9+7]
                 "#]];
 
                 program_true: "true;" => expect![[r#"
                     Program
-                    └── Bool(true)     [0+4]     [0+5]
+                    └── Bool(true)     [0+4]
                 "#]];
                 program_string_addition: "\"Hello \" + 3;" => expect![[r#"
                     Program
-                    └── +     [0+13]     [0+13]
+                    └── +     [0+13]
                         ├── Str("Hello ")     [0+8]
                         └── F64(3.0)     [11+1]
                 "#]];
@@ -986,92 +1004,73 @@ mod tests {
                     │   └── +     [18+4]
                     │       ├── Read 'a'     [18+1]
                     │       └── Read 'a'     [20+1]
-                    └── Read 'b'     [22+1]     [22+2]
+                    └── Read 'b'     [22+1]
                 "#]];
 
                 program_assign: "a=1;" => expect![[r#"
                     Program
-                    └── 'a' (Identifier) =      [0+4]     [0+4]
+                    └── 'a' (Identifier) =      [0+4]
                         └── F64(1.0)     [2+1]
                 "#]];
                 program_assign_twice2: "a=b=3;" => expect![[r#"
                     Program
-                    └── 'a' (Identifier) =      [0+6]     [0+6]
+                    └── 'a' (Identifier) =      [0+6]
                         └── 'b' (Identifier) =      [2+4]
                             └── F64(3.0)     [4+1]
                 "#]];
                 program_block_empty: "{}" => expect![[r#"
                     Program
                     └── Block     [0+2]
+                        └── Unit     [1+1]
                 "#]];
                 program_nested_block: "{{foo;}}" => expect![[r#"
                     Program
                     └── Block     [0+8]
-                        └── Block     [1+7]
-                            └── Read 'foo'     [2+3]     [2+4]
+                        ├── Block     [1+7]
+                        │   ├── Read 'foo'     [2+3]
+                        │   └── Unit     [6+1]
+                        └── Unit     [7+1]
                 "#]];
 
                program_if: "if(c) a;" => expect![[r#"
                    Program
                    └── If     [0+8]
                        ├── Read 'c'     [3+1]
-                       └── Read 'a'     [6+1]     [6+2]
+                       └── Read 'a'     [6+1]
                "#]];
                program_if_else: "if(c) a; else b;" => expect![[r#"
                    Program
                    └── If     [0+16]
                        ├── Read 'c'     [3+1]
-                       ├── Read 'a'     [6+1]     [6+2]
-                       └── Read 'b'     [14+1]     [14+2]
+                       ├── Read 'a'     [6+1]
+                       └── Read 'b'     [14+1]
                "#]];
                program_if_no_parentheses: "if c a;" => expect![[r#"
                    Program
                    └── If     [0+7]
                        ├── Read 'c'     [3+1]
-                       └── Read 'a'     [5+1]     [5+2]
+                       └── Read 'a'     [5+1]
                "#]];
                program_if_else_no_parentheses: "if c a; else b;" => expect![[r#"
                    Program
                    └── If     [0+15]
                        ├── Read 'c'     [3+1]
-                       ├── Read 'a'     [5+1]     [5+2]
-                       └── Read 'b'     [13+1]     [13+2]
+                       ├── Read 'a'     [5+1]
+                       └── Read 'b'     [13+1]
                "#]];
 
                program_while: "while(a) b;" => expect![[r#"
                    Program
                    └── While     [0+11]
                        ├── Read 'a'     [6+1]
-                       └── Read 'b'     [9+1]     [9+2]
-               "#]];
-
-               program_for_let: "for(let i = 1; i < 3; i = i + 1) i;" => expect![[r#"
-                   Program
-                   └── Block     [0+35]
-                       ├── Let ''i' (Identifier)'     [4+10]
-                       │   └── F64(1.0)     [12+1]
-                       └── While     [0+35]
-                           ├── <     [15+6]
-                           │   ├── Read 'i'     [15+1]
-                           │   └── F64(3.0)     [19+1]
-                           └── Block     [33+2]
-                               ├── Read 'i'     [33+1]     [33+2]
-                               └── 'i' (Identifier) =      [22+10]     [22+13]
-                                   └── +     [26+6]
-                                       ├── Read 'i'     [26+1]
-                                       └── F64(1.0)     [30+1]
-               "#]];
-               program_for_empty: "for(;;) i;" => expect![[r#"
-                   Program
-                   └── While     [0+10]
-                       ├── Bool(true)     [5+1]
-                       └── Read 'i'     [8+1]     [8+2]
+                       └── Read 'b'     [9+1]
                "#]];
 
                program_fun_empty: "fun foo() {}" => expect![[r#"
                    Program
                    └── Declare fun 'foo()'     [0+12]
-                       └── Return type: Read 'unit'     [0+11]
+                       ├── Return type: Read 'unit'     [0+11]
+                       └── Unit     [11+1]
                "#]];
                program_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
                    Program
@@ -1079,7 +1078,8 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [11+4]
                        ├── Return type: Read 'unit'     [0+18]
-                       └── Read 'a'     [18+1]     [18+2]
+                       ├── Read 'a'     [18+1]
+                       └── Unit     [20+1]
                "#]];
                program_fun_with_return_type: "fun not(a: bool,) -> bool {return !a;} " => expect![[r#"
                    Program
@@ -1087,16 +1087,18 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [11+4]
                        ├── Return type: Read 'bool'     [21+4]
-                       └── Return     [27+11]
-                           └── !     [34+3]
-                               └── Read 'a'     [35+1]
+                       ├── Return     [27+11]
+                       │   └── !     [34+3]
+                       │       └── Read 'a'     [35+1]
+                       └── Unit     [37+1]
                "#]];
                program_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
                    └── Declare fun 'nop()'     [0+20]
                        ├── Return type: Read 'unit'     [0+11]
-                       └── Return     [11+8]
-                           └── Unit     [11+7]
+                       ├── Return     [11+8]
+                       │   └── Unit     [11+7]
+                       └── Unit     [18+1]
                "#]];
                program_fun_return_value: "fun three(a: bool) {return 3;} " => expect![[r#"
                    Program
@@ -1104,8 +1106,9 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [13+4]
                        ├── Return type: Read 'unit'     [0+20]
-                       └── Return     [20+10]
-                           └── F64(3.0)     [27+1]
+                       ├── Return     [20+10]
+                       │   └── F64(3.0)     [27+1]
+                       └── Unit     [29+1]
                "#]];
                program_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
                    Program
@@ -1113,19 +1116,20 @@ mod tests {
                        ├── Param a
                        │   └── Read 'f64'     [13+3]
                        ├── Return type: Read 'unit'     [0+19]
-                       └── Return     [19+12]
-                           └── +     [26+4]
-                               ├── Read 'a'     [26+1]
-                               └── Read 'a'     [28+1]
+                       ├── Return     [19+12]
+                       │   └── +     [26+4]
+                       │       ├── Read 'a'     [26+1]
+                       │       └── Read 'a'     [28+1]
+                       └── Unit     [30+1]
                "#]];
                program_property_access: "a.b;" => expect![[r#"
                    Program
-                   └── Get b     [1+3]     [0+4]
+                   └── Get b     [1+3]
                        └── Read 'a'     [0+1]
                "#]];
                program_property_set: "a.b = 3;" => expect![[r#"
                    Program
-                   └── Set b     [0+8]     [0+8]
+                   └── Set b     [0+8]
                        ├── Read 'a'     [0+1]
                        └── F64(3.0)     [6+1]
                "#]];
