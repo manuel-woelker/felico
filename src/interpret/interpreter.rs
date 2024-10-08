@@ -268,6 +268,38 @@ impl Interpreter {
                 self.environment.exit();
                 return Ok(result);
             }
+            Expr::If(if_expr) => match self.evaluate_expr(&if_expr.condition)?.val {
+                ValueKind::Bool(true) => {
+                    let result = self.evaluate_expr(&if_expr.then_expr)?;
+                    /*                    if result.is_return() {
+                        return Ok(result);
+                    }*/
+                    return Ok(result);
+                }
+                ValueKind::Bool(false) => {
+                    if let Some(else_expr) = &if_expr.else_expr {
+                        let result = self.evaluate_expr(else_expr)?;
+                        /*                        if result.is_return() {
+                            return Ok(result);
+                        }*/
+                        return Ok(result);
+                    } else {
+                        return Ok(self.value_factory.unit());
+                    }
+                }
+                other => {
+                    return self.create_diagnostic(
+                        &if_expr.condition,
+                        format!(
+                            "Expected true or false in if condition, but found '{}' instead",
+                            other
+                        ),
+                        |diagnostic| {
+                            diagnostic.add_primary_label(&if_expr.condition.location);
+                        },
+                    );
+                }
+            },
 
             Expr::Get(_get) => {
                 todo!("Get not supported");
@@ -412,34 +444,6 @@ impl Interpreter {
                 let callable = self.create_fun_callable(fun, stmt);
                 self.environment.define(fun.name.lexeme(), callable);
             }
-            Stmt::If(if_stmt) => match self.evaluate_expr(&if_stmt.condition)?.val {
-                ValueKind::Bool(true) => {
-                    let result = self.evaluate_stmt(&if_stmt.then_stmt)?;
-                    if result.is_return() {
-                        return Ok(result);
-                    }
-                }
-                ValueKind::Bool(false) => {
-                    if let Some(else_stmt) = &if_stmt.else_stmt {
-                        let result = self.evaluate_stmt(else_stmt)?;
-                        if result.is_return() {
-                            return Ok(result);
-                        }
-                    }
-                }
-                other => {
-                    return self.create_diagnostic(
-                        &if_stmt.condition,
-                        format!(
-                            "Expected true or false in if condition, but found '{}' instead",
-                            other
-                        ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&if_stmt.condition.location);
-                        },
-                    );
-                }
-            },
             Stmt::While(while_stmt) => {
                 loop {
                     match self.evaluate_expr(&while_stmt.condition)?.val {
@@ -560,8 +564,8 @@ mod tests {
     test_eval_program!(
         program_fib: "
             fun fib(n: f64) {
-                 if (n <= 1) return n;
-                 return fib(n - 2) + fib(n - 1);
+                 return if (n <= 1) n else
+                 fib(n - 2) + fib(n - 1);
             }
             debug_print(fib(6));
         " => expect!["8"];

@@ -15,6 +15,7 @@ pub enum Expr {
     Get(GetExpr),
     Set(SetExpr),
     Block(BlockExpr),
+    If(IfExpr),
 }
 
 impl AstData for Expr {}
@@ -82,4 +83,11 @@ pub struct TupleExpr {
 pub struct BlockExpr {
     pub stmts: Vec<AstNode<Stmt>>,
     pub result_expression: AstNode<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfExpr {
+    pub condition: AstNode<Expr>,
+    pub then_expr: AstNode<Expr>,
+    pub else_expr: Option<AstNode<Expr>>,
 }

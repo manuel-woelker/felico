@@ -11,7 +11,6 @@ pub enum Stmt {
     Let(LetStmt),
     Struct(StructStmt),
     Fun(FunStmt),
-    If(IfStmt),
     While(WhileStmt),
 }
 
@@ -58,13 +57,6 @@ pub struct FunStmt {
 }
 
 impl AstData for FunStmt {}
-
-#[derive(Debug, Clone)]
-pub struct IfStmt {
-    pub condition: AstNode<Expr>,
-    pub then_stmt: AstNode<Stmt>,
-    pub else_stmt: Option<AstNode<Stmt>>,
-}
 
 #[derive(Debug, Clone)]
 pub struct WhileStmt {

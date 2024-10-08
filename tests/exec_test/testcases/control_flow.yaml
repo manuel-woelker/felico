@@ -12,14 +12,14 @@ testcases:
 
   - name: if else true
     input: |-
-      if (true) debug_print(true);
+      if (true) debug_print(true)
       else debug_print(false);
     output: |-
       true
 
   - name: if else false
     input: |-
-      if (false) debug_print(true);
+      if (false) debug_print(true)
       else debug_print(false);
     output: |-
       false
@@ -47,15 +47,22 @@ testcases:
   - name: if nested
     input: |-
       if (false)
-        if (true) debug_print(1);
+        if (true) debug_print(1)
         else debug_print(2);
     output: |-
 
+  - name: print if expression
+    input: |-
+      debug_print(if true
+          1
+        else 2);
+    output: |-
+      1
 
   - name: if nested 2
     input: |-
       if (true)
-        if (false) debug_print(1);
+        if (false) debug_print(1)
         else debug_print(2);
     output: |-
       2

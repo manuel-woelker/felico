@@ -1,11 +1,11 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr,
-    VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, SetExpr,
+    UnaryExpr, VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::stmt::{FunStmt, IfStmt, LetStmt, Stmt, StructStmt, WhileStmt};
+use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, StructStmt, WhileStmt};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
@@ -116,9 +116,6 @@ impl Resolver {
             Stmt::Fun(fun_stmt) => {
                 self.resolve_fun_stmt(fun_stmt, &mut ast_info)?;
             }
-            Stmt::If(if_stmt) => {
-                self.resolve_if_stmt(if_stmt)?;
-            }
             Stmt::While(while_stmt) => {
                 self.resolve_while_stmt(while_stmt)?;
             }
@@ -132,11 +129,11 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_if_stmt(&mut self, if_stmt: &mut IfStmt) -> FelicoResult<()> {
-        self.resolve_expr(&mut if_stmt.condition)?;
-        self.resolve_stmt(&mut if_stmt.then_stmt)?;
-        if let Some(stmt) = &mut if_stmt.else_stmt {
-            self.resolve_stmt(stmt)?;
+    fn resolve_if_expr(&mut self, if_expr: &mut IfExpr) -> FelicoResult<()> {
+        self.resolve_expr(&mut if_expr.condition)?;
+        self.resolve_expr(&mut if_expr.then_expr)?;
+        if let Some(else_expr) = &mut if_expr.else_expr {
+            self.resolve_expr(else_expr)?;
         }
         Ok(())
     }
@@ -302,6 +299,9 @@ impl Resolver {
             }
             Expr::Block(block) => {
                 self.resolve_block_expr(block)?;
+            }
+            Expr::If(if_expr) => {
+                self.resolve_if_expr(if_expr)?;
             }
         }
         Ok(())

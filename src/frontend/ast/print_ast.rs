@@ -126,6 +126,15 @@ impl<'a> AstPrinterWorker<'a> {
                 tree.push(self.expr_to_tree(&block.result_expression));
                 tree
             }
+            Expr::If(if_expr) => {
+                let mut tree = Tree::new("If".into());
+                tree.push(self.expr_to_tree(&if_expr.condition));
+                tree.push(self.expr_to_tree(&if_expr.then_expr));
+                if let Some(else_expr) = &if_expr.else_expr {
+                    tree.push(self.expr_to_tree(else_expr));
+                }
+                tree
+            }
         };
         self.add_location(tree, ast)
     }
@@ -171,15 +180,6 @@ impl<'a> AstPrinterWorker<'a> {
                     field_tree.push(self.expr_to_tree(&field.data.type_expression));
                     let field_tree = self.add_location(field_tree, field);
                     tree.push(field_tree);
-                }
-                tree
-            }
-            Stmt::If(if_stmt) => {
-                let mut tree = Tree::new("If".into());
-                tree.push(self.expr_to_tree(&if_stmt.condition));
-                tree.push(self.stmt_to_tree(&if_stmt.then_stmt));
-                if let Some(else_stmt) = &if_stmt.else_stmt {
-                    tree.push(self.stmt_to_tree(else_stmt));
                 }
                 tree
             }

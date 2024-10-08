@@ -31,12 +31,23 @@ testcases:
   - name: recursive fibonacci
     input: |-
       fun fib(n: f64) {
-           if (n <= 1) return n;
-           return fib(n - 2) + fib(n - 1);
+           return if (n <= 1) n else
+           fib(n - 2) + fib(n - 1);
       }
       debug_print(fib(6));
     output: |-
       8
+
+  # Return not supported in bare expression
+  #  - name: recursive fibonacci with returns
+  #    input: |-
+  #      fun fib(n: f64) {
+  #           if (n <= 1) return n;
+  #           return fib(n - 2) + fib(n - 1);
+  #      }
+  #      debug_print(fib(6));
+  #    output: |-
+  #      8
 
   #  currently fails in resolve pass
   #  - name: function as argument

@@ -1,12 +1,12 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr,
-    VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, SetExpr,
+    UnaryExpr, VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
-    ExprStmt, FunParameter, FunStmt, IfStmt, LetStmt, ReturnStmt, Stmt, StructStmt,
-    StructStmtField, WhileStmt,
+    ExprStmt, FunParameter, FunStmt, LetStmt, ReturnStmt, Stmt, StructStmt, StructStmtField,
+    WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -68,6 +68,10 @@ impl Parser {
         let start_location = self.current_location();
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
         while self.current_token.token_type != TokenType::EOF {
+            if self.is_at(TokenType::Semicolon) {
+                self.advance();
+                continue;
+            }
             stmts.push(self.parse_decl()?)
         }
         self.consume(TokenType::EOF, "Expected end of file")?;
@@ -216,14 +220,15 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         match self.current_token.token_type {
-            TokenType::If => self.parse_if(),
             TokenType::While => self.parse_while(),
             //            TokenType::For => self.parse_for(),
             TokenType::Return => self.parse_return(),
             _ => {
                 let node = self.parse_expr_stmt()?;
                 if let Stmt::Expression(expression) = &*node.data {
-                    if !matches!(*expression.expression.data, Expr::Block(_)) {
+                    if !(matches!(*expression.expression.data, Expr::Block(_))
+                        || matches!(*expression.expression.data, Expr::If(_)))
+                    {
                         self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
                     };
                 } else {
@@ -254,23 +259,23 @@ impl Parser {
         self.create_node(start_location, Stmt::Expression(ExprStmt { expression }))
     }
 
-    fn parse_if(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_if(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         self.consume(TokenType::If, "Expected 'if'")?;
         let condition = self.parse_expr()?;
-        let then_stmt = self.parse_stmt()?;
-        let else_stmt = if self.is_at(TokenType::Else) {
+        let then_expr = self.parse_expr()?;
+        let else_expr = if self.is_at(TokenType::Else) {
             self.advance();
-            Some(self.parse_stmt()?)
+            Some(self.parse_expr()?)
         } else {
             None
         };
         self.create_node(
             start_location,
-            Stmt::If(IfStmt {
+            Expr::If(IfExpr {
                 condition,
-                then_stmt,
-                else_stmt,
+                then_expr,
+                else_expr,
             }),
         )
     }
@@ -349,6 +354,10 @@ impl Parser {
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
 
         while self.current_token.token_type != TokenType::RightBrace {
+            if self.is_at(TokenType::Semicolon) {
+                self.advance();
+                continue;
+            }
             stmts.push(self.parse_decl()?)
         }
         // TODO: handle result expression
@@ -573,6 +582,7 @@ impl Parser {
                     return Ok(expression);
                 }
                 TokenType::LeftBrace => return self.parse_block_expr(),
+                TokenType::If => return self.parse_if(),
                 _ => {
                     return self.create_diagnostic(
                         format!(
@@ -1038,12 +1048,12 @@ mod tests {
                        ├── Read 'c'     [3+1]
                        └── Read 'a'     [6+1]
                "#]];
-               program_if_else: "if(c) a; else b;" => expect![[r#"
+               program_if_else: "if(c) a else b;" => expect![[r#"
                    Program
-                   └── If     [0+16]
+                   └── If     [0+15]
                        ├── Read 'c'     [3+1]
                        ├── Read 'a'     [6+1]
-                       └── Read 'b'     [14+1]
+                       └── Read 'b'     [13+1]
                "#]];
                program_if_no_parentheses: "if c a;" => expect![[r#"
                    Program
@@ -1051,12 +1061,19 @@ mod tests {
                        ├── Read 'c'     [3+1]
                        └── Read 'a'     [5+1]
                "#]];
-               program_if_else_no_parentheses: "if c a; else b;" => expect![[r#"
+               program_if_no_semicolon: "if c {}" => expect![[r#"
                    Program
-                   └── If     [0+15]
+                   └── If     [0+7]
+                       ├── Read 'c'     [3+1]
+                       └── Block     [5+2]
+                           └── Unit     [6+1]
+               "#]];
+               program_if_else_no_parentheses: "if c a else b;" => expect![[r#"
+                   Program
+                   └── If     [0+14]
                        ├── Read 'c'     [3+1]
                        ├── Read 'a'     [5+1]
-                       └── Read 'b'     [13+1]
+                       └── Read 'b'     [12+1]
                "#]];
 
                program_while: "while(a) b;" => expect![[r#"
@@ -1206,10 +1223,9 @@ mod tests {
                 ╰────
                help: Assignment target must be an l-value (e.g. a variable or field)"#]];
          unexpected_expression_part: "3 + if" => expect![[r#"
-             × Unexpected token 'If' in expression
-                ╭─[unexpected_expression_part:1:5]
+             × Unexpected token 'EOF' in expression
+                ╭─[unexpected_expression_part:1:7]
               1 │ 3 + if
-                ·     ──
                 ╰────"#]];
          incomplete_statement: "print true" => expect![[r#"
              × Expected statement terminator (';'), found 'true' (True) instead
