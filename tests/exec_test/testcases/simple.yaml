@@ -35,18 +35,6 @@ testcases:
     output: |-
       3
 
-  - name: print empty tuple
-    input: |-
-      debug_print(());
-    output: |-
-      ()
-
-  - name: print tuple
-    input: |-
-      debug_print((1,"foo", true, bool));
-    output: |-
-      (1, foo, true, ❬bool❭)
-
   - name: multiline
     input: |-
       debug_print(1);

@@ -1,5 +1,6 @@
 use crate::frontend::ast::types::{PrimitiveType, StructField, StructType, Type, TypeKind};
-use crate::frontend::lex::token::Token;
+use crate::frontend::lex::token::{Token, TokenType};
+use crate::infra::location::Location;
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
 use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
@@ -44,7 +45,17 @@ impl TypeFactory {
         Self {
             inner: Rc::new(TypeFactoryInner {
                 bool: Type::primitive("bool", PrimitiveType::Bool),
-                unit: Type::tuple("()", vec![]),
+                unit: Type::new(
+                    "Unit",
+                    TypeKind::Struct(StructType {
+                        name: Token {
+                            token_type: TokenType::Identifier,
+                            location: Location::ephemeral(),
+                            value: Some(SharedString::from("Unit")),
+                        },
+                        fields: Default::default(),
+                    }),
+                ),
                 f64: Type::primitive("f64", PrimitiveType::F64),
                 i64: Type::primitive("i64", PrimitiveType::I64),
                 str: Type::primitive("str", PrimitiveType::Str),
@@ -64,17 +75,6 @@ impl TypeFactory {
             + ") -> "
             + &return_type.to_string();
         Type::function(&name, parameter_types, return_type)
-    }
-
-    pub fn tuple(&self, components: Vec<Type>) -> Type {
-        let name = "(".to_string()
-            + &components
-                .iter()
-                .map(|ty| ty.to_string())
-                .collect::<Vec<String>>()
-                .join(", ")
-            + ")";
-        Type::tuple(&name, components)
     }
 
     pub fn make_struct(&self, name: &Token, fields: HashMap<SharedString, StructField>) -> Type {

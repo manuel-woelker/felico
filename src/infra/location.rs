@@ -8,3 +8,13 @@ pub struct Location {
     pub start_byte: ByteOffset,
     pub end_byte: ByteOffset,
 }
+
+impl Location {
+    pub fn ephemeral() -> Location {
+        Location {
+            source_file: SourceFileHandle::from_string("ephemeral", ""),
+            start_byte: 0,
+            end_byte: 0,
+        }
+    }
+}

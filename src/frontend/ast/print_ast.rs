@@ -107,13 +107,6 @@ impl<'a> AstPrinterWorker<'a> {
                 }
                 tree
             }
-            Expr::Tuple(tuple) => {
-                let mut tree = Tree::new("Tuple".into());
-                for expr in &tuple.components {
-                    tree.push(self.expr_to_tree(expr));
-                }
-                tree
-            }
             Expr::Get(get) => {
                 let mut tree = Tree::new(format!("Get {}", get.name.lexeme()));
                 tree.push(self.expr_to_tree(&get.object));

@@ -44,10 +44,6 @@ impl Type {
         Self::new(name, TypeKind::Primitive(primitive_type))
     }
 
-    pub fn tuple(name: &str, components: Vec<Type>) -> Self {
-        Self::new(name, TypeKind::Tuple(components))
-    }
-
     pub fn function(name: &str, parameter_types: Vec<Type>, return_type: Type) -> Self {
         Self::new(
             name,
@@ -86,7 +82,6 @@ pub enum TypeKind {
     Any, // Top Kind, should only be used for debug_print()
     Unknown,
     Primitive(PrimitiveType),
-    Tuple(Vec<Type>),
     Type,
     Function(FunctionType),
     Struct(StructType),

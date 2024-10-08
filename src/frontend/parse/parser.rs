@@ -550,24 +550,10 @@ impl Parser {
                     return result;
                 }
                 TokenType::LeftParen => {
-                    let start_location = self.current_location();
                     self.advance();
-                    if self.is_at(TokenType::RightParen) {
-                        // empty tuple
-                        self.advance();
-                        return self.create_node(self.current_location(), Expr::new_tuple(vec![]));
-                    }
-                    let mut components = self.parse_separated(|parser| {
-                        if parser.is_at(TokenType::RightParen) {
-                            return Ok(None);
-                        }
-                        Ok(Some(parser.parse_expr()?))
-                    })?;
+                    let expression = self.parse_expr()?;
                     self.consume(TokenType::RightParen, "Expect closing ')' after expression")?;
-                    if components.len() == 1 {
-                        return Ok(components.pop().unwrap());
-                    }
-                    return self.create_node(start_location, Expr::new_tuple(components));
+                    return Ok(expression);
                 }
                 _ => {
                     return self.create_diagnostic(
@@ -931,15 +917,6 @@ mod tests {
                 └── Read 'foo'     [0+3]
         "#]];
 
-        tuple_empty: "()" => expect![[r#"
-            Tuple     [2+0]
-        "#]];
-
-        tuple_pair: "(3, true)" => expect![[r#"
-            Tuple     [0+9]
-            ├── F64(3.0)     [1+1]
-            └── Bool(true)     [4+4]
-        "#]];
     );
 
     fn test_parse_program(name: &str, input: &str, expected: Expect) {

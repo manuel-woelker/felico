@@ -373,13 +373,6 @@ impl Interpreter {
                     );
                 }
             }
-            Expr::Tuple(tuple) => {
-                let mut components: Vec<InterpreterValue> = vec![];
-                for component in &tuple.components {
-                    components.push(self.evaluate_expr(component)?)
-                }
-                return Ok(self.value_factory.tuple(components));
-            }
         })
     }
 

@@ -1,6 +1,5 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, TupleExpr, UnaryExpr,
-    VarUse,
+    AssignExpr, BinaryExpr, CallExpr, Expr, GetExpr, LiteralExpr, SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
@@ -298,9 +297,6 @@ impl Resolver {
                 self.resolve_call_expr(call, &mut ast_info)?;
             }
             Expr::Variable(var_use) => self.resolve_var_use_expr(var_use, &mut ast_info)?,
-            Expr::Tuple(tuple) => {
-                self.resolve_tuple_expr(tuple, &mut ast_info)?;
-            }
             Expr::Get(get) => {
                 self.resolve_get_expr(get)?;
             }
@@ -319,20 +315,6 @@ impl Resolver {
 
     fn resolve_get_expr(&mut self, get: &mut GetExpr) -> FelicoResult<()> {
         self.resolve_expr(&mut get.object)
-    }
-
-    fn resolve_tuple_expr(
-        &mut self,
-        tuple: &mut TupleExpr,
-        ast_info: &mut CommonAstInfo,
-    ) -> FelicoResult<()> {
-        let mut component_types = Vec::<Type>::new();
-        for component in &mut tuple.components {
-            self.resolve_expr(component)?;
-            component_types.push(component.ty.clone());
-        }
-        *ast_info.ty = self.type_factory.tuple(component_types);
-        Ok(())
     }
 
     fn resolve_call_expr(
@@ -632,20 +614,6 @@ mod tests {
             Module
               a: ❬f64❭
         "#]];
-        tuple_empty: "();" => expect![[r#"
-                Program
-                └── Tuple: ❬()❭
-            "#]],expect![[r#"
-                Module
-            "#]];
-        tuple_pair: "(3, true);" => expect![[r#"
-                Program
-                └── Tuple: ❬(❬f64❭, ❬bool❭)❭
-                    ├── F64(3.0): ❬f64❭
-                    └── Bool(true): ❬bool❭
-            "#]],expect![[r#"
-                Module
-            "#]];
         call_type_native: "sqrt(3);" => expect![[r#"
             Program
             └── Call: ❬f64❭
@@ -701,8 +669,8 @@ mod tests {
            "#]],expect![[r#"
                Module
                  Foo: ❬Foo❭
-                   baz: ❬f64❭
                    bar: ❬bool❭
+                   baz: ❬f64❭
            "#]];
         program_struct_empty: "
            struct Empty {}

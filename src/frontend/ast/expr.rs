@@ -13,13 +13,6 @@ pub enum Expr {
     Call(CallExpr),
     Get(GetExpr),
     Set(SetExpr),
-    Tuple(TupleExpr),
-}
-
-impl Expr {
-    pub fn new_tuple(components: Vec<AstNode<Expr>>) -> Self {
-        Expr::Tuple(TupleExpr { components })
-    }
 }
 
 impl AstData for Expr {}

@@ -31,7 +31,7 @@ impl ModuleManifest {
         for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
             write!(string, "  {}: {}\n", entry.name, entry.ty).unwrap();
             if let TypeKind::Struct(struct_type) = entry.ty.kind() {
-                for (name, field) in &struct_type.fields {
+                for (name, field) in struct_type.fields.iter().sorted_by_key(|(name, _)| *name) {
                     write!(string, "    {}: {}\n", name, field.ty).unwrap();
                 }
             }

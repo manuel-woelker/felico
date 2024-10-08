@@ -73,14 +73,6 @@ impl ValueFactory {
         }
     }
 
-    pub fn tuple(&self, components: Vec<InterpreterValue>) -> InterpreterValue {
-        let types: Vec<_> = components.iter().map(|val| val.ty.clone()).collect();
-        InterpreterValue {
-            val: ValueKind::Tuple(components),
-            ty: self.type_factory.tuple(types),
-        }
-    }
-
     pub fn new_native_callable(
         &self,
         name: &str,
