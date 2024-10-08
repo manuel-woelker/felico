@@ -1,9 +1,8 @@
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFileHandle;
-use crate::interpret::interpreter::Interpreter;
-use crate::interpret::value::InterpreterValue;
+use crate::interpret::interpreter::{EvalResult, Interpreter};
 
-pub fn eval_expression(source_file: SourceFileHandle) -> FelicoResult<InterpreterValue> {
+pub fn eval_expression(source_file: SourceFileHandle) -> FelicoResult<EvalResult> {
     Interpreter::new(source_file)?.evaluate_expression()
 }
 

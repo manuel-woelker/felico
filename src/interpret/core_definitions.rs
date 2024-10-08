@@ -38,7 +38,7 @@ struct TypeFactoryInner {
 
 }
 
-factory_fns!(bool, unit, i64, f64, ty, str, unknown);
+factory_fns!(bool, unit, i64, f64, ty, str, unknown, never);
 
 impl TypeFactory {
     pub fn new() -> Self {
@@ -61,6 +61,7 @@ impl TypeFactory {
                 str: Type::primitive("str", PrimitiveType::Str),
                 ty: Type::ty(),
                 unknown: Type::new("unknown", TypeKind::Unknown),
+                never: Type::new("never", TypeKind::Never),
             }),
         }
     }

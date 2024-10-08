@@ -1,6 +1,6 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, SetExpr,
-    UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
+    SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
@@ -103,9 +103,6 @@ impl Resolver {
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
                 self.resolve_let_stmt(let_stmt, &mut ast_info)?;
-            }
-            Stmt::Return(return_stmt) => {
-                self.resolve_expr(&mut return_stmt.expression)?;
             }
             Stmt::Expression(expr_stmt) => {
                 self.resolve_expr(&mut expr_stmt.expression)?;
@@ -302,6 +299,9 @@ impl Resolver {
             }
             Expr::If(if_expr) => {
                 self.resolve_if_expr(if_expr)?;
+            }
+            Expr::Return(return_expr) => {
+                self.resolve_return_expr(return_expr, &mut ast_info)?;
             }
         }
         Ok(())
@@ -506,6 +506,16 @@ impl Resolver {
         }
         Ok(())
     }
+
+    fn resolve_return_expr(
+        &mut self,
+        return_expr: &mut ReturnExpr,
+        ast: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.resolve_expr(&mut return_expr.expression)?;
+        *ast.ty = self.type_factory.never();
+        Ok(())
+    }
 }
 
 pub fn resolve_variables(
@@ -637,6 +647,19 @@ mod tests {
             Module
               a: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
               x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+        "#]];
+        function_with_return: "fun x(a: f64) -> f64 {return a;}" => expect![[r#"
+            Program
+            └── Declare fun 'x(a)': ❬Fn(❬f64❭) -> ❬f64❭❭
+                ├── Param a
+                │   └── Read 'f64'
+                ├── Return type: Read 'f64'
+                ├── Return: ❬never❭
+                │   └── Read 'a': ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
+            Module
+              x: ❬Fn(❬f64❭) -> ❬f64❭❭
         "#]];
         function_arg_type: "fun x(a: bool, b: i64) -> f64 {
                 a;

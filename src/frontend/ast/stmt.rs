@@ -6,7 +6,6 @@ use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Return(ReturnStmt),
     Expression(ExprStmt),
     Let(LetStmt),
     Struct(StructStmt),
@@ -15,11 +14,6 @@ pub enum Stmt {
 }
 
 impl AstData for Stmt {}
-
-#[derive(Debug, Clone)]
-pub struct ReturnStmt {
-    pub expression: AstNode<Expr>,
-}
 
 #[derive(Debug, Clone)]
 pub struct ExprStmt {

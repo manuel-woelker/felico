@@ -79,7 +79,8 @@ pub struct TypeInner {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TypeKind {
-    Any, // Top Kind, should only be used for debug_print()
+    Any,   // Top Type, should only be used for debug_print()
+    Never, // Bottom Type, the type of return expressions and return type of divergent functions
     Unknown,
     Primitive(PrimitiveType),
     Type,

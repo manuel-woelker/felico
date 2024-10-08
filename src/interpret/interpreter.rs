@@ -14,6 +14,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::value::{
     Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
 };
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -29,14 +30,35 @@ pub struct Interpreter {
     available_stack: i64,
 }
 
-pub enum StmtResult {
-    Continue,
-    Return(InterpreterValue),
+pub struct EvalResult {
+    value: InterpreterValue,
+    should_return: bool,
 }
 
-impl StmtResult {
+impl Debug for EvalResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.should_return {
+            f.write_str("ret ")?;
+        }
+        self.value.fmt(f)
+    }
+}
+
+impl EvalResult {
     fn is_return(&self) -> bool {
-        matches!(self, Self::Return(_))
+        self.should_return
+    }
+    fn ret(value: InterpreterValue) -> Self {
+        Self {
+            value,
+            should_return: true,
+        }
+    }
+    fn val(value: InterpreterValue) -> Self {
+        Self {
+            value,
+            should_return: false,
+        }
     }
 }
 
@@ -73,6 +95,13 @@ impl Interpreter {
         self.fuel = fuel;
     }
 
+    fn cont(&self) -> EvalResult {
+        EvalResult {
+            value: self.value_factory.unit(),
+            should_return: false,
+        }
+    }
+
     fn spend_fuel<T: AstData>(&mut self, stmt: &AstNode<T>) -> FelicoResult<()> {
         self.fuel -= 1;
         if self.fuel <= 0 {
@@ -98,13 +127,13 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue> {
+    pub fn evaluate_expression(mut self) -> FelicoResult<EvalResult> {
         let expr = parse_expression(self.source_file.clone())?;
         self.evaluate_expr(&expr)
     }
 
-    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
-        Ok(match expr.data.deref() {
+    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<EvalResult> {
+        Ok(EvalResult::val(match expr.data.deref() {
             Expr::Literal(LiteralExpr::Unit) => self.value_factory.unit(),
             Expr::Literal(LiteralExpr::Str(string)) => {
                 self.value_factory.new_string(string.clone())
@@ -114,6 +143,10 @@ impl Interpreter {
             Expr::Literal(LiteralExpr::Bool(bool)) => self.value_factory.bool(*bool),
             Expr::Unary(unary) => {
                 let sub_expression = self.evaluate_expr(&unary.right)?;
+                if sub_expression.is_return() {
+                    return Ok(sub_expression);
+                }
+                let sub_expression = sub_expression.value;
                 match unary.operator.token_type {
                     TokenType::Minus => match sub_expression.val {
                         ValueKind::F64(number) => self.value_factory.f64(-number),
@@ -140,23 +173,31 @@ impl Interpreter {
             }
             Expr::Binary(binary) => {
                 let left_value = self.evaluate_expr(&binary.left)?;
+                if left_value.is_return() {
+                    return Ok(left_value);
+                }
+                let left_value = left_value.value;
                 // Handle "and" & "or" upfront to handle short-circuiting logic
                 match binary.operator.token_type {
                     TokenType::Or | TokenType::And => {
                         if let ValueKind::Bool(left) = left_value.val {
                             if binary.operator.token_type == TokenType::Or {
                                 if left {
-                                    return Ok(self.value_factory.bool(true));
+                                    return Ok(EvalResult::val(self.value_factory.bool(true)));
                                 }
                             } else {
                                 // AND
                                 if !left {
-                                    return Ok(self.value_factory.bool(false));
+                                    return Ok(EvalResult::val(self.value_factory.bool(false)));
                                 }
                             }
                             let right_value = self.evaluate_expr(&binary.right)?;
+                            if right_value.is_return() {
+                                return Ok(right_value);
+                            }
+                            let right_value = right_value.value;
                             return match right_value.val {
-                                ValueKind::Bool(_) => Ok(right_value), // Ok
+                                ValueKind::Bool(_) => Ok(EvalResult::val(right_value)), // Ok
                                 _ => self.create_diagnostic(
                                     expr,
                                     format!(
@@ -184,6 +225,10 @@ impl Interpreter {
                     _ => {}
                 };
                 let right_value = self.evaluate_expr(&binary.right)?;
+                if right_value.is_return() {
+                    return Ok(right_value);
+                }
+                let right_value = right_value.value;
                 match (left_value.val, right_value.val) {
                     (ValueKind::F64(left), ValueKind::F64(right)) => {
                         match binary.operator.token_type {
@@ -213,7 +258,9 @@ impl Interpreter {
                     }
                     (ValueKind::String(left), right) => match binary.operator.token_type {
                         TokenType::Plus => {
-                            return Ok(self.value_factory.new_string(left + &format!("{}", right)))
+                            return Ok(EvalResult::val(
+                                self.value_factory.new_string(left + &format!("{}", right)),
+                            ))
                         }
                         _ => {
                             return self.create_diagnostic(
@@ -248,6 +295,10 @@ impl Interpreter {
                 .clone(),
             Expr::Assign(assign) => {
                 let value = self.evaluate_expr(&assign.value)?;
+                if value.is_return() {
+                    return Ok(value);
+                }
+                let value = value.value;
                 self.environment.assign_at_distance(
                     assign.destination.lexeme(),
                     assign.distance,
@@ -255,40 +306,45 @@ impl Interpreter {
                 )?;
                 value
             }
+            Expr::Return(return_stmt) => {
+                let return_result = self.evaluate_expr(&return_stmt.expression)?;
+                if return_result.is_return() {
+                    return Ok(return_result);
+                }
+                let value = return_result.value;
+                return Ok(EvalResult::ret(value));
+            }
 
             Expr::Block(block) => {
                 self.environment.enter_new();
                 let stmt_result = self.evaluate_stmts(&block.stmts[..])?;
-                // TODO: handle early returns
-                let result = if let StmtResult::Return(value) = stmt_result {
-                    value
-                } else {
-                    self.evaluate_expr(&block.result_expression)?
-                };
+                if stmt_result.is_return() {
+                    self.environment.exit();
+                    return Ok(stmt_result);
+                }
+                let result = self.evaluate_expr(&block.result_expression)?;
                 self.environment.exit();
                 return Ok(result);
             }
-            Expr::If(if_expr) => match self.evaluate_expr(&if_expr.condition)?.val {
-                ValueKind::Bool(true) => {
-                    let result = self.evaluate_expr(&if_expr.then_expr)?;
-                    /*                    if result.is_return() {
-                        return Ok(result);
-                    }*/
-                    return Ok(result);
+            Expr::If(if_expr) => {
+                let condition = self.evaluate_expr(&if_expr.condition)?;
+                if condition.is_return() {
+                    return Ok(condition);
                 }
-                ValueKind::Bool(false) => {
-                    if let Some(else_expr) = &if_expr.else_expr {
-                        let result = self.evaluate_expr(else_expr)?;
-                        /*                        if result.is_return() {
-                            return Ok(result);
-                        }*/
-                        return Ok(result);
-                    } else {
-                        return Ok(self.value_factory.unit());
+                let condition = condition.value;
+                return match condition.val {
+                    ValueKind::Bool(true) => {
+                        let then_result = self.evaluate_expr(&if_expr.then_expr)?;
+                        Ok(then_result)
                     }
-                }
-                other => {
-                    return self.create_diagnostic(
+                    ValueKind::Bool(false) => {
+                        if let Some(else_expr) = &if_expr.else_expr {
+                            self.evaluate_expr(else_expr)
+                        } else {
+                            Ok(EvalResult::val(self.value_factory.unit()))
+                        }
+                    }
+                    other => self.create_diagnostic(
                         &if_expr.condition,
                         format!(
                             "Expected true or false in if condition, but found '{}' instead",
@@ -297,9 +353,9 @@ impl Interpreter {
                         |diagnostic| {
                             diagnostic.add_primary_label(&if_expr.condition.location);
                         },
-                    );
-                }
-            },
+                    ),
+                };
+            }
 
             Expr::Get(_get) => {
                 todo!("Get not supported");
@@ -361,6 +417,11 @@ impl Interpreter {
                     });
                 }
                 let callee = self.evaluate_expr(&call.callee)?;
+                if callee.is_return() {
+                    self.available_stack += 1;
+                    return Ok(callee);
+                }
+                let callee = callee.value;
                 if let ValueKind::Callable(callable) = callee.val {
                     // Check arity
                     if call.arguments.len() != callable.arity {
@@ -373,7 +434,12 @@ impl Interpreter {
                     }
                     let mut arguments: Vec<InterpreterValue> = vec![];
                     for expr in &call.arguments {
-                        arguments.push(self.evaluate_expr(expr)?);
+                        let argument = self.evaluate_expr(expr)?;
+                        if argument.is_return() {
+                            return Ok(argument);
+                        }
+                        let argument = argument.value;
+                        arguments.push(argument);
                     }
                     let result = match &callable.fun.as_ref() {
                         CallableFun::Native(fun) => match fun(self, arguments) {
@@ -399,9 +465,11 @@ impl Interpreter {
                                 .for_each(|(parameter, value)| {
                                     self.environment.define(parameter.name.lexeme(), value);
                                 });
-                            let result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
+                            let mut result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
+                            result.should_return = false; // this is a return itself
                             self.environment = old_environment;
-                            result
+                            self.available_stack += 1;
+                            return Ok(result);
                         }
                     };
                     self.available_stack += 1;
@@ -416,7 +484,7 @@ impl Interpreter {
                     );
                 }
             }
-        })
+        }))
     }
 
     fn create_diagnostic<T, S: Into<String>, A: AstData>(
@@ -431,13 +499,20 @@ impl Interpreter {
         Err(diagnostic.into())
     }
 
-    fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<StmtResult> {
+    fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<EvalResult> {
         match stmt.data.deref() {
             Stmt::Expression(expr) => {
-                self.evaluate_expr(&expr.expression)?;
+                let expr_result = self.evaluate_expr(&expr.expression)?;
+                if expr_result.is_return() {
+                    return Ok(expr_result);
+                }
             }
             Stmt::Let(var) => {
                 let value = self.evaluate_expr(&var.expression)?;
+                if value.is_return() {
+                    return Ok(value);
+                }
+                let value = value.value;
                 self.environment.define(var.name.lexeme(), value);
             }
             Stmt::Fun(fun) => {
@@ -446,7 +521,12 @@ impl Interpreter {
             }
             Stmt::While(while_stmt) => {
                 loop {
-                    match self.evaluate_expr(&while_stmt.condition)?.val {
+                    let condition = self.evaluate_expr(&while_stmt.condition)?;
+                    if condition.is_return() {
+                        return Ok(condition);
+                    }
+                    let condition = condition.value;
+                    match condition.val {
                         ValueKind::Bool(true) => {
                             let result = self.evaluate_stmt(&while_stmt.body_stmt)?;
                             if result.is_return() {
@@ -465,15 +545,11 @@ impl Interpreter {
                     self.spend_fuel(&while_stmt.condition)?;
                 }
             }
-            Stmt::Return(return_stmt) => {
-                let result = self.evaluate_expr(&return_stmt.expression)?;
-                return Ok(StmtResult::Return(result));
-            }
             Stmt::Struct(_) => {
                 todo!("implement struct");
             }
         }
-        Ok(StmtResult::Continue)
+        Ok(self.cont())
     }
 
     fn create_fun_callable(&mut self, fun: &FunStmt, stmt: &AstNode<Stmt>) -> InterpreterValue {
@@ -491,14 +567,14 @@ impl Interpreter {
         callable
     }
 
-    fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<StmtResult> {
+    fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<EvalResult> {
         for stmt in stmts {
             let result = self.evaluate_stmt(stmt)?;
             if result.is_return() {
                 return Ok(result);
             }
         }
-        Ok(StmtResult::Continue)
+        Ok(EvalResult::val(self.value_factory.unit()))
     }
 }
 

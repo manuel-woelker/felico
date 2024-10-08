@@ -6,6 +6,7 @@ use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Return(ReturnExpr),
     Unary(UnaryExpr),
     Binary(BinaryExpr),
     Literal(LiteralExpr),
@@ -90,4 +91,9 @@ pub struct IfExpr {
     pub condition: AstNode<Expr>,
     pub then_expr: AstNode<Expr>,
     pub else_expr: Option<AstNode<Expr>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnExpr {
+    pub expression: AstNode<Expr>,
 }

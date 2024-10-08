@@ -1,12 +1,11 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, SetExpr,
-    UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
+    SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
-    ExprStmt, FunParameter, FunStmt, LetStmt, ReturnStmt, Stmt, StructStmt, StructStmtField,
-    WhileStmt,
+    ExprStmt, FunParameter, FunStmt, LetStmt, Stmt, StructStmt, StructStmtField, WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -222,7 +221,6 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::While => self.parse_while(),
             //            TokenType::For => self.parse_for(),
-            TokenType::Return => self.parse_return(),
             _ => {
                 let node = self.parse_expr_stmt()?;
                 if let Stmt::Expression(expression) = &*node.data {
@@ -239,7 +237,7 @@ impl Parser {
         }
     }
 
-    fn parse_return(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_return(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         self.consume(TokenType::Return, "return expected")?;
         let expression = if self.current_token.token_type != TokenType::Semicolon {
@@ -247,11 +245,7 @@ impl Parser {
         } else {
             self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Unit))?
         };
-        self.consume(
-            TokenType::Semicolon,
-            "Expected semicolon after return statement",
-        )?;
-        self.create_node(start_location, Stmt::Return(ReturnStmt { expression }))
+        self.create_node(start_location, Expr::Return(ReturnExpr { expression }))
     }
     fn parse_expr_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         let start_location = self.current_location();
@@ -583,6 +577,7 @@ impl Parser {
                 }
                 TokenType::LeftBrace => return self.parse_block_expr(),
                 TokenType::If => return self.parse_if(),
+                TokenType::Return => return self.parse_return(),
                 _ => {
                     return self.create_diagnostic(
                         format!(
@@ -1104,7 +1099,7 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [11+4]
                        ├── Return type: Read 'bool'     [21+4]
-                       ├── Return     [27+11]
+                       ├── Return     [27+10]
                        │   └── !     [34+3]
                        │       └── Read 'a'     [35+1]
                        └── Unit     [37+1]
@@ -1113,7 +1108,7 @@ mod tests {
                    Program
                    └── Declare fun 'nop()'     [0+20]
                        ├── Return type: Read 'unit'     [0+11]
-                       ├── Return     [11+8]
+                       ├── Return     [11+7]
                        │   └── Unit     [11+7]
                        └── Unit     [18+1]
                "#]];
@@ -1123,7 +1118,7 @@ mod tests {
                        ├── Param a
                        │   └── Read 'bool'     [13+4]
                        ├── Return type: Read 'unit'     [0+20]
-                       ├── Return     [20+10]
+                       ├── Return     [20+9]
                        │   └── F64(3.0)     [27+1]
                        └── Unit     [29+1]
                "#]];
@@ -1133,7 +1128,7 @@ mod tests {
                        ├── Param a
                        │   └── Read 'f64'     [13+3]
                        ├── Return type: Read 'unit'     [0+19]
-                       ├── Return     [19+12]
+                       ├── Return     [19+11]
                        │   └── +     [26+4]
                        │       ├── Read 'a'     [26+1]
                        │       └── Read 'a'     [28+1]
@@ -1181,6 +1176,42 @@ mod tests {
                " => expect![[r#"
                    Program
                    └── Struct 'Empty'     [16+31]
+               "#]];
+                program_fib: "
+                    fun fib(n: f64) {
+                         return if (n <= 1) n else
+                         fib(n - 2) + fib(n - 1);
+                    }
+                    debug_print(fib(6));
+               " => expect![[r#"
+                   Program
+                   ├── Declare fun 'fib(n)'     [21+172]
+                   │   ├── Param n
+                   │   │   └── Read 'f64'     [32+3]
+                   │   ├── Return type: Read 'unit'     [21+17]
+                   │   ├── Return     [64+75]
+                   │   │   └── If     [71+68]
+                   │   │       ├── <=     [75+7]
+                   │   │       │   ├── Read 'n'     [75+1]
+                   │   │       │   └── F64(1.0)     [80+1]
+                   │   │       ├── Read 'n'     [83+1]
+                   │   │       └── +     [115+24]
+                   │   │           ├── Call     [118+9]
+                   │   │           │   ├── Read 'fib'     [115+3]
+                   │   │           │   └── -     [119+6]
+                   │   │           │       ├── Read 'n'     [119+1]
+                   │   │           │       └── F64(2.0)     [123+1]
+                   │   │           └── Call     [131+8]
+                   │   │               ├── Read 'fib'     [128+3]
+                   │   │               └── -     [132+6]
+                   │   │                   ├── Read 'n'     [132+1]
+                   │   │                   └── F64(1.0)     [136+1]
+                   │   └── Unit     [160+1]
+                   └── Call     [193+9]
+                       ├── Read 'debug_print'     [182+11]
+                       └── Call     [197+4]
+                           ├── Read 'fib'     [194+3]
+                           └── F64(6.0)     [198+1]
                "#]];
 
     );

@@ -135,6 +135,11 @@ impl<'a> AstPrinterWorker<'a> {
                 }
                 tree
             }
+            Expr::Return(return_expr) => {
+                let mut tree = Tree::new("Return".into());
+                tree.push(self.expr_to_tree(&return_expr.expression));
+                tree
+            }
         };
         self.add_location(tree, ast)
     }
@@ -142,11 +147,6 @@ impl<'a> AstPrinterWorker<'a> {
     fn stmt_to_tree(&self, ast: &AstNode<Stmt>) -> Tree<String> {
         let tree = match &ast.data.as_ref() {
             Stmt::Expression(expr) => return self.expr_to_tree(&expr.expression),
-            Stmt::Return(return_stmt) => {
-                let mut tree = Tree::new("Return".into());
-                tree.push(self.expr_to_tree(&return_stmt.expression));
-                tree
-            }
             Stmt::Let(var) => {
                 let mut tree = Tree::new(format!("Let '{}'", var.name));
                 tree.push(self.expr_to_tree(&var.expression));
