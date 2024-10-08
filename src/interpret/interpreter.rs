@@ -14,7 +14,6 @@ use crate::interpret::environment::Environment;
 use crate::interpret::value::{
     Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
 };
-use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -30,35 +29,20 @@ pub struct Interpreter {
     available_stack: i64,
 }
 
-pub struct EvalResult {
-    value: InterpreterValue,
-    should_return: bool,
-}
-
-impl Debug for EvalResult {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.should_return {
-            f.write_str("ret ")?;
+macro_rules! check_early_return {
+    ($expr:expr) => {
+        if $expr.is_return() {
+            return Ok($expr);
         }
-        self.value.fmt(f)
-    }
+    };
 }
 
-impl EvalResult {
+impl InterpreterValue {
     fn is_return(&self) -> bool {
-        self.should_return
-    }
-    fn ret(value: InterpreterValue) -> Self {
-        Self {
-            value,
-            should_return: true,
-        }
+        matches!(self.val, ValueKind::Return(_))
     }
     fn val(value: InterpreterValue) -> Self {
-        Self {
-            value,
-            should_return: false,
-        }
+        value
     }
 }
 
@@ -95,10 +79,14 @@ impl Interpreter {
         self.fuel = fuel;
     }
 
-    fn cont(&self) -> EvalResult {
-        EvalResult {
-            value: self.value_factory.unit(),
-            should_return: false,
+    fn cont(&self) -> InterpreterValue {
+        self.value_factory.unit()
+    }
+
+    fn ret(&self, value: InterpreterValue) -> InterpreterValue {
+        InterpreterValue {
+            val: ValueKind::Return(Box::new(value)),
+            ty: self.type_factory.never(),
         }
     }
 
@@ -127,13 +115,13 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn evaluate_expression(mut self) -> FelicoResult<EvalResult> {
+    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue> {
         let expr = parse_expression(self.source_file.clone())?;
         self.evaluate_expr(&expr)
     }
 
-    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<EvalResult> {
-        Ok(EvalResult::val(match expr.data.deref() {
+    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
+        Ok(InterpreterValue::val(match expr.data.deref() {
             Expr::Literal(LiteralExpr::Unit) => self.value_factory.unit(),
             Expr::Literal(LiteralExpr::Str(string)) => {
                 self.value_factory.new_string(string.clone())
@@ -146,7 +134,6 @@ impl Interpreter {
                 if sub_expression.is_return() {
                     return Ok(sub_expression);
                 }
-                let sub_expression = sub_expression.value;
                 match unary.operator.token_type {
                     TokenType::Minus => match sub_expression.val {
                         ValueKind::F64(number) => self.value_factory.f64(-number),
@@ -173,31 +160,29 @@ impl Interpreter {
             }
             Expr::Binary(binary) => {
                 let left_value = self.evaluate_expr(&binary.left)?;
-                if left_value.is_return() {
-                    return Ok(left_value);
-                }
-                let left_value = left_value.value;
+                check_early_return!(left_value);
                 // Handle "and" & "or" upfront to handle short-circuiting logic
                 match binary.operator.token_type {
                     TokenType::Or | TokenType::And => {
                         if let ValueKind::Bool(left) = left_value.val {
                             if binary.operator.token_type == TokenType::Or {
                                 if left {
-                                    return Ok(EvalResult::val(self.value_factory.bool(true)));
+                                    return Ok(InterpreterValue::val(
+                                        self.value_factory.bool(true),
+                                    ));
                                 }
                             } else {
                                 // AND
                                 if !left {
-                                    return Ok(EvalResult::val(self.value_factory.bool(false)));
+                                    return Ok(InterpreterValue::val(
+                                        self.value_factory.bool(false),
+                                    ));
                                 }
                             }
                             let right_value = self.evaluate_expr(&binary.right)?;
-                            if right_value.is_return() {
-                                return Ok(right_value);
-                            }
-                            let right_value = right_value.value;
+                            check_early_return!(right_value);
                             return match right_value.val {
-                                ValueKind::Bool(_) => Ok(EvalResult::val(right_value)), // Ok
+                                ValueKind::Bool(_) => Ok(InterpreterValue::val(right_value)), // Ok
                                 _ => self.create_diagnostic(
                                     expr,
                                     format!(
@@ -225,10 +210,7 @@ impl Interpreter {
                     _ => {}
                 };
                 let right_value = self.evaluate_expr(&binary.right)?;
-                if right_value.is_return() {
-                    return Ok(right_value);
-                }
-                let right_value = right_value.value;
+                check_early_return!(right_value);
                 match (left_value.val, right_value.val) {
                     (ValueKind::F64(left), ValueKind::F64(right)) => {
                         match binary.operator.token_type {
@@ -258,7 +240,7 @@ impl Interpreter {
                     }
                     (ValueKind::String(left), right) => match binary.operator.token_type {
                         TokenType::Plus => {
-                            return Ok(EvalResult::val(
+                            return Ok(InterpreterValue::val(
                                 self.value_factory.new_string(left + &format!("{}", right)),
                             ))
                         }
@@ -295,10 +277,7 @@ impl Interpreter {
                 .clone(),
             Expr::Assign(assign) => {
                 let value = self.evaluate_expr(&assign.value)?;
-                if value.is_return() {
-                    return Ok(value);
-                }
-                let value = value.value;
+                check_early_return!(value);
                 self.environment.assign_at_distance(
                     assign.destination.lexeme(),
                     assign.distance,
@@ -308,11 +287,8 @@ impl Interpreter {
             }
             Expr::Return(return_stmt) => {
                 let return_result = self.evaluate_expr(&return_stmt.expression)?;
-                if return_result.is_return() {
-                    return Ok(return_result);
-                }
-                let value = return_result.value;
-                return Ok(EvalResult::ret(value));
+                check_early_return!(return_result);
+                return Ok(self.ret(return_result));
             }
 
             Expr::Block(block) => {
@@ -328,10 +304,7 @@ impl Interpreter {
             }
             Expr::If(if_expr) => {
                 let condition = self.evaluate_expr(&if_expr.condition)?;
-                if condition.is_return() {
-                    return Ok(condition);
-                }
-                let condition = condition.value;
+                check_early_return!(condition);
                 return match condition.val {
                     ValueKind::Bool(true) => {
                         let then_result = self.evaluate_expr(&if_expr.then_expr)?;
@@ -341,7 +314,7 @@ impl Interpreter {
                         if let Some(else_expr) = &if_expr.else_expr {
                             self.evaluate_expr(else_expr)
                         } else {
-                            Ok(EvalResult::val(self.value_factory.unit()))
+                            Ok(InterpreterValue::val(self.value_factory.unit()))
                         }
                     }
                     other => self.create_diagnostic(
@@ -421,7 +394,6 @@ impl Interpreter {
                     self.available_stack += 1;
                     return Ok(callee);
                 }
-                let callee = callee.value;
                 if let ValueKind::Callable(callable) = callee.val {
                     // Check arity
                     if call.arguments.len() != callable.arity {
@@ -435,10 +407,7 @@ impl Interpreter {
                     let mut arguments: Vec<InterpreterValue> = vec![];
                     for expr in &call.arguments {
                         let argument = self.evaluate_expr(expr)?;
-                        if argument.is_return() {
-                            return Ok(argument);
-                        }
-                        let argument = argument.value;
+                        check_early_return!(argument);
                         arguments.push(argument);
                     }
                     let result = match &callable.fun.as_ref() {
@@ -465,11 +434,16 @@ impl Interpreter {
                                 .for_each(|(parameter, value)| {
                                     self.environment.define(parameter.name.lexeme(), value);
                                 });
-                            let mut result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
-                            result.should_return = false; // this is a return itself
+                            let result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
+                            // this is a return itself
+                            let value = if let ValueKind::Return(value) = result.val {
+                                *value
+                            } else {
+                                result
+                            };
                             self.environment = old_environment;
                             self.available_stack += 1;
-                            return Ok(result);
+                            return Ok(value);
                         }
                     };
                     self.available_stack += 1;
@@ -499,20 +473,15 @@ impl Interpreter {
         Err(diagnostic.into())
     }
 
-    fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<EvalResult> {
+    fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<InterpreterValue> {
         match stmt.data.deref() {
             Stmt::Expression(expr) => {
                 let expr_result = self.evaluate_expr(&expr.expression)?;
-                if expr_result.is_return() {
-                    return Ok(expr_result);
-                }
+                check_early_return!(expr_result);
             }
             Stmt::Let(var) => {
                 let value = self.evaluate_expr(&var.expression)?;
-                if value.is_return() {
-                    return Ok(value);
-                }
-                let value = value.value;
+                check_early_return!(value);
                 self.environment.define(var.name.lexeme(), value);
             }
             Stmt::Fun(fun) => {
@@ -522,16 +491,11 @@ impl Interpreter {
             Stmt::While(while_stmt) => {
                 loop {
                     let condition = self.evaluate_expr(&while_stmt.condition)?;
-                    if condition.is_return() {
-                        return Ok(condition);
-                    }
-                    let condition = condition.value;
+                    check_early_return!(condition);
                     match condition.val {
                         ValueKind::Bool(true) => {
                             let result = self.evaluate_stmt(&while_stmt.body_stmt)?;
-                            if result.is_return() {
-                                return Ok(result);
-                            }
+                            check_early_return!(result);
                         }
                         ValueKind::Bool(false) => {
                             break;
@@ -567,14 +531,14 @@ impl Interpreter {
         callable
     }
 
-    fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<EvalResult> {
+    fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<InterpreterValue> {
         for stmt in stmts {
             let result = self.evaluate_stmt(stmt)?;
             if result.is_return() {
                 return Ok(result);
             }
         }
-        Ok(EvalResult::val(self.value_factory.unit()))
+        Ok(InterpreterValue::val(self.value_factory.unit()))
     }
 }
 

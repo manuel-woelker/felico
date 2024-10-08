@@ -95,6 +95,7 @@ impl ValueFactory {
 #[derive(Debug, Clone)]
 pub enum ValueKind {
     Unit,
+    Return(Box<InterpreterValue>),
     Tuple(Vec<InterpreterValue>),
     String(String),
     Bool(bool),
@@ -149,6 +150,9 @@ impl Display for ValueKind {
             }
             ValueKind::Type(ty) => {
                 write!(f, "{:?}", ty)
+            }
+            ValueKind::Return(value) => {
+                write!(f, "ret {:?}", value)
             }
         }
     }

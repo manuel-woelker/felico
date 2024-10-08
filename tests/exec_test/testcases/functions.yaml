@@ -26,7 +26,23 @@ testcases:
     output: |-
       3
 
+  - name: function double return
+    input: |-
+      fun three() {
+        return return 3;
+      }
+      debug_print(three());
+    output: |-
+      3
 
+  - name: function return in call
+    input: |-
+      fun three() {
+        sqrt(return 3);
+      }
+      debug_print(three());
+    output: |-
+      3
 
   - name: recursive fibonacci
     input: |-
