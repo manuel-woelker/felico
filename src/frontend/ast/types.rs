@@ -1,4 +1,5 @@
 use crate::frontend::lex::token::Token;
+use crate::infra::location::Location;
 use crate::infra::shared_string::SharedString;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -16,6 +17,10 @@ impl Type {
     pub fn kind(&self) -> &TypeKind {
         &self.inner.kind
     }
+
+    pub fn declaration_site(&self) -> &Location {
+        &self.inner.declaration_site
+    }
 }
 
 impl Debug for Type {
@@ -31,31 +36,42 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn new<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
+    pub fn new<S: Into<SharedString>>(name: S, kind: TypeKind, declaration_site: Location) -> Self {
         Self {
             inner: Rc::new(TypeInner {
                 name: name.into(),
                 kind,
+                declaration_site,
             }),
         }
     }
 
-    pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
-        Self::new(name, TypeKind::Primitive(primitive_type))
+    pub fn new_ephemeral<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
+        Self::new(name, kind, Location::ephemeral())
     }
 
-    pub fn function(name: &str, parameter_types: Vec<Type>, return_type: Type) -> Self {
+    pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
+        Self::new_ephemeral(name, TypeKind::Primitive(primitive_type))
+    }
+
+    pub fn function(
+        name: &str,
+        parameter_types: Vec<Type>,
+        return_type: Type,
+        declaration_site: Location,
+    ) -> Self {
         Self::new(
             name,
             TypeKind::Function(FunctionType {
                 parameter_types,
                 return_type,
             }),
+            declaration_site,
         )
     }
 
     pub fn ty() -> Self {
-        Self::new("Type", TypeKind::Type)
+        Self::new_ephemeral("Type", TypeKind::Type)
     }
 
     pub fn name(&self) -> &SharedString {
@@ -74,6 +90,7 @@ impl Eq for Type {}
 #[derive(Debug)]
 pub struct TypeInner {
     name: SharedString,
+    declaration_site: Location,
     kind: TypeKind,
 }
 

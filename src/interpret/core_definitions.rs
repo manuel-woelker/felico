@@ -45,7 +45,7 @@ impl TypeFactory {
         Self {
             inner: Rc::new(TypeFactoryInner {
                 bool: Type::primitive("bool", PrimitiveType::Bool),
-                unit: Type::new(
+                unit: Type::new_ephemeral(
                     "Unit",
                     TypeKind::Struct(StructType {
                         name: Token {
@@ -60,13 +60,18 @@ impl TypeFactory {
                 i64: Type::primitive("i64", PrimitiveType::I64),
                 str: Type::primitive("str", PrimitiveType::Str),
                 ty: Type::ty(),
-                unknown: Type::new("unknown", TypeKind::Unknown),
-                never: Type::new("never", TypeKind::Never),
+                unknown: Type::new_ephemeral("unknown", TypeKind::Unknown),
+                never: Type::new_ephemeral("never", TypeKind::Never),
             }),
         }
     }
 
-    pub fn function(&self, parameter_types: Vec<Type>, return_type: Type) -> Type {
+    pub fn function(
+        &self,
+        parameter_types: Vec<Type>,
+        return_type: Type,
+        declaration_site: Location,
+    ) -> Type {
         let name = "Fn(".to_string()
             + &parameter_types
                 .iter()
@@ -75,16 +80,22 @@ impl TypeFactory {
                 .join(", ")
             + ") -> "
             + &return_type.to_string();
-        Type::function(&name, parameter_types, return_type)
+        Type::function(&name, parameter_types, return_type, declaration_site)
     }
 
-    pub fn make_struct(&self, name: &Token, fields: HashMap<SharedString, StructField>) -> Type {
+    pub fn make_struct(
+        &self,
+        name: &Token,
+        fields: HashMap<SharedString, StructField>,
+        declaration_site: Location,
+    ) -> Type {
         Type::new(
             name.lexeme(),
             TypeKind::Struct(StructType {
                 name: name.clone(),
                 fields,
             }),
+            declaration_site,
         )
     }
 }
@@ -117,7 +128,11 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                     bail!("Expected number as argument to sqrt")
                 }
             },
-            type_factory.function(vec![type_factory.f64()], type_factory.f64()),
+            type_factory.function(
+                vec![type_factory.f64()],
+                type_factory.f64(),
+                Location::ephemeral(),
+            ),
         ),
     );
     let value_factory_clone = value_factory.clone();
@@ -133,8 +148,9 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                 Ok(value_factory_clone.unit())
             },
             type_factory.function(
-                vec![Type::new("any".to_string(), TypeKind::Any)],
+                vec![Type::new_ephemeral("any".to_string(), TypeKind::Any)],
                 type_factory.unit(),
+                Location::ephemeral(),
             ),
         ),
     );

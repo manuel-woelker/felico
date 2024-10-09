@@ -28,16 +28,21 @@ struct Symbol {
     value: Option<InterpreterValue>,
 }
 
+struct CurrentFunctionInfo {
+    declared_return_type: Type,
+    return_type_declaration_site: Location,
+}
+
 pub struct LexicalScope {
     symbols: HashMap<SharedString, Symbol>,
-    declared_return_type: Option<Type>,
+    current_function: Option<CurrentFunctionInfo>,
 }
 
 impl LexicalScope {
     fn new() -> Self {
         Self {
             symbols: Default::default(),
-            declared_return_type: None,
+            current_function: None,
         }
     }
     fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol) {
@@ -194,7 +199,11 @@ impl Resolver {
             .iter()
             .map(|parameter| self.resolve_type(&parameter.type_expression))
             .collect::<FelicoResult<Vec<_>>>()?;
-        let function_type = type_factory.function(parameter_types, return_type.clone());
+        let function_type = type_factory.function(
+            parameter_types,
+            return_type.clone(),
+            fun_stmt.name.location.clone(),
+        );
         self.add_symbol_to_scope(
             name.to_string(),
             Symbol {
@@ -206,7 +215,10 @@ impl Resolver {
         )?;
         *ast_info.ty = function_type;
         let mut function_scope = LexicalScope::new();
-        function_scope.declared_return_type = Some(return_type);
+        function_scope.current_function = Some(CurrentFunctionInfo {
+            return_type_declaration_site: fun_stmt.return_type.location.clone(),
+            declared_return_type: return_type,
+        });
         self.scopes.push(function_scope);
         for parameter in &fun_stmt.parameters {
             let ty = self.resolve_type(&parameter.type_expression)?.clone();
@@ -238,7 +250,8 @@ impl Resolver {
             let name = SharedString::from(field.data.name.lexeme());
             fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
         }
-        *ast_info.ty = type_factory.make_struct(&struct_stmt.name, fields);
+        *ast_info.ty =
+            type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
         self.add_symbol_to_scope(
             struct_stmt.name.lexeme().into(),
             Symbol {
@@ -553,18 +566,19 @@ impl Resolver {
         ast: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut return_expr.expression)?;
-        if let Some(Some(expected_type)) = self
+        if let Some(Some(current_function_info)) = self
             .scopes
             .iter()
             .rev()
-            .map(|symbol| &symbol.declared_return_type)
+            .map(|symbol| &symbol.current_function)
             .filter(|ret| ret.is_some())
             .next()
         {
             let returned_type = &return_expr.expression.ty;
+            let expected_type = &current_function_info.declared_return_type;
             if !self
                 .type_checker
-                .is_assignable_to(returned_type, &expected_type)
+                .is_assignable_to(returned_type, expected_type)
             {
                 let mut diagnostic = InterpreterDiagnostic::new(
                     &return_expr.expression.location.source_file,
@@ -574,8 +588,13 @@ impl Resolver {
                     ),
                 );
                 diagnostic.add_primary_label(&return_expr.expression.location);
-                // TODO: add label for function definition
-                //                 diagnostic.add_label(&value.get().declaration_site, "is already declared here");
+                diagnostic.add_label(
+                    &current_function_info.return_type_declaration_site,
+                    format!(
+                        "declared with return type {} here",
+                        current_function_info.declared_return_type
+                    ),
+                );
                 return Err(diagnostic.into());
             }
         } else {
@@ -916,7 +935,8 @@ mod tests {
                ╭─[return_wrong_type:2:35]
              1 │ 
              2 │         fun foo() -> bool {return 3;}
-               ·                                   ─
+               ·                      ──┬─         ─
+               ·                        ╰── declared with return type ❬bool❭ here
              3 │         
                ╰────"#]];
     );
