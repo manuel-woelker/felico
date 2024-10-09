@@ -19,7 +19,7 @@ testcases:
 
   - name: function return
     input: |-
-      fun three() {
+      fun three() -> f64 {
         return 3;
       }
       debug_print(three());
@@ -28,7 +28,7 @@ testcases:
 
   - name: function double return
     input: |-
-      fun three() {
+      fun three() -> f64 {
         return return 3;
       }
       debug_print(three());
@@ -37,7 +37,7 @@ testcases:
 
   - name: function return in call
     input: |-
-      fun three() {
+      fun three() -> f64 {
         sqrt(return 3);
       }
       debug_print(three());
@@ -46,7 +46,7 @@ testcases:
 
   - name: recursive fibonacci
     input: |-
-      fun fib(n: f64) {
+      fun fib(n: f64) -> f64 {
            return if (n <= 1) n else
            fib(n - 2) + fib(n - 1);
       }

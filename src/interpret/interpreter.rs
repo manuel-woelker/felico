@@ -653,7 +653,7 @@ mod tests {
 
     test_eval_program!(
         program_fib: "
-            fun fib(n: f64) {
+            fun fib(n: f64) -> f64 {
                  return if (n <= 1) n else
                  fib(n - 2) + fib(n - 1);
             }

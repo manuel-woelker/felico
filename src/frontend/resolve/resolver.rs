@@ -28,8 +28,34 @@ struct Symbol {
     value: Option<InterpreterValue>,
 }
 
+pub struct LexicalScope {
+    symbols: HashMap<SharedString, Symbol>,
+    declared_return_type: Option<Type>,
+}
+
+impl LexicalScope {
+    fn new() -> Self {
+        Self {
+            symbols: Default::default(),
+            declared_return_type: None,
+        }
+    }
+    fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol) {
+        self.symbols.insert(name.into(), symbol);
+    }
+    fn get(&self, name: &str) -> Option<&Symbol> {
+        self.symbols.get(name)
+    }
+    fn get_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+        self.symbols.get_mut(name)
+    }
+    fn entry<S: Into<SharedString>>(&mut self, name: S) -> Entry<SharedString, Symbol> {
+        self.symbols.entry(name.into())
+    }
+}
+
 pub struct Resolver {
-    scopes: Vec<HashMap<String, Symbol>>,
+    scopes: Vec<LexicalScope>,
     type_factory: TypeFactory,
     type_checker: TypeChecker,
 }
@@ -47,7 +73,7 @@ impl<'a> CommonAstInfo<'a> {
 
 impl Resolver {
     fn new(type_factory: TypeFactory) -> Self {
-        let mut global_scope: HashMap<String, Symbol> = Default::default();
+        let mut global_scope: LexicalScope = LexicalScope::new();
         let location = Location {
             source_file: SourceFileHandle::from_string("native", "native_code"),
             start_byte: 0,
@@ -64,8 +90,9 @@ impl Resolver {
                 },
             );
         }
+        let script_scope = LexicalScope::new();
         Resolver {
-            scopes: vec![global_scope, Default::default()],
+            scopes: vec![global_scope, script_scope],
             type_factory,
             type_checker: TypeChecker::new(),
         }
@@ -76,6 +103,7 @@ impl Resolver {
 
     pub fn get_module_manifest(&self) -> FelicoResult<ModuleManifest> {
         let module_entries: HashMap<Name, ModuleEntry> = self.scopes[1]
+            .symbols
             .iter()
             .map(|(name, symbol)| {
                 let name = SharedString::from(name);
@@ -126,20 +154,30 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_if_expr(&mut self, if_expr: &mut IfExpr) -> FelicoResult<()> {
+    fn resolve_if_expr(
+        &mut self,
+        if_expr: &mut IfExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
         self.resolve_expr(&mut if_expr.condition)?;
         self.resolve_expr(&mut if_expr.then_expr)?;
         if let Some(else_expr) = &mut if_expr.else_expr {
             self.resolve_expr(else_expr)?;
         }
+        *ast_info.ty = if_expr.then_expr.ty.clone();
         Ok(())
     }
 
-    fn resolve_block_expr(&mut self, block: &mut BlockExpr) -> FelicoResult<()> {
-        self.scopes.push(Default::default());
+    fn resolve_block_expr(
+        &mut self,
+        block: &mut BlockExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.scopes.push(LexicalScope::new());
         self.resolve_stmts(&mut block.stmts)?;
         self.resolve_expr(&mut block.result_expression)?;
         self.scopes.pop();
+        *ast_info.ty = block.result_expression.ty.clone();
         Ok(())
     }
 
@@ -156,7 +194,7 @@ impl Resolver {
             .iter()
             .map(|parameter| self.resolve_type(&parameter.type_expression))
             .collect::<FelicoResult<Vec<_>>>()?;
-        let function_type = type_factory.function(parameter_types, return_type);
+        let function_type = type_factory.function(parameter_types, return_type.clone());
         self.add_symbol_to_scope(
             name.to_string(),
             Symbol {
@@ -167,7 +205,9 @@ impl Resolver {
             },
         )?;
         *ast_info.ty = function_type;
-        self.scopes.push(Default::default());
+        let mut function_scope = LexicalScope::new();
+        function_scope.declared_return_type = Some(return_type);
+        self.scopes.push(function_scope);
         for parameter in &fun_stmt.parameters {
             let ty = self.resolve_type(&parameter.type_expression)?.clone();
             self.add_symbol_to_scope(
@@ -295,10 +335,10 @@ impl Resolver {
                 self.resolve_set_expr(set)?;
             }
             Expr::Block(block) => {
-                self.resolve_block_expr(block)?;
+                self.resolve_block_expr(block, &mut ast_info)?;
             }
             Expr::If(if_expr) => {
-                self.resolve_if_expr(if_expr)?;
+                self.resolve_if_expr(if_expr, &mut ast_info)?;
             }
             Expr::Return(return_expr) => {
                 self.resolve_return_expr(return_expr, &mut ast_info)?;
@@ -460,7 +500,7 @@ impl Resolver {
         Ok(())
     }
 
-    fn current_scope(&mut self) -> &mut HashMap<String, Symbol> {
+    fn current_scope(&mut self) -> &mut LexicalScope {
         self.scopes
             .iter_mut()
             .last()
@@ -490,7 +530,7 @@ impl Resolver {
     }
 
     fn add_symbol_to_scope(&mut self, name: String, symbol: Symbol) -> FelicoResult<()> {
-        match self.current_scope().entry(name.clone()) {
+        match self.current_scope().entry(&name) {
             Entry::Occupied(value) => {
                 let mut diagnostic = InterpreterDiagnostic::new(
                     &symbol.declaration_site.source_file,
@@ -513,6 +553,34 @@ impl Resolver {
         ast: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut return_expr.expression)?;
+        if let Some(Some(expected_type)) = self
+            .scopes
+            .iter()
+            .rev()
+            .map(|symbol| &symbol.declared_return_type)
+            .filter(|ret| ret.is_some())
+            .next()
+        {
+            let returned_type = &return_expr.expression.ty;
+            if !self
+                .type_checker
+                .is_assignable_to(returned_type, &expected_type)
+            {
+                let mut diagnostic = InterpreterDiagnostic::new(
+                    &return_expr.expression.location.source_file,
+                    format!(
+                        "Cannot return value of type {} in function returning {}",
+                        returned_type, expected_type
+                    ),
+                );
+                diagnostic.add_primary_label(&return_expr.expression.location);
+                // TODO: add label for function definition
+                //                 diagnostic.add_label(&value.get().declaration_site, "is already declared here");
+                return Err(diagnostic.into());
+            }
+        } else {
+            bail!("Cannot return in a non function context");
+        }
         *ast.ty = self.type_factory.never();
         Ok(())
     }
@@ -839,6 +907,16 @@ mod tests {
              1 │ 
              2 │         sqrt(true);
                ·              ────
+             3 │         
+               ╰────"#]];
+        return_wrong_type: r#"
+        fun foo() -> bool {return 3;}
+        "# => expect![[r#"
+            × Cannot return value of type ❬f64❭ in function returning ❬bool❭
+               ╭─[return_wrong_type:2:35]
+             1 │ 
+             2 │         fun foo() -> bool {return 3;}
+               ·                                   ─
              3 │         
                ╰────"#]];
     );
