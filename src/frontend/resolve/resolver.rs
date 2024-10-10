@@ -404,7 +404,7 @@ impl Resolver {
             self.diagnose(
                 ast_info.ty,
                 InterpreterDiagnostic::new(
-                    &call.callee.location.clone(),
+                    &call.callee.location,
                     format!(
                         "Expected a function to call, but instead found type {}",
                         call.callee.ty

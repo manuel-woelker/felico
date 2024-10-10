@@ -77,16 +77,16 @@ impl Parser {
         // Create artificial main function
         let return_type = self.create_unit_var_use(&start_location)?;
         let result_expression =
-            self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Unit))?;
+            self.create_node(&start_location, Expr::Literal(LiteralExpr::Unit))?;
         let body = self.create_node(
-            start_location.clone(),
+            &start_location,
             Expr::Block(BlockExpr {
                 stmts,
                 result_expression,
             }),
         )?;
         let main_stmt = self.create_node(
-            start_location.clone(),
+            &start_location,
             Stmt::Fun(FunStmt {
                 name: Token {
                     token_type: TokenType::Identifier,
@@ -99,7 +99,7 @@ impl Parser {
             }),
         )?;
         self.create_node(
-            start_location,
+            &start_location,
             Module {
                 stmts: vec![main_stmt],
             },
@@ -138,7 +138,7 @@ impl Parser {
         self.consume(TokenType::Equal, "Expected '=' in let declaration")?;
         let expression = self.parse_expr()?;
         self.create_node(
-            start_location,
+            &start_location,
             Stmt::Let(LetStmt {
                 name,
                 expression,
@@ -181,7 +181,7 @@ impl Parser {
             parser.consume(TokenType::Colon, "Expected ':' after field name")?;
             let type_expression = parser.parse_type_expression()?;
             Ok(Some(parser.create_node(
-                field_start_location,
+                &field_start_location,
                 StructStmtField {
                     name: field_name,
                     type_expression,
@@ -189,7 +189,7 @@ impl Parser {
             )?))
         })?;
         self.consume(TokenType::RightBrace, "Expected '}' to complete class")?;
-        self.create_node(start_location, Stmt::Struct(StructStmt { name, fields }))
+        self.create_node(&start_location, Stmt::Struct(StructStmt { name, fields }))
     }
 
     fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<Stmt>> {
@@ -222,7 +222,7 @@ impl Parser {
         };
         let body = self.parse_block_expr()?;
         self.create_node(
-            start_location,
+            &start_location,
             Stmt::Fun(FunStmt {
                 name,
                 parameters,
@@ -234,7 +234,7 @@ impl Parser {
 
     fn create_unit_var_use(&mut self, start_location: &Location) -> FelicoResult<AstNode<Expr>> {
         self.create_node(
-            start_location.clone(),
+            &start_location,
             Expr::Variable(VarUse {
                 variable: Token {
                     token_type: TokenType::Identifier,
@@ -276,14 +276,14 @@ impl Parser {
         let expression = if self.current_token.token_type != TokenType::Semicolon {
             self.parse_expr()?
         } else {
-            self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Unit))?
+            self.create_node(&start_location, Expr::Literal(LiteralExpr::Unit))?
         };
-        self.create_node(start_location, Expr::Return(ReturnExpr { expression }))
+        self.create_node(&start_location, Expr::Return(ReturnExpr { expression }))
     }
     fn parse_expr_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
         let start_location = self.current_location();
         let expression = self.parse_expr()?;
-        self.create_node(start_location, Stmt::Expression(ExprStmt { expression }))
+        self.create_node(&start_location, Stmt::Expression(ExprStmt { expression }))
     }
 
     fn parse_if(&mut self) -> FelicoResult<AstNode<Expr>> {
@@ -298,7 +298,7 @@ impl Parser {
             None
         };
         self.create_node(
-            start_location,
+            &start_location,
             Expr::If(IfExpr {
                 condition,
                 then_expr,
@@ -315,7 +315,7 @@ impl Parser {
         self.consume(TokenType::RightParen, "Expected ')' after while condition")?;
         let body_stmt = self.parse_stmt()?;
         self.create_node(
-            start_location,
+            &start_location,
             Stmt::While(WhileStmt {
                 condition,
                 body_stmt,
@@ -357,16 +357,14 @@ impl Parser {
                     }),
                 )?
             }
-            let mut while_stmt = self.create_node(
-                start_location.clone(),
+            let mut while_stmt = self.create_node(&start_location,
                 Stmt::While(WhileStmt {
                     condition,
                     body_stmt,
                 }),
             )?;
             if let Some(initializer) = initializer {
-                while_stmt = self.create_node(
-                    start_location,
+                while_stmt = self.create_node(&start_location,
                     Stmt::Block(BlockExpr {
                         stmts: vec![initializer, while_stmt],
                     }),
@@ -390,11 +388,11 @@ impl Parser {
         // TODO: handle result expression
         let result_location = self.current_location();
         let result_expression =
-            self.create_node(result_location, Expr::Literal(LiteralExpr::Unit))?;
+            self.create_node(&result_location, Expr::Literal(LiteralExpr::Unit))?;
 
         self.consume(TokenType::RightBrace, "Expected right brace ('}')")?;
         self.create_node(
-            start_location,
+            &start_location,
             Expr::Block(BlockExpr {
                 stmts,
                 result_expression,
@@ -421,7 +419,7 @@ impl Parser {
             let value = self.parse_assignment()?;
             return if let Expr::Variable(var_use) = *expr.data {
                 self.create_node(
-                    start_location,
+                    &start_location,
                     Expr::Assign(AssignExpr {
                         destination: var_use.variable,
                         value,
@@ -430,7 +428,7 @@ impl Parser {
                 )
             } else if let Expr::Get(get) = *expr.data {
                 self.create_node(
-                    start_location,
+                    &start_location,
                     Expr::Set(SetExpr {
                         value,
                         object: get.object,
@@ -461,7 +459,7 @@ impl Parser {
             self.advance();
             let right = self.parse_and()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -480,7 +478,7 @@ impl Parser {
             self.advance();
             let right = self.parse_equality()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -498,7 +496,7 @@ impl Parser {
             self.advance();
             let right = self.parse_comparison()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -521,7 +519,7 @@ impl Parser {
             self.advance();
             let right = self.parse_term()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -540,7 +538,7 @@ impl Parser {
             self.advance();
             let right = self.parse_factor()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -559,7 +557,7 @@ impl Parser {
             self.advance();
             let right = self.parse_unary()?;
             expr = self.create_node(
-                start_location.clone(),
+                &start_location,
                 Expr::Binary(BinaryExpr {
                     operator,
                     left: expr,
@@ -576,7 +574,7 @@ impl Parser {
 
     fn parse_primary(&mut self) -> FelicoResult<AstNode<Expr>> {
         let result = self.create_node(
-            self.current_location(),
+            &self.current_location(),
             Expr::Literal(match self.current_token.token_type {
                 TokenType::Number => {
                     let number: f64 = self.current_token.lexeme().parse().map_err(|e| {
@@ -597,7 +595,7 @@ impl Parser {
                 TokenType::False => LiteralExpr::Bool(false),
                 TokenType::Identifier => {
                     let result = self.create_node(
-                        self.current_location(),
+                        &self.current_location(),
                         Expr::Variable(VarUse {
                             variable: self.current_token.clone(),
                             distance: -1000,
@@ -653,7 +651,7 @@ impl Parser {
                 let operator = self.current_token.clone();
                 self.advance();
                 let right = self.parse_unary()?;
-                self.create_node(start_location, Expr::Unary(UnaryExpr { operator, right }))
+                self.create_node(&start_location, Expr::Unary(UnaryExpr { operator, right }))
             }
             _ => self.parse_call(),
         }
@@ -669,10 +667,8 @@ impl Parser {
             } else if self.is_at(TokenType::Dot) {
                 self.advance();
                 let name = self.consume(TokenType::Identifier, "Expected identifier after '.'")?;
-                expr = self.create_node(
-                    start_location.clone(),
-                    Expr::Get(GetExpr { object: expr, name }),
-                )?;
+                expr =
+                    self.create_node(&start_location, Expr::Get(GetExpr { object: expr, name }))?;
             } else {
                 break;
             }
@@ -698,12 +694,12 @@ impl Parser {
             TokenType::RightParen,
             "Expected ')' after function call arguments",
         )?;
-        self.create_node(start_location, Expr::Call(CallExpr { callee, arguments }))
+        self.create_node(&start_location, Expr::Call(CallExpr { callee, arguments }))
     }
 
     fn create_node<T: AstData>(
         &mut self,
-        start_location: Location,
+        start_location: &Location,
         data: T,
     ) -> FelicoResult<AstNode<T>> {
         let start = start_location;
