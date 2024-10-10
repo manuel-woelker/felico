@@ -312,8 +312,8 @@ impl Resolver {
             .type_checker
             .is_assignable_to(expression_type, &variable_type)
         {
-            let diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
-            self.diagnose(&mut ast_info.ty, diagnostic);
+            let diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
+            self.diagnose(ast_info.ty, diagnostic);
         }
         *ast_info.ty = variable_type.clone();
         let symbol = self.current_scope().get_mut(name).unwrap();
@@ -402,7 +402,7 @@ impl Resolver {
         }
         let TypeKind::Function(function_type) = call.callee.ty.kind() else {
             self.diagnose(
-                &mut ast_info.ty,
+                ast_info.ty,
                 InterpreterDiagnostic::new(
                     &call.callee.location.clone(),
                     format!(
@@ -416,7 +416,7 @@ impl Resolver {
         *ast_info.ty = function_type.return_type.clone();
         let mut diagnostics = vec![];
         let mut diagnose = |location: &Location, message: String| {
-            let mut diagnostic = InterpreterDiagnostic::new(location, message.into());
+            let mut diagnostic = InterpreterDiagnostic::new(location, message);
             let declaration_site = call.callee.ty.declaration_site();
             if !declaration_site.is_ephemeral() {
                 diagnostic.add_label(declaration_site, "Function declared here".to_string());
@@ -426,7 +426,7 @@ impl Resolver {
 
         if function_type.parameter_types.len() != call.arguments.len() {
             diagnose(
-                &ast_info.location,
+                ast_info.location,
                 format!(
                     "Wrong number of arguments in call - expected: {}, actual {}",
                     function_type.parameter_types.len(),
@@ -467,16 +467,16 @@ impl Resolver {
                 .type_checker
                 .is_assignable_to(expression_type, destination_type)
             {
-                let mut diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
+                let mut diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
                 diagnostic.add_label(
                     &symbol.declaration_site,
                     format!("is declared as {} here", destination_type),
                 );
-                self.diagnose(&mut ast_info.ty, diagnostic)
+                self.diagnose(ast_info.ty, diagnostic)
             }
         } else {
             self.diagnose(
-                &mut ast_info.ty,
+                ast_info.ty,
                 InterpreterDiagnostic::new(
                     &destination.location,
                     format!("Variable '{}' is not defined here", destination.lexeme()),
@@ -497,7 +497,7 @@ impl Resolver {
             *ast_info.ty = symbol.ty.clone();
         } else {
             self.diagnose(
-                &mut ast_info.ty,
+                ast_info.ty,
                 InterpreterDiagnostic::new(
                     &var_use.variable.location,
                     format!(
@@ -599,8 +599,7 @@ impl Resolver {
             .iter()
             .rev()
             .map(|symbol| &symbol.current_function)
-            .filter(|ret| ret.is_some())
-            .next()
+            .find(|ret| ret.is_some())
         {
             let returned_type = &return_expr.expression.ty;
             let expected_type = &current_function_info.declared_return_type;
@@ -622,7 +621,7 @@ impl Resolver {
                         current_function_info.declared_return_type
                     ),
                 );
-                self.diagnose(&mut ast.ty, diagnostic);
+                self.diagnose(ast.ty, diagnostic);
             }
         } else {
             bail!("Cannot return in a non function context");
