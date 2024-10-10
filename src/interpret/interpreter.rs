@@ -2,12 +2,12 @@ use crate::frontend::ast::expr::{
     AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
     SetExpr, UnaryExpr, VarUse,
 };
+use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{FunStmt, Stmt, WhileStmt};
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::TokenType;
-use crate::frontend::parse::parser::{parse_expression, parse_program};
+use crate::frontend::parse::parser::{parse_expression, parse_script};
 use crate::frontend::resolve::resolver::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::FelicoResult;
@@ -104,13 +104,13 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn evaluate_program(mut self) -> FelicoResult<()> {
-        let mut program = parse_program(self.source_file.clone(), &self.type_factory)?;
+    pub fn evaluate_script(mut self) -> FelicoResult<()> {
+        let mut program = parse_script(self.source_file.clone(), &self.type_factory)?;
         resolve_variables(&mut program, &self.type_factory)?;
         self.evaluate_prgrm(&program)
     }
 
-    fn evaluate_prgrm(&mut self, program: &AstNode<Program>) -> FelicoResult<()> {
+    fn evaluate_prgrm(&mut self, program: &AstNode<Module>) -> FelicoResult<()> {
         self.evaluate_stmts(&program.data.stmts)?;
         Ok(())
     }
@@ -575,7 +575,7 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
             .unwrap()
             .push_str(&format!("{}", value))
     }));
-    interpreter.evaluate_program()?;
+    interpreter.evaluate_script()?;
     let guard = output_buffer_clone.write().unwrap();
     Ok(guard.deref().clone())
 }
@@ -637,7 +637,7 @@ mod tests {
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {
         let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input)).unwrap();
         interpreter.set_print_fn(Box::new(move |_value| {}));
-        let result = interpreter.evaluate_program();
+        let result = interpreter.evaluate_script();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }

@@ -2,8 +2,8 @@ use crate::frontend::ast::expr::{
     AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
     SetExpr, UnaryExpr, VarUse,
 };
+use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, StructStmt, WhileStmt};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
@@ -111,7 +111,7 @@ impl Resolver {
         *ty = self.type_factory.unresolved();
     }
 
-    pub fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
+    pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
         self.resolve_stmts(&mut program.data.stmts)?;
         if self.diagnostics.len() > 0 {
             let diagnostics = std::mem::take(&mut self.diagnostics);
@@ -633,7 +633,7 @@ impl Resolver {
 }
 
 pub fn resolve_variables(
-    ast: &mut AstNode<Program>,
+    ast: &mut AstNode<Module>,
     type_factory: &TypeFactory,
 ) -> FelicoResult<()> {
     Resolver::new(type_factory.clone()).resolve_program(ast)
@@ -656,7 +656,7 @@ mod tests {
     ) {
         let type_factory = &TypeFactory::new();
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
-        let mut program = parser.parse_program().unwrap();
+        let mut program = parser.parse_script().unwrap();
         let mut resolver = Resolver::new(type_factory.clone());
         resolver.resolve_program(&mut program).unwrap();
         let printed_ast = AstPrinter::new()
@@ -824,7 +824,7 @@ mod tests {
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
         let type_factory = &TypeFactory::new();
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
-        let mut ast = parser.parse_program().unwrap();
+        let mut ast = parser.parse_script().unwrap();
         let result = resolve_variables(&mut ast, type_factory);
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);

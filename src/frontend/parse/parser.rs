@@ -2,8 +2,8 @@ use crate::frontend::ast::expr::{
     AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
     SetExpr, UnaryExpr, VarUse,
 };
+use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::{
     ExprStmt, FunParameter, FunStmt, LetStmt, Stmt, StructStmt, StructStmtField, WhileStmt,
 };
@@ -63,7 +63,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_program(mut self) -> FelicoResult<AstNode<Program>> {
+    pub fn parse_script(mut self) -> FelicoResult<AstNode<Module>> {
         let start_location = self.current_location();
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
         while self.current_token.token_type != TokenType::EOF {
@@ -74,7 +74,7 @@ impl Parser {
             stmts.push(self.parse_decl()?)
         }
         self.consume(TokenType::EOF, "Expected end of file")?;
-        self.create_node(start_location, Program { stmts })
+        self.create_node(start_location, Module { stmts })
     }
 
     fn parse_decl(&mut self) -> FelicoResult<AstNode<Stmt>> {
@@ -697,12 +697,12 @@ pub fn parse_expression(code_source: SourceFileHandle) -> FelicoResult<AstNode<E
     parser.parse_expression()
 }
 
-pub fn parse_program(
+pub fn parse_script(
     code_source: SourceFileHandle,
     type_factory: &TypeFactory,
-) -> FelicoResult<AstNode<Program>> {
+) -> FelicoResult<AstNode<Module>> {
     let parser = Parser::new(code_source, type_factory)?;
-    parser.parse_program()
+    parser.parse_script()
 }
 
 #[cfg(test)]
@@ -935,66 +935,66 @@ mod tests {
 
     );
 
-    fn test_parse_program(name: &str, input: &str, expected: Expect) {
+    fn test_parse_script(name: &str, input: &str, expected: Expect) {
         let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
-        let program = parser.parse_program().unwrap();
-        let printed_ast = ast_to_string(&program).unwrap();
+        let script = parser.parse_script().unwrap();
+        let printed_ast = ast_to_string(&script).unwrap();
 
         expected.assert_eq(&printed_ast);
     }
 
-    macro_rules! test_program {
+    macro_rules! test_script {
     ( $($label:ident: $input:expr => $expect:expr;)+ ) => {
         $(
             #[test]
             fn $label() {
-                test_parse_program(stringify!($label), $input, $expect);
+                test_parse_script(stringify!($label), $input, $expect);
             }
         )*
         }
     }
 
-    test_program!(
-                program_empty: "" => expect![[r#"
+    test_script!(
+                script_empty: "" => expect![[r#"
                     Program
                 "#]];
-                program_bool_true: "true;" => expect![[r#"
+                script_bool_true: "true;" => expect![[r#"
                     Program
                     └── Bool(true)     [0+4]
                 "#]];
-                program_addition: "1+2;" => expect![[r#"
+                script_addition: "1+2;" => expect![[r#"
                     Program
                     └── +     [0+4]
                         ├── F64(1.0)     [0+1]
                         └── F64(2.0)     [2+1]
                 "#]];
-                program_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
+                script_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
                     Program
                     ├── Str("Hello")     [0+7]
                     └── Str("World")     [9+7]
                 "#]];
 
-                program_true: "true;" => expect![[r#"
+                script_true: "true;" => expect![[r#"
                     Program
                     └── Bool(true)     [0+4]
                 "#]];
-                program_string_addition: "\"Hello \" + 3;" => expect![[r#"
+                script_string_addition: "\"Hello \" + 3;" => expect![[r#"
                     Program
                     └── +     [0+13]
                         ├── Str("Hello ")     [0+8]
                         └── F64(3.0)     [11+1]
                 "#]];
-                program_let_decl: "let a = false;" => expect![[r#"
+                script_let_decl: "let a = false;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)'     [0+14]
                         └── Bool(false)     [8+5]
                 "#]];
-                program_let_decl_with_type: "let a: bool = false;" => expect![[r#"
+                script_let_decl_with_type: "let a: bool = false;" => expect![[r#"
                     Program
                     └── Let ''a' (Identifier)'     [0+20]
                         └── Bool(false)     [14+5]
                 "#]];
-                program_program: "let a = 1;let b = a+a;b;" => expect![[r#"
+                script_script: "let a = 1;let b = a+a;b;" => expect![[r#"
                     Program
                     ├── Let ''a' (Identifier)'     [0+10]
                     │   └── F64(1.0)     [8+1]
@@ -1005,23 +1005,23 @@ mod tests {
                     └── Read 'b'     [22+1]
                 "#]];
 
-                program_assign: "a=1;" => expect![[r#"
+                script_assign: "a=1;" => expect![[r#"
                     Program
                     └── 'a' (Identifier) =      [0+4]
                         └── F64(1.0)     [2+1]
                 "#]];
-                program_assign_twice2: "a=b=3;" => expect![[r#"
+                script_assign_twice2: "a=b=3;" => expect![[r#"
                     Program
                     └── 'a' (Identifier) =      [0+6]
                         └── 'b' (Identifier) =      [2+4]
                             └── F64(3.0)     [4+1]
                 "#]];
-                program_block_empty: "{}" => expect![[r#"
+                script_block_empty: "{}" => expect![[r#"
                     Program
                     └── Block     [0+2]
                         └── Unit     [1+1]
                 "#]];
-                program_nested_block: "{{foo;}}" => expect![[r#"
+                script_nested_block: "{{foo;}}" => expect![[r#"
                     Program
                     └── Block     [0+8]
                         ├── Block     [1+7]
@@ -1030,33 +1030,33 @@ mod tests {
                         └── Unit     [7+1]
                 "#]];
 
-               program_if: "if(c) a;" => expect![[r#"
+               script_if: "if(c) a;" => expect![[r#"
                    Program
                    └── If     [0+8]
                        ├── Read 'c'     [3+1]
                        └── Read 'a'     [6+1]
                "#]];
-               program_if_else: "if(c) a else b;" => expect![[r#"
+               script_if_else: "if(c) a else b;" => expect![[r#"
                    Program
                    └── If     [0+15]
                        ├── Read 'c'     [3+1]
                        ├── Read 'a'     [6+1]
                        └── Read 'b'     [13+1]
                "#]];
-               program_if_no_parentheses: "if c a;" => expect![[r#"
+               script_if_no_parentheses: "if c a;" => expect![[r#"
                    Program
                    └── If     [0+7]
                        ├── Read 'c'     [3+1]
                        └── Read 'a'     [5+1]
                "#]];
-               program_if_no_semicolon: "if c {}" => expect![[r#"
+               script_if_no_semicolon: "if c {}" => expect![[r#"
                    Program
                    └── If     [0+7]
                        ├── Read 'c'     [3+1]
                        └── Block     [5+2]
                            └── Unit     [6+1]
                "#]];
-               program_if_else_no_parentheses: "if c a else b;" => expect![[r#"
+               script_if_else_no_parentheses: "if c a else b;" => expect![[r#"
                    Program
                    └── If     [0+14]
                        ├── Read 'c'     [3+1]
@@ -1064,20 +1064,20 @@ mod tests {
                        └── Read 'b'     [12+1]
                "#]];
 
-               program_while: "while(a) b;" => expect![[r#"
+               script_while: "while(a) b;" => expect![[r#"
                    Program
                    └── While     [0+11]
                        ├── Read 'a'     [6+1]
                        └── Read 'b'     [9+1]
                "#]];
 
-               program_fun_empty: "fun foo() {}" => expect![[r#"
+               script_fun_empty: "fun foo() {}" => expect![[r#"
                    Program
                    └── Declare fun 'foo()'     [0+12]
                        ├── Return type: Read 'unit'     [0+11]
                        └── Unit     [11+1]
                "#]];
-               program_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
+               script_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
                    Program
                    └── Declare fun 'foo(a)'     [0+22]
                        ├── Param a
@@ -1086,7 +1086,7 @@ mod tests {
                        ├── Read 'a'     [18+1]
                        └── Unit     [20+1]
                "#]];
-               program_fun_with_return_type: "fun not(a: bool,) -> bool {return !a;} " => expect![[r#"
+               script_fun_with_return_type: "fun not(a: bool,) -> bool {return !a;} " => expect![[r#"
                    Program
                    └── Declare fun 'not(a)'     [0+39]
                        ├── Param a
@@ -1097,7 +1097,7 @@ mod tests {
                        │       └── Read 'a'     [35+1]
                        └── Unit     [37+1]
                "#]];
-               program_fun_return: "fun nop() {return;} " => expect![[r#"
+               script_fun_return: "fun nop() {return;} " => expect![[r#"
                    Program
                    └── Declare fun 'nop()'     [0+20]
                        ├── Return type: Read 'unit'     [0+11]
@@ -1105,7 +1105,7 @@ mod tests {
                        │   └── Unit     [11+7]
                        └── Unit     [18+1]
                "#]];
-               program_fun_return_value: "fun three(a: bool) {return 3;} " => expect![[r#"
+               script_fun_return_value: "fun three(a: bool) {return 3;} " => expect![[r#"
                    Program
                    └── Declare fun 'three(a)'     [0+31]
                        ├── Param a
@@ -1115,7 +1115,7 @@ mod tests {
                        │   └── F64(3.0)     [27+1]
                        └── Unit     [29+1]
                "#]];
-               program_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
+               script_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
                    Program
                    └── Declare fun 'twice(a)'     [0+32]
                        ├── Param a
@@ -1127,18 +1127,18 @@ mod tests {
                        │       └── Read 'a'     [28+1]
                        └── Unit     [30+1]
                "#]];
-               program_property_access: "a.b;" => expect![[r#"
+               script_property_access: "a.b;" => expect![[r#"
                    Program
                    └── Get b     [1+3]
                        └── Read 'a'     [0+1]
                "#]];
-               program_property_set: "a.b = 3;" => expect![[r#"
+               script_property_set: "a.b = 3;" => expect![[r#"
                    Program
                    └── Set b     [0+8]
                        ├── Read 'a'     [0+1]
                        └── F64(3.0)     [6+1]
                "#]];
-               program_struct_simple: "
+               script_struct_simple: "
                struct Foo {
                     bar: bool,
                     baz: f64
@@ -1151,7 +1151,7 @@ mod tests {
                        └── Field baz     [80+26]
                            └── Read 'f64'     [85+3]
                "#]];
-               program_struct_trailing_comma: "
+               script_struct_trailing_comma: "
                struct Foo {
                     bar: bool,
                     baz: f64,
@@ -1164,13 +1164,13 @@ mod tests {
                        └── Field baz     [80+9]
                            └── Read 'f64'     [85+3]
                "#]];
-                program_struct_empty: "
+                script_struct_empty: "
                struct Empty {}
                " => expect![[r#"
                    Program
                    └── Struct 'Empty'     [16+31]
                "#]];
-                program_fib: "
+                script_fib: "
                     fun fib(n: f64) {
                          return if (n <= 1) n else
                          fib(n - 2) + fib(n - 1);
@@ -1209,9 +1209,9 @@ mod tests {
 
     );
 
-    fn test_parse_program_error(name: &str, input: &str, expected: Expect) {
+    fn test_parse_script_error(name: &str, input: &str, expected: Expect) {
         let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
-        let result = parser.parse_program();
+        let result = parser.parse_script();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }
@@ -1221,7 +1221,7 @@ mod tests {
         $(
             #[test]
             fn $label() {
-                test_parse_program_error(stringify!($label), $input, $expect);
+                test_parse_script_error(stringify!($label), $input, $expect);
             }
         )*
         }

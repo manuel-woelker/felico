@@ -4,8 +4,8 @@ use crate::frontend::ast::AstData;
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct Program {
+pub struct Module {
     pub stmts: Vec<AstNode<Stmt>>,
 }
 
-impl AstData for Program {}
+impl AstData for Module {}

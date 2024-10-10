@@ -1,6 +1,6 @@
 use crate::frontend::ast::expr::Expr;
+use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::program::Program;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::AstData;
 use crate::infra::result::FelicoResult;
@@ -47,7 +47,7 @@ impl AstPrinter {
         Ok(printed_ast)
     }
 
-    pub fn print(&self, ast: &AstNode<Program>) -> FelicoResult<String> {
+    pub fn print(&self, ast: &AstNode<Module>) -> FelicoResult<String> {
         self.using_worker(|worker| worker.print_program(ast))
     }
 
@@ -56,7 +56,7 @@ impl AstPrinter {
     }
 }
 
-pub fn ast_to_string(ast: &AstNode<Program>) -> FelicoResult<String> {
+pub fn ast_to_string(ast: &AstNode<Module>) -> FelicoResult<String> {
     AstPrinter::new().print(ast)
 }
 
@@ -73,7 +73,7 @@ impl<'a> AstPrinterWorker<'a> {
         Ok(())
     }
 
-    fn print_program(&mut self, ast: &AstNode<Program>) -> FelicoResult<()> {
+    fn print_program(&mut self, ast: &AstNode<Module>) -> FelicoResult<()> {
         let tree = self.program_to_tree(ast);
         write!(self.write, "{}", tree)?;
         Ok(())
@@ -193,7 +193,7 @@ impl<'a> AstPrinterWorker<'a> {
         self.add_location(tree, ast)
     }
 
-    fn program_to_tree(&self, ast: &AstNode<Program>) -> Tree<String> {
+    fn program_to_tree(&self, ast: &AstNode<Module>) -> Tree<String> {
         let mut tree = Tree::new("Program".into());
         for stmt in &ast.data.stmts {
             tree.push(self.stmt_to_tree(stmt));
