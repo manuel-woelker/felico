@@ -42,7 +42,7 @@ impl InterpreterDiagnostic {
     pub fn new(location: &Location, message: String) -> Self {
         let mut diagnostic =
             InterpreterDiagnostic::from_source_file(&location.source_file, message);
-        diagnostic.add_primary_label(&location);
+        diagnostic.add_primary_label(location);
         diagnostic
     }
 
@@ -52,7 +52,7 @@ impl InterpreterDiagnostic {
         message: String,
         mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> Self {
-        let mut diagnostic = InterpreterDiagnostic::new(&location, message);
+        let mut diagnostic = InterpreterDiagnostic::new(location, message);
         f(&mut diagnostic);
         diagnostic
     }
@@ -137,13 +137,12 @@ pub fn unwrap_diagnostic_to_string<T>(result: &FelicoResult<T>) -> String {
         for frame in stack.report.frames() {
             if let Some(error) = frame.downcast_ref::<FelicoError>() {
                 if let FelicoError::Diagnostic(diagnostic) = error {
-                    string += &diagnostic_to_string(
+                    string += diagnostic_to_string(
                         diagnostic,
                         &GraphicalReportHandler::new()
                             .with_theme(GraphicalTheme::unicode_nocolor()),
                     )
-                    .trim()
-                    .to_string();
+                    .trim();
                     string += "\n\n";
                 } else {
                     string += &format!("{:?}\n\n", error);

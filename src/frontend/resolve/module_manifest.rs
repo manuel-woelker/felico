@@ -18,7 +18,7 @@ impl Debug for ModuleManifest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Module\n")?;
         for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
-            write!(f, "  {}: {}\n", entry.name, entry.ty)?;
+            writeln!(f, "  {}: {}", entry.name, entry.ty)?;
         }
         Ok(())
     }
@@ -29,10 +29,10 @@ impl ModuleManifest {
         use std::fmt::Write;
         let mut string = String::from("Module\n");
         for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
-            write!(string, "  {}: {}\n", entry.name, entry.ty).unwrap();
+            writeln!(string, "  {}: {}", entry.name, entry.ty).unwrap();
             if let TypeKind::Struct(struct_type) = entry.ty.kind() {
                 for (name, field) in struct_type.fields.iter().sorted_by_key(|(name, _)| *name) {
-                    write!(string, "    {}: {}\n", name, field.ty).unwrap();
+                    writeln!(string, "    {}: {}", name, field.ty).unwrap();
                 }
             }
         }

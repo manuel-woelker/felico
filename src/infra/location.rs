@@ -8,7 +8,7 @@ pub struct Location {
     pub start_byte: ByteOffset,
     pub end_byte: ByteOffset,
 }
-const EPHEMERAL_FILE: &'static str = "<ephemeral file>";
+const EPHEMERAL_FILE: &str = "<ephemeral file>";
 
 impl Location {
     pub fn ephemeral() -> Location {

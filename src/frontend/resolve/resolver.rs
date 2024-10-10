@@ -113,7 +113,7 @@ impl Resolver {
 
     pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
         self.resolve_stmts(&mut program.data.stmts)?;
-        if self.diagnostics.len() > 0 {
+        if !self.diagnostics.is_empty() {
             let diagnostics = std::mem::take(&mut self.diagnostics);
             let report = diagnostics
                 .into_iter()
@@ -304,13 +304,13 @@ impl Resolver {
         self.resolve_expr(&mut let_stmt.expression)?;
         let expression_type = &let_stmt.expression.ty;
         let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
-            self.resolve_type(&type_expr)?
+            self.resolve_type(type_expr)?
         } else {
             let_stmt.expression.ty.clone()
         };
         if !self
             .type_checker
-            .is_assignable_to(&expression_type, &variable_type)
+            .is_assignable_to(expression_type, &variable_type)
         {
             let diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
             self.diagnose(&mut ast_info.ty, diagnostic);
