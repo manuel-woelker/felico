@@ -12,11 +12,12 @@ use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
-use crate::infra::result::{bail, FelicoResult};
+use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
+use error_stack::Report;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -63,6 +64,7 @@ pub struct Resolver {
     scopes: Vec<LexicalScope>,
     type_factory: TypeFactory,
     type_checker: TypeChecker,
+    diagnostics: Vec<InterpreterDiagnostic>,
 }
 
 // Ast information extract during resolution to make separate borrows
@@ -100,10 +102,29 @@ impl Resolver {
             scopes: vec![global_scope, script_scope],
             type_factory,
             type_checker: TypeChecker::new(),
+            diagnostics: vec![],
         }
     }
+
+    pub fn diagnose(&mut self, diagnostic: InterpreterDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
     pub fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
-        self.resolve_stmts(&mut program.data.stmts)
+        self.resolve_stmts(&mut program.data.stmts)?;
+        if self.diagnostics.len() > 0 {
+            let diagnostics = std::mem::take(&mut self.diagnostics);
+            let report = diagnostics
+                .into_iter()
+                .map(|diagnostic| Report::from(FelicoError::from(diagnostic)))
+                .reduce(|mut a, b| {
+                    a.extend_one(b);
+                    a
+                })
+                .unwrap();
+            return Err(FelicoReport { report });
+        }
+        Ok(())
     }
 
     pub fn get_module_manifest(&self) -> FelicoResult<ModuleManifest> {
@@ -449,11 +470,10 @@ impl Resolver {
                 }
             }
         } else {
-            let diagnostic = InterpreterDiagnostic::new(
+            self.diagnose(InterpreterDiagnostic::new(
                 &destination.location,
                 format!("Variable '{}' is not defined here", destination.lexeme()),
-            );
-            return Err(diagnostic.into());
+            ));
         }
         Ok(())
     }
@@ -468,14 +488,13 @@ impl Resolver {
             var_use.distance = distance;
             *ast_info.ty = symbol.ty.clone();
         } else {
-            let diagnostic = InterpreterDiagnostic::new(
+            self.diagnose(InterpreterDiagnostic::new(
                 &var_use.variable.location,
                 format!(
                     "Variable '{}' is not defined here",
                     var_use.variable.lexeme()
                 ),
-            );
-            return Err(diagnostic.into());
+            ));
         }
         Ok(())
     }
@@ -819,11 +838,13 @@ mod tests {
 
     test_resolve_error!(
         let_self_referential: "let a: bool = a;" => expect![[r#"
-            × Variable 'a' is not defined here
-               ╭─[let_self_referential:1:15]
+            × Expression value of type ❬unknown❭ cannot be assigned to variable 'a' declared to be type ❬bool❭
+               ╭─[let_self_referential:1:1]
              1 │ let a: bool = a;
-               ·               ─
-               ╰────"#]];
+               · ────────────────
+               ╰────
+
+        "#]];
         let_self_referential_quasi: r#"
         let a = "outer";
         {
@@ -836,7 +857,9 @@ mod tests {
              4 │           let a = a;
                ·                   ─
              5 │         }
-               ╰────"#]];
+               ╰────
+
+        "#]];
         double_declaration: "let x = 0;\ndebug_print(x);\nlet x = true;" => expect![[r#"
             × The name 'x' already declared
                ╭─[double_declaration:3:5]
@@ -846,7 +869,9 @@ mod tests {
              2 │ debug_print(x);
              3 │ let x = true;
                ·     ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         double_declaration_with_function: "let x = 0;\nfun x() {}" => expect![[r#"
             × The name 'x' already declared
                ╭─[double_declaration_with_function:2:5]
@@ -855,25 +880,33 @@ mod tests {
                ·     ╰── is already declared here
              2 │ fun x() {}
                ·     ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         use_undefined_variable: "debug_print(x);" => expect![[r#"
             × Variable 'x' is not defined here
                ╭─[use_undefined_variable:1:13]
              1 │ debug_print(x);
                ·             ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         assign_undefined_variable: "x = 3;" => expect![[r#"
             × Variable 'x' is not defined here
                ╭─[assign_undefined_variable:1:1]
              1 │ x = 3;
                · ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         call_undefined_function: "x();" => expect![[r#"
-            × Variable 'x' is not defined here
+            × Expected a function to call, but instead found type ❬unknown❭
                ╭─[call_undefined_function:1:1]
              1 │ x();
                · ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         assign_wrong_type_to_variable: r#"
         fun f() {
             let x: bool = true;
@@ -888,7 +921,9 @@ mod tests {
               4 │             x=3;
                 ·             ────
               5 │          }
-                ╰────"#]];
+                ╰────
+
+         "#]];
         initialize_variable_with_wrong_type: r#"
         fun f() {
             let x: bool = 3;
@@ -899,7 +934,9 @@ mod tests {
               3 │             let x: bool = 3;
                 ·             ────────────────
               4 │          }
-                ╰────"#]];
+                ╰────
+
+         "#]];
         call_a_non_function: r#"
         true();
         "# => expect![[r#"
@@ -909,7 +946,9 @@ mod tests {
              2 │         true();
                ·         ────
              3 │         
-               ╰────"#]];
+               ╰────
+
+        "#]];
         call_wrong_number_of_arguments: r#"
         sqrt(1,2);
         "# => expect![[r#"
@@ -919,7 +958,9 @@ mod tests {
              2 │         sqrt(1,2);
                ·             ──────
              3 │         
-               ╰────"#]];
+               ╰────
+
+        "#]];
 
         call_with_wrong_argument: r#"
         fun foo() {};
@@ -934,7 +975,9 @@ mod tests {
              3 │         foo(true);
                ·            ───────
              4 │         
-               ╰────"#]];
+               ╰────
+
+        "#]];
         return_wrong_type: r#"
         fun foo() -> bool {return 3;}
         "# => expect![[r#"
@@ -945,6 +988,22 @@ mod tests {
                ·                      ──┬─         ─
                ·                        ╰── declared with return type ❬bool❭ here
              3 │         
-               ╰────"#]];
+               ╰────
+
+        "#]];
+        multiple_diagnostics: "a+b;" => expect![[r#"
+            × Variable 'a' is not defined here
+               ╭─[multiple_diagnostics:1:1]
+             1 │ a+b;
+               · ─
+               ╰────
+
+            × Variable 'b' is not defined here
+               ╭─[multiple_diagnostics:1:3]
+             1 │ a+b;
+               ·   ─
+               ╰────
+
+        "#]];
     );
 }

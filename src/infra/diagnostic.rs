@@ -132,21 +132,28 @@ impl Diagnostic for InterpreterDiagnostic {
     }
 }
 pub fn unwrap_diagnostic_to_string<T>(result: &FelicoResult<T>) -> String {
-    if let Err(stack) = result {
-        let error = stack.report.downcast_ref::<FelicoError>().unwrap();
-        if let FelicoError::Diagnostic(diagnostic) = error {
-            diagnostic_to_string(
-                diagnostic,
-                &GraphicalReportHandler::new().with_theme(GraphicalTheme::unicode_nocolor()),
-            )
-            .trim()
-            .to_string()
-        } else {
-            panic!("Expected error diagnostic, but instead got: {:?}", error);
+    let mut string = String::new();
+    if let Err(stack) = &result {
+        for frame in stack.report.frames() {
+            if let Some(error) = frame.downcast_ref::<FelicoError>() {
+                if let FelicoError::Diagnostic(diagnostic) = error {
+                    string += &diagnostic_to_string(
+                        diagnostic,
+                        &GraphicalReportHandler::new()
+                            .with_theme(GraphicalTheme::unicode_nocolor()),
+                    )
+                    .trim()
+                    .to_string();
+                    string += "\n\n";
+                } else {
+                    string += &format!("{:?}\n\n", error);
+                }
+            }
         }
     } else {
         panic!("Expected error result, but got Ok(...) instead");
     }
+    string
 }
 
 #[cfg(test)]
@@ -159,10 +166,13 @@ mod tests {
     use crate::infra::diagnostic::{
         assert_diagnostic, diagnostic_to_string, InterpreterDiagnostic,
     };
-    use crate::infra::result::FelicoReport;
+    use crate::infra::location::Location;
+    use crate::infra::result::{FelicoError, FelicoReport};
     use crate::infra::source_file::SourceFileHandle;
+    use error_stack::Report;
     use expect_test::expect;
     use miette::{GraphicalReportHandler, GraphicalTheme, LabeledSpan};
+    use std::io::ErrorKind;
 
     #[test]
     fn test_diagnostic_printing() {
@@ -203,6 +213,33 @@ mod tests {
 
         assert_diagnostic::<()>(
             &Err(FelicoReport::from(diagnostic)),
+            expect![[r#"
+                code::foo::bar
+
+                  × Something went wrong
+                   ╭─[foo.txt:1:5]
+                 1 │ foo rocks!
+                   · ─┬─ ──┬──
+                   ·  │    ╰── Yay!
+                   ·  ╰── This should be Rust
+                   ╰────
+                  help: Helpful hint
+
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_printing_multiple_frames() {
+        let mut report = Report::from(FelicoError::from(InterpreterDiagnostic::new(
+            &Location::ephemeral(),
+            "foo".to_string(),
+        )));
+        let error = FelicoError::from(std::io::Error::from(ErrorKind::AddrNotAvailable));
+        let other_report = Report::from(error);
+        report.extend_one(other_report);
+        assert_diagnostic::<()>(
+            &Err(FelicoReport { report }),
             expect![[r#"
             code::foo::bar
 
