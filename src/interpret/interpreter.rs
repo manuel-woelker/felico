@@ -10,7 +10,7 @@ use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_script};
 use crate::frontend::resolve::resolver::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::result::FelicoResult;
+use crate::infra::result::{bail, FelicoResult};
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::environment::Environment;
@@ -104,14 +104,23 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn evaluate_script(mut self) -> FelicoResult<()> {
-        let mut program = parse_script(self.source_file.clone(), &self.type_factory)?;
-        resolve_variables(&mut program, &self.type_factory)?;
-        self.evaluate_prgrm(&program)
+    pub fn run(mut self) -> FelicoResult<()> {
+        let mut module = parse_script(self.source_file.clone(), &self.type_factory)?;
+        resolve_variables(&mut module, &self.type_factory)?;
+        self.evaluate_main(&module)
     }
 
-    fn evaluate_prgrm(&mut self, program: &AstNode<Module>) -> FelicoResult<()> {
-        self.evaluate_stmts(&program.data.stmts)?;
+    fn evaluate_main(&mut self, module: &AstNode<Module>) -> FelicoResult<()> {
+        self.evaluate_stmts(&module.data.stmts)?;
+        self.environment.enter_new();
+        let main_function = self.environment.get("main")?;
+        let ValueKind::Callable(callable) = main_function.val else {
+            bail!("main() function not found in module");
+        };
+        let CallableFun::Defined(main_function) = &*callable.fun else {
+            bail!("main() is not a user defined function");
+        };
+        self.evaluate_expr(&main_function.fun_stmt.body)?;
         Ok(())
     }
 
@@ -575,7 +584,7 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
             .unwrap()
             .push_str(&format!("{}", value))
     }));
-    interpreter.evaluate_script()?;
+    interpreter.run()?;
     let guard = output_buffer_clone.write().unwrap();
     Ok(guard.deref().clone())
 }
@@ -637,7 +646,7 @@ mod tests {
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {
         let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input)).unwrap();
         interpreter.set_print_fn(Box::new(move |_value| {}));
-        let result = interpreter.evaluate_script();
+        let result = interpreter.run();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }

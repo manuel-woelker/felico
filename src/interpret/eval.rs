@@ -8,5 +8,5 @@ pub fn eval_expression(source_file: SourceFileHandle) -> FelicoResult<Interprete
 }
 
 pub fn eval_program(source_file: SourceFileHandle) -> FelicoResult<()> {
-    Interpreter::new(source_file)?.evaluate_script()
+    Interpreter::new(source_file)?.run()
 }

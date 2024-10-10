@@ -194,7 +194,7 @@ impl<'a> AstPrinterWorker<'a> {
     }
 
     fn program_to_tree(&self, ast: &AstNode<Module>) -> Tree<String> {
-        let mut tree = Tree::new("Program".into());
+        let mut tree = Tree::new("Module".into());
         for stmt in &ast.data.stmts {
             tree.push(self.stmt_to_tree(stmt));
         }

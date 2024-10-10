@@ -74,7 +74,36 @@ impl Parser {
             stmts.push(self.parse_decl()?)
         }
         self.consume(TokenType::EOF, "Expected end of file")?;
-        self.create_node(start_location, Module { stmts })
+        // Create artificial main function
+        let return_type = self.create_unit_var_use(&start_location)?;
+        let result_expression =
+            self.create_node(start_location.clone(), Expr::Literal(LiteralExpr::Unit))?;
+        let body = self.create_node(
+            start_location.clone(),
+            Expr::Block(BlockExpr {
+                stmts,
+                result_expression,
+            }),
+        )?;
+        let main_stmt = self.create_node(
+            start_location.clone(),
+            Stmt::Fun(FunStmt {
+                name: Token {
+                    token_type: TokenType::Identifier,
+                    location: start_location.clone(),
+                    value: Some(SharedString::from("main")),
+                },
+                parameters: vec![],
+                return_type,
+                body,
+            }),
+        )?;
+        self.create_node(
+            start_location,
+            Module {
+                stmts: vec![main_stmt],
+            },
+        )
     }
 
     fn parse_decl(&mut self) -> FelicoResult<AstNode<Stmt>> {
@@ -189,21 +218,7 @@ impl Parser {
             self.advance();
             self.parse_type_expression()?
         } else {
-            self.create_node(
-                start_location.clone(),
-                Expr::Variable(VarUse {
-                    variable: Token {
-                        token_type: TokenType::Identifier,
-                        location: Location {
-                            source_file: self.source_file.clone(),
-                            start_byte: start_location.start_byte,
-                            end_byte: start_location.end_byte,
-                        },
-                        value: Some(SharedString::from("unit")),
-                    },
-                    distance: 0,
-                }),
-            )?
+            self.create_unit_var_use(&start_location)?
         };
         let body = self.parse_block_expr()?;
         self.create_node(
@@ -213,6 +228,24 @@ impl Parser {
                 parameters,
                 return_type,
                 body,
+            }),
+        )
+    }
+
+    fn create_unit_var_use(&mut self, start_location: &Location) -> FelicoResult<AstNode<Expr>> {
+        self.create_node(
+            start_location.clone(),
+            Expr::Variable(VarUse {
+                variable: Token {
+                    token_type: TokenType::Identifier,
+                    location: Location {
+                        source_file: self.source_file.clone(),
+                        start_byte: start_location.start_byte,
+                        end_byte: start_location.end_byte,
+                    },
+                    value: Some(SharedString::from("unit")),
+                },
+                distance: 0,
             }),
         )
     }
@@ -956,187 +989,268 @@ mod tests {
 
     test_script!(
                 script_empty: "" => expect![[r#"
-                    Program
+                    Module
+                    └── Declare fun 'main()'     [0+0]
+                        ├── Return type: Read 'unit'     [0+0]
+                        └── Unit     [0+0]
                 "#]];
                 script_bool_true: "true;" => expect![[r#"
-                    Program
-                    └── Bool(true)     [0+4]
+                    Module
+                    └── Declare fun 'main()'     [0+5]
+                        ├── Return type: Read 'unit'     [0+5]
+                        ├── Bool(true)     [0+4]
+                        └── Unit     [0+5]
                 "#]];
                 script_addition: "1+2;" => expect![[r#"
-                    Program
-                    └── +     [0+4]
-                        ├── F64(1.0)     [0+1]
-                        └── F64(2.0)     [2+1]
+                    Module
+                    └── Declare fun 'main()'     [0+4]
+                        ├── Return type: Read 'unit'     [0+4]
+                        ├── +     [0+4]
+                        │   ├── F64(1.0)     [0+1]
+                        │   └── F64(2.0)     [2+1]
+                        └── Unit     [0+4]
                 "#]];
                 script_multiline: "\"Hello\";\n\"World\";" => expect![[r#"
-                    Program
-                    ├── Str("Hello")     [0+7]
-                    └── Str("World")     [9+7]
+                    Module
+                    └── Declare fun 'main()'     [0+17]
+                        ├── Return type: Read 'unit'     [0+17]
+                        ├── Str("Hello")     [0+7]
+                        ├── Str("World")     [9+7]
+                        └── Unit     [0+17]
                 "#]];
 
                 script_true: "true;" => expect![[r#"
-                    Program
-                    └── Bool(true)     [0+4]
+                    Module
+                    └── Declare fun 'main()'     [0+5]
+                        ├── Return type: Read 'unit'     [0+5]
+                        ├── Bool(true)     [0+4]
+                        └── Unit     [0+5]
                 "#]];
                 script_string_addition: "\"Hello \" + 3;" => expect![[r#"
-                    Program
-                    └── +     [0+13]
-                        ├── Str("Hello ")     [0+8]
-                        └── F64(3.0)     [11+1]
+                    Module
+                    └── Declare fun 'main()'     [0+13]
+                        ├── Return type: Read 'unit'     [0+13]
+                        ├── +     [0+13]
+                        │   ├── Str("Hello ")     [0+8]
+                        │   └── F64(3.0)     [11+1]
+                        └── Unit     [0+13]
                 "#]];
                 script_let_decl: "let a = false;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)'     [0+14]
-                        └── Bool(false)     [8+5]
+                    Module
+                    └── Declare fun 'main()'     [0+14]
+                        ├── Return type: Read 'unit'     [0+14]
+                        ├── Let ''a' (Identifier)'     [0+14]
+                        │   └── Bool(false)     [8+5]
+                        └── Unit     [0+14]
                 "#]];
                 script_let_decl_with_type: "let a: bool = false;" => expect![[r#"
-                    Program
-                    └── Let ''a' (Identifier)'     [0+20]
-                        └── Bool(false)     [14+5]
+                    Module
+                    └── Declare fun 'main()'     [0+20]
+                        ├── Return type: Read 'unit'     [0+20]
+                        ├── Let ''a' (Identifier)'     [0+20]
+                        │   └── Bool(false)     [14+5]
+                        └── Unit     [0+20]
                 "#]];
                 script_script: "let a = 1;let b = a+a;b;" => expect![[r#"
-                    Program
-                    ├── Let ''a' (Identifier)'     [0+10]
-                    │   └── F64(1.0)     [8+1]
-                    ├── Let ''b' (Identifier)'     [10+12]
-                    │   └── +     [18+4]
-                    │       ├── Read 'a'     [18+1]
-                    │       └── Read 'a'     [20+1]
-                    └── Read 'b'     [22+1]
+                    Module
+                    └── Declare fun 'main()'     [0+24]
+                        ├── Return type: Read 'unit'     [0+24]
+                        ├── Let ''a' (Identifier)'     [0+10]
+                        │   └── F64(1.0)     [8+1]
+                        ├── Let ''b' (Identifier)'     [10+12]
+                        │   └── +     [18+4]
+                        │       ├── Read 'a'     [18+1]
+                        │       └── Read 'a'     [20+1]
+                        ├── Read 'b'     [22+1]
+                        └── Unit     [0+24]
                 "#]];
 
                 script_assign: "a=1;" => expect![[r#"
-                    Program
-                    └── 'a' (Identifier) =      [0+4]
-                        └── F64(1.0)     [2+1]
+                    Module
+                    └── Declare fun 'main()'     [0+4]
+                        ├── Return type: Read 'unit'     [0+4]
+                        ├── 'a' (Identifier) =      [0+4]
+                        │   └── F64(1.0)     [2+1]
+                        └── Unit     [0+4]
                 "#]];
                 script_assign_twice2: "a=b=3;" => expect![[r#"
-                    Program
-                    └── 'a' (Identifier) =      [0+6]
-                        └── 'b' (Identifier) =      [2+4]
-                            └── F64(3.0)     [4+1]
+                    Module
+                    └── Declare fun 'main()'     [0+6]
+                        ├── Return type: Read 'unit'     [0+6]
+                        ├── 'a' (Identifier) =      [0+6]
+                        │   └── 'b' (Identifier) =      [2+4]
+                        │       └── F64(3.0)     [4+1]
+                        └── Unit     [0+6]
                 "#]];
                 script_block_empty: "{}" => expect![[r#"
-                    Program
-                    └── Block     [0+2]
-                        └── Unit     [1+1]
+                    Module
+                    └── Declare fun 'main()'     [0+2]
+                        ├── Return type: Read 'unit'     [0+2]
+                        ├── Block     [0+2]
+                        │   └── Unit     [1+1]
+                        └── Unit     [0+2]
                 "#]];
                 script_nested_block: "{{foo;}}" => expect![[r#"
-                    Program
-                    └── Block     [0+8]
-                        ├── Block     [1+7]
-                        │   ├── Read 'foo'     [2+3]
-                        │   └── Unit     [6+1]
-                        └── Unit     [7+1]
+                    Module
+                    └── Declare fun 'main()'     [0+8]
+                        ├── Return type: Read 'unit'     [0+8]
+                        ├── Block     [0+8]
+                        │   ├── Block     [1+7]
+                        │   │   ├── Read 'foo'     [2+3]
+                        │   │   └── Unit     [6+1]
+                        │   └── Unit     [7+1]
+                        └── Unit     [0+8]
                 "#]];
 
                script_if: "if(c) a;" => expect![[r#"
-                   Program
-                   └── If     [0+8]
-                       ├── Read 'c'     [3+1]
-                       └── Read 'a'     [6+1]
+                   Module
+                   └── Declare fun 'main()'     [0+8]
+                       ├── Return type: Read 'unit'     [0+8]
+                       ├── If     [0+8]
+                       │   ├── Read 'c'     [3+1]
+                       │   └── Read 'a'     [6+1]
+                       └── Unit     [0+8]
                "#]];
                script_if_else: "if(c) a else b;" => expect![[r#"
-                   Program
-                   └── If     [0+15]
-                       ├── Read 'c'     [3+1]
-                       ├── Read 'a'     [6+1]
-                       └── Read 'b'     [13+1]
+                   Module
+                   └── Declare fun 'main()'     [0+15]
+                       ├── Return type: Read 'unit'     [0+15]
+                       ├── If     [0+15]
+                       │   ├── Read 'c'     [3+1]
+                       │   ├── Read 'a'     [6+1]
+                       │   └── Read 'b'     [13+1]
+                       └── Unit     [0+15]
                "#]];
                script_if_no_parentheses: "if c a;" => expect![[r#"
-                   Program
-                   └── If     [0+7]
-                       ├── Read 'c'     [3+1]
-                       └── Read 'a'     [5+1]
+                   Module
+                   └── Declare fun 'main()'     [0+7]
+                       ├── Return type: Read 'unit'     [0+7]
+                       ├── If     [0+7]
+                       │   ├── Read 'c'     [3+1]
+                       │   └── Read 'a'     [5+1]
+                       └── Unit     [0+7]
                "#]];
                script_if_no_semicolon: "if c {}" => expect![[r#"
-                   Program
-                   └── If     [0+7]
-                       ├── Read 'c'     [3+1]
-                       └── Block     [5+2]
-                           └── Unit     [6+1]
+                   Module
+                   └── Declare fun 'main()'     [0+7]
+                       ├── Return type: Read 'unit'     [0+7]
+                       ├── If     [0+7]
+                       │   ├── Read 'c'     [3+1]
+                       │   └── Block     [5+2]
+                       │       └── Unit     [6+1]
+                       └── Unit     [0+7]
                "#]];
                script_if_else_no_parentheses: "if c a else b;" => expect![[r#"
-                   Program
-                   └── If     [0+14]
-                       ├── Read 'c'     [3+1]
-                       ├── Read 'a'     [5+1]
-                       └── Read 'b'     [12+1]
+                   Module
+                   └── Declare fun 'main()'     [0+14]
+                       ├── Return type: Read 'unit'     [0+14]
+                       ├── If     [0+14]
+                       │   ├── Read 'c'     [3+1]
+                       │   ├── Read 'a'     [5+1]
+                       │   └── Read 'b'     [12+1]
+                       └── Unit     [0+14]
                "#]];
 
                script_while: "while(a) b;" => expect![[r#"
-                   Program
-                   └── While     [0+11]
-                       ├── Read 'a'     [6+1]
-                       └── Read 'b'     [9+1]
+                   Module
+                   └── Declare fun 'main()'     [0+11]
+                       ├── Return type: Read 'unit'     [0+11]
+                       ├── While     [0+11]
+                       │   ├── Read 'a'     [6+1]
+                       │   └── Read 'b'     [9+1]
+                       └── Unit     [0+11]
                "#]];
 
                script_fun_empty: "fun foo() {}" => expect![[r#"
-                   Program
-                   └── Declare fun 'foo()'     [0+12]
-                       ├── Return type: Read 'unit'     [0+11]
-                       └── Unit     [11+1]
+                   Module
+                   └── Declare fun 'main()'     [0+12]
+                       ├── Return type: Read 'unit'     [0+12]
+                       ├── Declare fun 'foo()'     [0+12]
+                       │   ├── Return type: Read 'unit'     [0+11]
+                       │   └── Unit     [11+1]
+                       └── Unit     [0+12]
                "#]];
                script_fun_simple: "fun foo(a: bool) {a;} " => expect![[r#"
-                   Program
-                   └── Declare fun 'foo(a)'     [0+22]
-                       ├── Param a
-                       │   └── Read 'bool'     [11+4]
-                       ├── Return type: Read 'unit'     [0+18]
-                       ├── Read 'a'     [18+1]
-                       └── Unit     [20+1]
+                   Module
+                   └── Declare fun 'main()'     [0+22]
+                       ├── Return type: Read 'unit'     [0+22]
+                       ├── Declare fun 'foo(a)'     [0+22]
+                       │   ├── Param a
+                       │   │   └── Read 'bool'     [11+4]
+                       │   ├── Return type: Read 'unit'     [0+18]
+                       │   ├── Read 'a'     [18+1]
+                       │   └── Unit     [20+1]
+                       └── Unit     [0+22]
                "#]];
                script_fun_with_return_type: "fun not(a: bool,) -> bool {return !a;} " => expect![[r#"
-                   Program
-                   └── Declare fun 'not(a)'     [0+39]
-                       ├── Param a
-                       │   └── Read 'bool'     [11+4]
-                       ├── Return type: Read 'bool'     [21+4]
-                       ├── Return     [27+10]
-                       │   └── !     [34+3]
-                       │       └── Read 'a'     [35+1]
-                       └── Unit     [37+1]
+                   Module
+                   └── Declare fun 'main()'     [0+39]
+                       ├── Return type: Read 'unit'     [0+39]
+                       ├── Declare fun 'not(a)'     [0+39]
+                       │   ├── Param a
+                       │   │   └── Read 'bool'     [11+4]
+                       │   ├── Return type: Read 'bool'     [21+4]
+                       │   ├── Return     [27+10]
+                       │   │   └── !     [34+3]
+                       │   │       └── Read 'a'     [35+1]
+                       │   └── Unit     [37+1]
+                       └── Unit     [0+39]
                "#]];
                script_fun_return: "fun nop() {return;} " => expect![[r#"
-                   Program
-                   └── Declare fun 'nop()'     [0+20]
-                       ├── Return type: Read 'unit'     [0+11]
-                       ├── Return     [11+7]
-                       │   └── Unit     [11+7]
-                       └── Unit     [18+1]
+                   Module
+                   └── Declare fun 'main()'     [0+20]
+                       ├── Return type: Read 'unit'     [0+20]
+                       ├── Declare fun 'nop()'     [0+20]
+                       │   ├── Return type: Read 'unit'     [0+11]
+                       │   ├── Return     [11+7]
+                       │   │   └── Unit     [11+7]
+                       │   └── Unit     [18+1]
+                       └── Unit     [0+20]
                "#]];
                script_fun_return_value: "fun three(a: bool) {return 3;} " => expect![[r#"
-                   Program
-                   └── Declare fun 'three(a)'     [0+31]
-                       ├── Param a
-                       │   └── Read 'bool'     [13+4]
-                       ├── Return type: Read 'unit'     [0+20]
-                       ├── Return     [20+9]
-                       │   └── F64(3.0)     [27+1]
-                       └── Unit     [29+1]
+                   Module
+                   └── Declare fun 'main()'     [0+31]
+                       ├── Return type: Read 'unit'     [0+31]
+                       ├── Declare fun 'three(a)'     [0+31]
+                       │   ├── Param a
+                       │   │   └── Read 'bool'     [13+4]
+                       │   ├── Return type: Read 'unit'     [0+20]
+                       │   ├── Return     [20+9]
+                       │   │   └── F64(3.0)     [27+1]
+                       │   └── Unit     [29+1]
+                       └── Unit     [0+31]
                "#]];
                script_fun_return_expression: "fun twice(a: f64) {return a+a;} " => expect![[r#"
-                   Program
-                   └── Declare fun 'twice(a)'     [0+32]
-                       ├── Param a
-                       │   └── Read 'f64'     [13+3]
-                       ├── Return type: Read 'unit'     [0+19]
-                       ├── Return     [19+11]
-                       │   └── +     [26+4]
-                       │       ├── Read 'a'     [26+1]
-                       │       └── Read 'a'     [28+1]
-                       └── Unit     [30+1]
+                   Module
+                   └── Declare fun 'main()'     [0+32]
+                       ├── Return type: Read 'unit'     [0+32]
+                       ├── Declare fun 'twice(a)'     [0+32]
+                       │   ├── Param a
+                       │   │   └── Read 'f64'     [13+3]
+                       │   ├── Return type: Read 'unit'     [0+19]
+                       │   ├── Return     [19+11]
+                       │   │   └── +     [26+4]
+                       │   │       ├── Read 'a'     [26+1]
+                       │   │       └── Read 'a'     [28+1]
+                       │   └── Unit     [30+1]
+                       └── Unit     [0+32]
                "#]];
                script_property_access: "a.b;" => expect![[r#"
-                   Program
-                   └── Get b     [1+3]
-                       └── Read 'a'     [0+1]
+                   Module
+                   └── Declare fun 'main()'     [0+4]
+                       ├── Return type: Read 'unit'     [0+4]
+                       ├── Get b     [1+3]
+                       │   └── Read 'a'     [0+1]
+                       └── Unit     [0+4]
                "#]];
                script_property_set: "a.b = 3;" => expect![[r#"
-                   Program
-                   └── Set b     [0+8]
-                       ├── Read 'a'     [0+1]
-                       └── F64(3.0)     [6+1]
+                   Module
+                   └── Declare fun 'main()'     [0+8]
+                       ├── Return type: Read 'unit'     [0+8]
+                       ├── Set b     [0+8]
+                       │   ├── Read 'a'     [0+1]
+                       │   └── F64(3.0)     [6+1]
+                       └── Unit     [0+8]
                "#]];
                script_struct_simple: "
                struct Foo {
@@ -1144,12 +1258,15 @@ mod tests {
                     baz: f64
                 }
                " => expect![[r#"
-                   Program
-                   └── Struct 'Foo'     [16+106]
-                       ├── Field bar     [49+10]
-                       │   └── Read 'bool'     [54+4]
-                       └── Field baz     [80+26]
-                           └── Read 'f64'     [85+3]
+                   Module
+                   └── Declare fun 'main()'     [16+106]
+                       ├── Return type: Read 'unit'     [16+106]
+                       ├── Struct 'Foo'     [16+106]
+                       │   ├── Field bar     [49+10]
+                       │   │   └── Read 'bool'     [54+4]
+                       │   └── Field baz     [80+26]
+                       │       └── Read 'f64'     [85+3]
+                       └── Unit     [16+106]
                "#]];
                script_struct_trailing_comma: "
                struct Foo {
@@ -1157,18 +1274,24 @@ mod tests {
                     baz: f64,
                 }
                " => expect![[r#"
-                   Program
-                   └── Struct 'Foo'     [16+107]
-                       ├── Field bar     [49+10]
-                       │   └── Read 'bool'     [54+4]
-                       └── Field baz     [80+9]
-                           └── Read 'f64'     [85+3]
+                   Module
+                   └── Declare fun 'main()'     [16+107]
+                       ├── Return type: Read 'unit'     [16+107]
+                       ├── Struct 'Foo'     [16+107]
+                       │   ├── Field bar     [49+10]
+                       │   │   └── Read 'bool'     [54+4]
+                       │   └── Field baz     [80+9]
+                       │       └── Read 'f64'     [85+3]
+                       └── Unit     [16+107]
                "#]];
                 script_struct_empty: "
                struct Empty {}
                " => expect![[r#"
-                   Program
-                   └── Struct 'Empty'     [16+31]
+                   Module
+                   └── Declare fun 'main()'     [16+31]
+                       ├── Return type: Read 'unit'     [16+31]
+                       ├── Struct 'Empty'     [16+31]
+                       └── Unit     [16+31]
                "#]];
                 script_fib: "
                     fun fib(n: f64) {
@@ -1177,34 +1300,37 @@ mod tests {
                     }
                     debug_print(fib(6));
                " => expect![[r#"
-                   Program
-                   ├── Declare fun 'fib(n)'     [21+172]
-                   │   ├── Param n
-                   │   │   └── Read 'f64'     [32+3]
-                   │   ├── Return type: Read 'unit'     [21+17]
-                   │   ├── Return     [64+75]
-                   │   │   └── If     [71+68]
-                   │   │       ├── <=     [75+7]
-                   │   │       │   ├── Read 'n'     [75+1]
-                   │   │       │   └── F64(1.0)     [80+1]
-                   │   │       ├── Read 'n'     [83+1]
-                   │   │       └── +     [115+24]
-                   │   │           ├── Call     [118+9]
-                   │   │           │   ├── Read 'fib'     [115+3]
-                   │   │           │   └── -     [119+6]
-                   │   │           │       ├── Read 'n'     [119+1]
-                   │   │           │       └── F64(2.0)     [123+1]
-                   │   │           └── Call     [131+8]
-                   │   │               ├── Read 'fib'     [128+3]
-                   │   │               └── -     [132+6]
-                   │   │                   ├── Read 'n'     [132+1]
-                   │   │                   └── F64(1.0)     [136+1]
-                   │   └── Unit     [160+1]
-                   └── Call     [193+9]
-                       ├── Read 'debug_print'     [182+11]
-                       └── Call     [197+4]
-                           ├── Read 'fib'     [194+3]
-                           └── F64(6.0)     [198+1]
+                   Module
+                   └── Declare fun 'main()'     [21+197]
+                       ├── Return type: Read 'unit'     [21+197]
+                       ├── Declare fun 'fib(n)'     [21+172]
+                       │   ├── Param n
+                       │   │   └── Read 'f64'     [32+3]
+                       │   ├── Return type: Read 'unit'     [21+17]
+                       │   ├── Return     [64+75]
+                       │   │   └── If     [71+68]
+                       │   │       ├── <=     [75+7]
+                       │   │       │   ├── Read 'n'     [75+1]
+                       │   │       │   └── F64(1.0)     [80+1]
+                       │   │       ├── Read 'n'     [83+1]
+                       │   │       └── +     [115+24]
+                       │   │           ├── Call     [118+9]
+                       │   │           │   ├── Read 'fib'     [115+3]
+                       │   │           │   └── -     [119+6]
+                       │   │           │       ├── Read 'n'     [119+1]
+                       │   │           │       └── F64(2.0)     [123+1]
+                       │   │           └── Call     [131+8]
+                       │   │               ├── Read 'fib'     [128+3]
+                       │   │               └── -     [132+6]
+                       │   │                   ├── Read 'n'     [132+1]
+                       │   │                   └── F64(1.0)     [136+1]
+                       │   └── Unit     [160+1]
+                       ├── Call     [193+9]
+                       │   ├── Read 'debug_print'     [182+11]
+                       │   └── Call     [197+4]
+                       │       ├── Read 'fib'     [194+3]
+                       │       └── F64(6.0)     [198+1]
+                       └── Unit     [21+197]
                "#]];
 
     );

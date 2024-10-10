@@ -682,116 +682,145 @@ mod tests {
 
     test_program!(
         let_explicit_type: "let a: bool = true;" => expect![[r#"
-            Program
-            └── Let ''a' (Identifier)': ❬bool❭
-                └── Bool(true): ❬bool❭
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬bool❭
+                │   └── Bool(true): ❬bool❭
+                └── Unit: ❬Unit❭
         "#]],expect![[r#"
             Module
-              a: ❬bool❭
+              main: ❬Fn() -> ❬Unit❭❭
         "#]];
 
         let_inferred_type: "let a = 3;" => expect![[r#"
-                Program
-                └── Let ''a' (Identifier)': ❬f64❭
-                    └── F64(3.0): ❬f64❭
-            "#]],expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── F64(3.0): ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
                 Module
-                  a: ❬f64❭
+                  main: ❬Fn() -> ❬Unit❭❭
             "#]];
         let_inferred_type_from_binary_expression: "let a = 1 + 2;" => expect![[r#"
-                Program
-                └── Let ''a' (Identifier)': ❬f64❭
-                    └── +: ❬f64❭
-                        ├── F64(1.0): ❬f64❭
-                        └── F64(2.0): ❬f64❭
-            "#]],expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── +: ❬f64❭
+                │       ├── F64(1.0): ❬f64❭
+                │       └── F64(2.0): ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
                 Module
-                  a: ❬f64❭
+                  main: ❬Fn() -> ❬Unit❭❭
             "#]];
         let_inferred_type_from_unary_expression: "let a = -1;" => expect![[r#"
-                Program
-                └── Let ''a' (Identifier)': ❬f64❭
-                    └── -: ❬f64❭
-                        └── F64(1.0): ❬f64❭
-            "#]],expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── -: ❬f64❭
+                │       └── F64(1.0): ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
                 Module
-                  a: ❬f64❭
+                  main: ❬Fn() -> ❬Unit❭❭
             "#]];
         let_inferred_type_from_variable: "let a = 1;let b = a;" => expect![[r#"
-            Program
-            ├── Let ''a' (Identifier)': ❬f64❭
-            │   └── F64(1.0): ❬f64❭
-            └── Let ''b' (Identifier)': ❬f64❭
-                └── Read 'a': ❬f64❭
-        "#]],expect![[r#"
             Module
-              a: ❬f64❭
-              b: ❬f64❭
-        "#]];
-        assign_type: "let a = 1;a = 3;" => expect![[r#"
-            Program
-            ├── Let ''a' (Identifier)': ❬f64❭
-            │   └── F64(1.0): ❬f64❭
-            └── 'a' (Identifier) = : ❬f64❭
-                └── F64(3.0): ❬f64❭
-        "#]],expect![[r#"
-            Module
-              a: ❬f64❭
-        "#]];
-        call_type_native: "sqrt(3);" => expect![[r#"
-            Program
-            └── Call: ❬f64❭
-                ├── Read 'sqrt': ❬Fn(❬f64❭) -> ❬f64❭❭
-                └── F64(3.0): ❬f64❭
-        "#]],expect![[r#"
-                Module
-            "#]];
-        function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
-            Program
-            ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-            │   ├── Param a
-            │   │   └── Read 'bool'
-            │   ├── Param b
-            │   │   └── Read 'i64'
-            │   ├── Return type: Read 'f64'
-            │   └── Unit: ❬Unit❭
-            └── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-                └── Read 'x': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-        "#]],expect![[r#"
-            Module
-              a: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-              x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-        "#]];
-        function_with_return: "fun x(a: f64) -> f64 {return a;}" => expect![[r#"
-            Program
-            └── Declare fun 'x(a)': ❬Fn(❬f64❭) -> ❬f64❭❭
-                ├── Param a
-                │   └── Read 'f64'
-                ├── Return type: Read 'f64'
-                ├── Return: ❬never❭
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── F64(1.0): ❬f64❭
+                ├── Let ''b' (Identifier)': ❬f64❭
                 │   └── Read 'a': ❬f64❭
                 └── Unit: ❬Unit❭
         "#]],expect![[r#"
             Module
-              x: ❬Fn(❬f64❭) -> ❬f64❭❭
+              main: ❬Fn() -> ❬Unit❭❭
+        "#]];
+        assign_type: "let a = 1;a = 3;" => expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Let ''a' (Identifier)': ❬f64❭
+                │   └── F64(1.0): ❬f64❭
+                ├── 'a' (Identifier) = : ❬f64❭
+                │   └── F64(3.0): ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
+            Module
+              main: ❬Fn() -> ❬Unit❭❭
+        "#]];
+        call_type_native: "sqrt(3);" => expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Call: ❬f64❭
+                │   ├── Read 'sqrt': ❬Fn(❬f64❭) -> ❬f64❭❭
+                │   └── F64(3.0): ❬f64❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
+            Module
+              main: ❬Fn() -> ❬Unit❭❭
+        "#]];
+        function_simple: "fun x(a: bool, b: i64) -> f64 {} let a = x;" => expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                │   ├── Param a
+                │   │   └── Read 'bool'
+                │   ├── Param b
+                │   │   └── Read 'i64'
+                │   ├── Return type: Read 'f64'
+                │   └── Unit: ❬Unit❭
+                ├── Let ''a' (Identifier)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                │   └── Read 'x': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
+            Module
+              main: ❬Fn() -> ❬Unit❭❭
+        "#]];
+        function_with_return: "fun x(a: f64) -> f64 {return a;}" => expect![[r#"
+            Module
+            └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                ├── Return type: Read 'unit'
+                ├── Declare fun 'x(a)': ❬Fn(❬f64❭) -> ❬f64❭❭
+                │   ├── Param a
+                │   │   └── Read 'f64'
+                │   ├── Return type: Read 'f64'
+                │   ├── Return: ❬never❭
+                │   │   └── Read 'a': ❬f64❭
+                │   └── Unit: ❬Unit❭
+                └── Unit: ❬Unit❭
+        "#]],expect![[r#"
+            Module
+              main: ❬Fn() -> ❬Unit❭❭
         "#]];
         function_arg_type: "fun x(a: bool, b: i64) -> f64 {
                 a;
                 b;
             }" => expect![[r#"
-                Program
-                └── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
-                    ├── Param a
-                    │   └── Read 'bool'
-                    ├── Param b
-                    │   └── Read 'i64'
-                    ├── Return type: Read 'f64'
-                    ├── Read 'a': ❬bool❭
-                    ├── Read 'b': ❬i64❭
+                Module
+                └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                    ├── Return type: Read 'unit'
+                    ├── Declare fun 'x(a, b)': ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                    │   ├── Param a
+                    │   │   └── Read 'bool'
+                    │   ├── Param b
+                    │   │   └── Read 'i64'
+                    │   ├── Return type: Read 'f64'
+                    │   ├── Read 'a': ❬bool❭
+                    │   ├── Read 'b': ❬i64❭
+                    │   └── Unit: ❬Unit❭
                     └── Unit: ❬Unit❭
             "#]],expect![[r#"
                 Module
-                  x: ❬Fn(❬bool❭, ❬i64❭) -> ❬f64❭❭
+                  main: ❬Fn() -> ❬Unit❭❭
             "#]];
        program_struct_simple: "
            struct Foo {
@@ -799,26 +828,30 @@ mod tests {
                 baz: f64
             }
            " => expect![[r#"
-               Program
-               └── Struct 'Foo': ❬Foo❭
-                   ├── Field bar: ❬bool❭
-                   │   └── Read 'bool': ❬Type❭
-                   └── Field baz: ❬f64❭
-                       └── Read 'f64': ❬Type❭
+               Module
+               └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                   ├── Return type: Read 'unit'
+                   ├── Struct 'Foo': ❬Foo❭
+                   │   ├── Field bar: ❬bool❭
+                   │   │   └── Read 'bool': ❬Type❭
+                   │   └── Field baz: ❬f64❭
+                   │       └── Read 'f64': ❬Type❭
+                   └── Unit: ❬Unit❭
            "#]],expect![[r#"
                Module
-                 Foo: ❬Foo❭
-                   bar: ❬bool❭
-                   baz: ❬f64❭
+                 main: ❬Fn() -> ❬Unit❭❭
            "#]];
         program_struct_empty: "
            struct Empty {}
            " => expect![[r#"
-               Program
-               └── Struct 'Empty': ❬Empty❭
+               Module
+               └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                   ├── Return type: Read 'unit'
+                   ├── Struct 'Empty': ❬Empty❭
+                   └── Unit: ❬Unit❭
            "#]],expect![[r#"
                Module
-                 Empty: ❬Empty❭
+                 main: ❬Fn() -> ❬Unit❭❭
            "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
