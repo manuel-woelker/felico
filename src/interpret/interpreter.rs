@@ -99,9 +99,6 @@ impl Interpreter {
             return self.create_diagnostic(
                 stmt,
                 "Out of fuel! Execution took to many loops/function calls.",
-                |diagnostic| {
-                    diagnostic.add_primary_label(&stmt.location);
-                },
             );
         }
         Ok(())
@@ -146,9 +143,7 @@ impl Interpreter {
     ) -> FelicoResult<InterpreterValue> {
         self.available_stack -= 1;
         if self.available_stack <= 0 {
-            return self.create_diagnostic(expr, "Stack size exceeded.", |diagnostic| {
-                diagnostic.add_primary_label(&expr.location);
-            });
+            return self.create_diagnostic(expr, "Stack size exceeded.");
         }
         let callee = self.evaluate_expr(&call.callee)?;
         if callee.is_return() {
@@ -158,8 +153,7 @@ impl Interpreter {
         if let ValueKind::Callable(callable) = callee.val {
             // Check arity
             if call.arguments.len() != callable.arity {
-                return self.create_diagnostic(expr, format!("Wrong number of arguments in function call '{}' - Expected: {}, got: {} instead", callable.name, callable.arity, call.arguments.len()), |diagnostic| {
-                    diagnostic.add_primary_label(&call.callee.location);
+                return self.create_diagnostic_with(expr, format!("Wrong number of arguments in function call '{}' - Expected: {}, got: {} instead", callable.name, callable.arity, call.arguments.len()), |diagnostic| {
                     if let CallableFun::Defined(fun) = callable.fun.as_ref() {
                         diagnostic.add_label(&fun.fun_stmt.name.location, format!("'{}' defined here", callable.name));
                     }
@@ -176,11 +170,8 @@ impl Interpreter {
                     Ok(result) => result,
                     Err(err) => {
                         return self.create_diagnostic(
-                            expr,
+                            &call.callee,
                             format!("Error in native call to {}(): {}", callable.name, err),
-                            |diagnostic| {
-                                diagnostic.add_primary_label(&call.callee.location);
-                            },
                         );
                     }
                 },
@@ -210,13 +201,10 @@ impl Interpreter {
             self.available_stack += 1;
             Ok(result)
         } else {
-            return self.create_diagnostic(
-                expr,
+            self.create_diagnostic(
+                &call.callee,
                 format!("Expression '{:?}' is not callable", callee),
-                |diagnostic| {
-                    diagnostic.add_primary_label(&call.callee.location);
-                },
-            );
+            )
         }
     }
 
@@ -295,9 +283,6 @@ impl Interpreter {
                     "Expected true or false in if condition, but found '{}' instead",
                     other
                 ),
-                |diagnostic| {
-                    diagnostic.add_primary_label(&if_expr.condition.location);
-                },
             ),
         }
     }
@@ -364,26 +349,20 @@ impl Interpreter {
                     return match right_value.val {
                         ValueKind::Bool(_) => Ok(InterpreterValue::val(right_value)), // Ok
                         _ => self.create_diagnostic(
-                            expr,
+                            &binary.right,
                             format!(
                                 "Unsupported operand for boolean {} operation: {}",
                                 binary.operator.token_type, right_value
                             ),
-                            |diagnostic| {
-                                diagnostic.add_primary_label(&binary.right.location);
-                            },
                         ),
                     };
                 } else {
                     return self.create_diagnostic(
-                        expr,
+                        &binary.left,
                         format!(
                             "Unsupported operand for boolean {} operation: {}",
                             binary.operator.token_type, left_value
                         ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&binary.left.location);
-                        },
                     );
                 }
             }
@@ -404,16 +383,14 @@ impl Interpreter {
                 TokenType::Less => self.value_factory.bool(left < right),
                 TokenType::LessEqual => self.value_factory.bool(left <= right),
                 _ => {
-                    return self.create_diagnostic(
-                        expr,
+                    return Err(InterpreterDiagnostic::new(
+                        &binary.operator.location,
                         format!(
                             "Unsupported binary operator for numbers: {}",
                             binary.operator.lexeme()
                         ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&binary.operator.location);
-                        },
-                    );
+                    )
+                    .into());
                 }
             },
             (ValueKind::String(left), right) => match binary.operator.token_type {
@@ -423,16 +400,14 @@ impl Interpreter {
                     ))
                 }
                 _ => {
-                    return self.create_diagnostic(
-                        expr,
+                    return Err(InterpreterDiagnostic::new(
+                        &binary.operator.location,
                         format!(
                             "Unsupported binary operator for string: {}",
                             binary.operator.lexeme()
                         ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&binary.operator.location);
-                        },
-                    );
+                    )
+                    .into());
                 }
             },
             (left, right) => {
@@ -442,9 +417,6 @@ impl Interpreter {
                         "Operator {:?} not defined for values {:?} and {:?}",
                         binary.operator.token_type, left, right
                     ),
-                    |diagnostic| {
-                        diagnostic.add_primary_label(&expr.location);
-                    },
                 );
             }
         })
@@ -466,9 +438,6 @@ impl Interpreter {
                     return self.create_diagnostic(
                         expr,
                         format!("Value '{:?}' cannot be negated", sub_expression),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&expr.location);
-                        },
                     );
                 }
             },
@@ -476,22 +445,29 @@ impl Interpreter {
                 return self.create_diagnostic(
                     expr,
                     format!("Unsupported unary operator {}", unary.operator.token_type),
-                    |diagnostic| {
-                        diagnostic.add_primary_label(&expr.location);
-                    },
                 );
             }
         })
     }
 
+    #[track_caller]
     fn create_diagnostic<T, S: Into<String>, A: AstData>(
+        &self,
+        ast_node: &AstNode<A>,
+        message: S,
+    ) -> FelicoResult<T> {
+        let diagnostic = InterpreterDiagnostic::new(&ast_node.location, message.into());
+        Err(diagnostic.into())
+    }
+
+    #[track_caller]
+    fn create_diagnostic_with<T, S: Into<String>, A: AstData>(
         &self,
         ast_node: &AstNode<A>,
         message: S,
         mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> FelicoResult<T> {
-        let mut diagnostic =
-            InterpreterDiagnostic::new(&ast_node.location.source_file, message.into());
+        let mut diagnostic = InterpreterDiagnostic::new(&ast_node.location, message.into());
         f(&mut diagnostic);
         Err(diagnostic.into())
     }
@@ -540,9 +516,6 @@ impl Interpreter {
                             "Expected true or false in loop condition, but found '{}' instead",
                             other
                         ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&while_stmt.condition.location);
-                        },
                     );
                 }
             }

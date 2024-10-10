@@ -38,7 +38,27 @@ pub struct InterpreterDiagnostic {
 }
 
 impl InterpreterDiagnostic {
-    pub fn new(source_file: &SourceFileHandle, message: String) -> Self {
+    #[track_caller]
+    pub fn new(location: &Location, message: String) -> Self {
+        let mut diagnostic =
+            InterpreterDiagnostic::from_source_file(&location.source_file, message);
+        diagnostic.add_primary_label(&location);
+        diagnostic
+    }
+
+    #[track_caller]
+    pub fn new_with(
+        location: &Location,
+        message: String,
+        mut f: impl FnMut(&mut InterpreterDiagnostic),
+    ) -> Self {
+        let mut diagnostic = InterpreterDiagnostic::new(&location, message);
+        f(&mut diagnostic);
+        diagnostic
+    }
+
+    #[track_caller]
+    pub fn from_source_file(source_file: &SourceFileHandle, message: String) -> Self {
         InterpreterDiagnostic {
             message,
             code: None,

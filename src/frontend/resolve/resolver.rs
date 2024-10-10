@@ -290,8 +290,7 @@ impl Resolver {
             .type_checker
             .is_assignable_to(&expression_type, &variable_type)
         {
-            let mut diagnostic = InterpreterDiagnostic::new(&stmt.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
-            diagnostic.add_primary_label(&stmt.location);
+            let diagnostic = InterpreterDiagnostic::new(&stmt.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
             return Err(diagnostic.into());
         }
         *stmt.ty = variable_type.clone();
@@ -432,8 +431,7 @@ impl Resolver {
                     .type_checker
                     .is_assignable_to(expression_type, destination_type)
                 {
-                    let mut diagnostic = InterpreterDiagnostic::new(&destination.location.source_file, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
-                    diagnostic.add_primary_label(&ast_info.location);
+                    let mut diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
                     diagnostic.add_label(
                         &symbol.declaration_site,
                         format!("is declared as {} here", destination_type),
@@ -442,11 +440,10 @@ impl Resolver {
                 }
             }
         } else {
-            let mut diagnostic = InterpreterDiagnostic::new(
-                &destination.location.source_file,
+            let diagnostic = InterpreterDiagnostic::new(
+                &destination.location,
                 format!("Variable '{}' is not defined here", destination.lexeme()),
             );
-            diagnostic.add_primary_label(&destination.location);
             return Err(diagnostic.into());
         }
         Ok(())
@@ -462,14 +459,13 @@ impl Resolver {
             var_use.distance = distance;
             *ast_info.ty = symbol.ty.clone();
         } else {
-            let mut diagnostic = InterpreterDiagnostic::new(
-                &var_use.variable.location.source_file,
+            let diagnostic = InterpreterDiagnostic::new(
+                &var_use.variable.location,
                 format!(
                     "Variable '{}' is not defined here",
                     var_use.variable.lexeme()
                 ),
             );
-            diagnostic.add_primary_label(&var_use.variable.location);
             return Err(diagnostic.into());
         }
         Ok(())
@@ -536,9 +532,9 @@ impl Resolver {
         None
     }
 
+    #[track_caller]
     fn fail_fast<T, S: Into<String>>(&self, location: &Location, message: S) -> FelicoResult<T> {
-        let mut diagnostic = InterpreterDiagnostic::new(&location.source_file, message.into());
-        diagnostic.add_primary_label(location);
+        let diagnostic = InterpreterDiagnostic::new(&location, message.into());
         Err(diagnostic.into())
     }
 
@@ -546,10 +542,9 @@ impl Resolver {
         match self.current_scope().entry(&name) {
             Entry::Occupied(value) => {
                 let mut diagnostic = InterpreterDiagnostic::new(
-                    &symbol.declaration_site.source_file,
+                    &symbol.declaration_site,
                     format!("The name '{}' already declared", name),
                 );
-                diagnostic.add_primary_label(&symbol.declaration_site);
                 diagnostic.add_label(&value.get().declaration_site, "is already declared here");
                 return Err(diagnostic.into());
             }
@@ -581,13 +576,12 @@ impl Resolver {
                 .is_assignable_to(returned_type, expected_type)
             {
                 let mut diagnostic = InterpreterDiagnostic::new(
-                    &return_expr.expression.location.source_file,
+                    &return_expr.expression.location,
                     format!(
                         "Cannot return value of type {} in function returning {}",
                         returned_type, expected_type
                     ),
                 );
-                diagnostic.add_primary_label(&return_expr.expression.location);
                 diagnostic.add_label(
                     &current_function_info.return_type_declaration_site,
                     format!(

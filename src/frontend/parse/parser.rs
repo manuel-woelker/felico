@@ -405,12 +405,16 @@ impl Parser {
                     }),
                 )
             } else {
-                self.create_diagnostic("Invalid assignment target", |diagnostic| {
-                    diagnostic.add_primary_label(&expr.location);
-                    diagnostic.set_help(
-                        "Assignment target must be an l-value (e.g. a variable or field)",
-                    );
-                })
+                return Err(InterpreterDiagnostic::new_with(
+                    &expr.location,
+                    format!("{:?} is not a valid assignment target", expr.data),
+                    |diagnostic| {
+                        diagnostic.set_help(
+                            "Assignment target must be an l-value (e.g. a variable or field)",
+                        );
+                    },
+                )
+                .into());
             };
         }
         Ok(expr)
@@ -579,15 +583,14 @@ impl Parser {
                 TokenType::If => return self.parse_if(),
                 TokenType::Return => return self.parse_return(),
                 _ => {
-                    return self.create_diagnostic(
+                    return Err(InterpreterDiagnostic::new(
+                        &self.current_token.location,
                         format!(
                             "Unexpected token '{}' in expression",
                             self.current_token.token_type
                         ),
-                        |diagnostic| {
-                            diagnostic.add_primary_label(&self.current_token.location);
-                        },
-                    );
+                    )
+                    .into());
                 }
             }),
         );
@@ -602,22 +605,12 @@ impl Parser {
             self.advance();
             Ok(token)
         } else {
-            self.create_diagnostic(
+            Err(InterpreterDiagnostic::new(
+                &self.current_location(),
                 format!("{}, found {} instead", msg, self.current_token),
-                |diagnostic| diagnostic.add_primary_label(&self.current_token.location),
             )
+            .into())
         }
-    }
-
-    #[track_caller]
-    fn create_diagnostic<T, S: Into<String>>(
-        &self,
-        message: S,
-        mut f: impl FnMut(&mut InterpreterDiagnostic),
-    ) -> FelicoResult<T> {
-        let mut diagnostic = InterpreterDiagnostic::new(&self.source_file, message.into());
-        f(&mut diagnostic);
-        Err(diagnostic.into())
     }
 
     fn parse_unary(&mut self) -> FelicoResult<AstNode<Expr>> {
@@ -1247,7 +1240,7 @@ mod tests {
                ·    ─
                ╰────"#]];
          invalid_assignment: "3 = true" => expect![[r#"
-             × Invalid assignment target
+             × Literal(F64(3.0)) is not a valid assignment target
                 ╭─[invalid_assignment:1:1]
               1 │ 3 = true
                 · ─
