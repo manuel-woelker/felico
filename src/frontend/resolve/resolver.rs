@@ -387,8 +387,17 @@ impl Resolver {
                 ),
             );
         };
+        let fail_fast = |location: &Location, message: String| {
+            let mut diagnostic = InterpreterDiagnostic::new(location, message.into());
+            let declaration_site = call.callee.ty.declaration_site();
+            if !declaration_site.is_ephemeral() {
+                diagnostic.add_label(declaration_site, "Function declared here".to_string());
+            }
+            return Err(diagnostic.into());
+        };
+
         if function_type.parameter_types.len() != call.arguments.len() {
-            return self.fail_fast(
+            return fail_fast(
                 &ast_info.location,
                 format!(
                     "Wrong number of arguments in call - expected: {}, actual {}",
@@ -399,7 +408,7 @@ impl Resolver {
         }
         for (parameter, argument) in function_type.parameter_types.iter().zip(&call.arguments) {
             if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
-                return self.fail_fast(
+                return fail_fast(
                     &argument.location,
                     format!(
                         "Cannot coerce argument of type {} as parameter of type {} in function invocation",
@@ -913,14 +922,18 @@ mod tests {
                ╰────"#]];
 
         call_with_wrong_argument: r#"
-        sqrt(true);
+        fun foo() {};
+        foo(true);
         "# => expect![[r#"
-            × Cannot coerce argument of type ❬bool❭ as parameter of type ❬f64❭ in function invocation
-               ╭─[call_with_wrong_argument:2:14]
+            × Wrong number of arguments in call - expected: 0, actual 1
+               ╭─[call_with_wrong_argument:3:12]
              1 │ 
-             2 │         sqrt(true);
-               ·              ────
-             3 │         
+             2 │         fun foo() {};
+               ·             ─┬─
+               ·              ╰── Function declared here
+             3 │         foo(true);
+               ·            ───────
+             4 │         
                ╰────"#]];
         return_wrong_type: r#"
         fun foo() -> bool {return 3;}
