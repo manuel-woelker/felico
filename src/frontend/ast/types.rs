@@ -99,6 +99,7 @@ pub enum TypeKind {
     Any,   // Top Type, should only be used for debug_print()
     Never, // Bottom Type, the type of return expressions and return type of divergent functions
     Unknown,
+    Unresolved, // failed to resolve
     Primitive(PrimitiveType),
     Type,
     Function(FunctionType),

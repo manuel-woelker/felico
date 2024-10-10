@@ -38,7 +38,7 @@ struct TypeFactoryInner {
 
 }
 
-factory_fns!(bool, unit, i64, f64, ty, str, unknown, never);
+factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
 
 impl TypeFactory {
     pub fn new() -> Self {
@@ -62,6 +62,7 @@ impl TypeFactory {
                 ty: Type::ty(),
                 unknown: Type::new_ephemeral("unknown", TypeKind::Unknown),
                 never: Type::new_ephemeral("never", TypeKind::Never),
+                unresolved: Type::new_ephemeral("unresolved", TypeKind::Unresolved),
             }),
         }
     }

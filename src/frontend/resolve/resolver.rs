@@ -106,8 +106,9 @@ impl Resolver {
         }
     }
 
-    pub fn diagnose(&mut self, diagnostic: InterpreterDiagnostic) {
+    pub fn diagnose(&mut self, ty: &mut Type, diagnostic: InterpreterDiagnostic) {
         self.diagnostics.push(diagnostic);
+        *ty = self.type_factory.unresolved();
     }
 
     pub fn resolve_program(&mut self, program: &mut AstNode<Program>) -> FelicoResult<()> {
@@ -288,7 +289,7 @@ impl Resolver {
     fn resolve_let_stmt(
         &mut self,
         let_stmt: &mut LetStmt,
-        stmt: &mut CommonAstInfo,
+        ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         let name = let_stmt.name.lexeme();
         self.add_symbol_to_scope(
@@ -311,10 +312,10 @@ impl Resolver {
             .type_checker
             .is_assignable_to(&expression_type, &variable_type)
         {
-            let diagnostic = InterpreterDiagnostic::new(&stmt.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
-            return Err(diagnostic.into());
+            let diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
+            self.diagnose(&mut ast_info.ty, diagnostic);
         }
-        *stmt.ty = variable_type.clone();
+        *ast_info.ty = variable_type.clone();
         let symbol = self.current_scope().get_mut(name).unwrap();
         symbol.is_defined = true;
         symbol.ty = variable_type;
@@ -400,25 +401,31 @@ impl Resolver {
             self.resolve_expr(arg)?
         }
         let TypeKind::Function(function_type) = call.callee.ty.kind() else {
-            return self.fail_fast(
-                &call.callee.location,
-                format!(
-                    "Expected a function to call, but instead found type {}",
-                    call.callee.ty
+            self.diagnose(
+                &mut ast_info.ty,
+                InterpreterDiagnostic::new(
+                    &call.callee.location.clone(),
+                    format!(
+                        "Expected a function to call, but instead found type {}",
+                        call.callee.ty
+                    ),
                 ),
             );
+            return Ok(());
         };
-        let fail_fast = |location: &Location, message: String| {
+        *ast_info.ty = function_type.return_type.clone();
+        let mut diagnostics = vec![];
+        let mut diagnose = |location: &Location, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message.into());
             let declaration_site = call.callee.ty.declaration_site();
             if !declaration_site.is_ephemeral() {
                 diagnostic.add_label(declaration_site, "Function declared here".to_string());
             }
-            return Err(diagnostic.into());
+            diagnostics.push(diagnostic);
         };
 
         if function_type.parameter_types.len() != call.arguments.len() {
-            return fail_fast(
+            diagnose(
                 &ast_info.location,
                 format!(
                     "Wrong number of arguments in call - expected: {}, actual {}",
@@ -429,7 +436,7 @@ impl Resolver {
         }
         for (parameter, argument) in function_type.parameter_types.iter().zip(&call.arguments) {
             if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
-                return fail_fast(
+                diagnose(
                     &argument.location,
                     format!(
                         "Cannot coerce argument of type {} as parameter of type {} in function invocation",
@@ -438,7 +445,7 @@ impl Resolver {
                 );
             }
         }
-        *ast_info.ty = function_type.return_type.clone();
+        self.diagnostics.append(&mut diagnostics);
         Ok(())
     }
 
@@ -455,25 +462,26 @@ impl Resolver {
             let destination_type = &symbol.ty;
             *ast_info.ty = symbol.ty.clone();
 
-            if !destination_type.is_unknown() {
-                let expression_type = &assign.value.ty;
-                if !self
-                    .type_checker
-                    .is_assignable_to(expression_type, destination_type)
-                {
-                    let mut diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
-                    diagnostic.add_label(
-                        &symbol.declaration_site,
-                        format!("is declared as {} here", destination_type),
-                    );
-                    return Err(diagnostic.into());
-                }
+            let expression_type = &assign.value.ty;
+            if !self
+                .type_checker
+                .is_assignable_to(expression_type, destination_type)
+            {
+                let mut diagnostic = InterpreterDiagnostic::new(&ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
+                diagnostic.add_label(
+                    &symbol.declaration_site,
+                    format!("is declared as {} here", destination_type),
+                );
+                self.diagnose(&mut ast_info.ty, diagnostic)
             }
         } else {
-            self.diagnose(InterpreterDiagnostic::new(
-                &destination.location,
-                format!("Variable '{}' is not defined here", destination.lexeme()),
-            ));
+            self.diagnose(
+                &mut ast_info.ty,
+                InterpreterDiagnostic::new(
+                    &destination.location,
+                    format!("Variable '{}' is not defined here", destination.lexeme()),
+                ),
+            );
         }
         Ok(())
     }
@@ -488,13 +496,16 @@ impl Resolver {
             var_use.distance = distance;
             *ast_info.ty = symbol.ty.clone();
         } else {
-            self.diagnose(InterpreterDiagnostic::new(
-                &var_use.variable.location,
-                format!(
-                    "Variable '{}' is not defined here",
-                    var_use.variable.lexeme()
+            self.diagnose(
+                &mut ast_info.ty,
+                InterpreterDiagnostic::new(
+                    &var_use.variable.location,
+                    format!(
+                        "Variable '{}' is not defined here",
+                        var_use.variable.lexeme()
+                    ),
                 ),
-            ));
+            );
         }
         Ok(())
     }
@@ -560,12 +571,6 @@ impl Resolver {
         None
     }
 
-    #[track_caller]
-    fn fail_fast<T, S: Into<String>>(&self, location: &Location, message: S) -> FelicoResult<T> {
-        let diagnostic = InterpreterDiagnostic::new(&location, message.into());
-        Err(diagnostic.into())
-    }
-
     fn add_symbol_to_scope(&mut self, name: String, symbol: Symbol) -> FelicoResult<()> {
         match self.current_scope().entry(&name) {
             Entry::Occupied(value) => {
@@ -574,7 +579,7 @@ impl Resolver {
                     format!("The name '{}' already declared", name),
                 );
                 diagnostic.add_label(&value.get().declaration_site, "is already declared here");
-                return Err(diagnostic.into());
+                self.diagnose(&mut Type::ty(), diagnostic);
             }
             Entry::Vacant(slot) => {
                 slot.insert(symbol);
@@ -617,7 +622,7 @@ impl Resolver {
                         current_function_info.declared_return_type
                     ),
                 );
-                return Err(diagnostic.into());
+                self.diagnose(&mut ast.ty, diagnostic);
             }
         } else {
             bail!("Cannot return in a non function context");
@@ -838,10 +843,10 @@ mod tests {
 
     test_resolve_error!(
         let_self_referential: "let a: bool = a;" => expect![[r#"
-            × Expression value of type ❬unknown❭ cannot be assigned to variable 'a' declared to be type ❬bool❭
-               ╭─[let_self_referential:1:1]
+            × Variable 'a' is not defined here
+               ╭─[let_self_referential:1:15]
              1 │ let a: bool = a;
-               · ────────────────
+               ·               ─
                ╰────
 
         "#]];
@@ -900,7 +905,13 @@ mod tests {
 
         "#]];
         call_undefined_function: "x();" => expect![[r#"
-            × Expected a function to call, but instead found type ❬unknown❭
+            × Variable 'x' is not defined here
+               ╭─[call_undefined_function:1:1]
+             1 │ x();
+               · ─
+               ╰────
+
+            × Expected a function to call, but instead found type ❬unresolved❭
                ╭─[call_undefined_function:1:1]
              1 │ x();
                · ─
@@ -1002,6 +1013,14 @@ mod tests {
                ╭─[multiple_diagnostics:1:3]
              1 │ a+b;
                ·   ─
+               ╰────
+
+        "#]];
+        multiple_diagnostics_followup_error: "let x = a+3;x+3;" => expect![[r#"
+            × Variable 'a' is not defined here
+               ╭─[multiple_diagnostics_followup_error:1:9]
+             1 │ let x = a+3;x+3;
+               ·         ─
                ╰────
 
         "#]];
