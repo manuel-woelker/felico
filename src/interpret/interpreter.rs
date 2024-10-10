@@ -659,85 +659,116 @@ mod tests {
                ╭─[invalid_addition:1:13]
              1 │ debug_print(3+true);
                ·             ───────
-               ╰────"#]];
+               ╰────
+
+        "#]];
         call_uncallable: "true();" => expect![[r#"
             × Expected a function to call, but instead found type ❬bool❭
                ╭─[call_uncallable:1:1]
              1 │ true();
                · ────
-               ╰────"#]];
+               ╰────
+
+        "#]];
         call_wrong_arity: "sqrt();" => expect![[r#"
             × Wrong number of arguments in call - expected: 1, actual 0
                ╭─[call_wrong_arity:1:5]
              1 │ sqrt();
                ·     ───
-               ╰────"#]];
+               ╰────
+
+        "#]];
         call_wrong_arity_defined: "fun foo(a: bool) {}\ndebug_print(3);\nfoo();" => expect![[r#"
             × Wrong number of arguments in call - expected: 1, actual 0
                ╭─[call_wrong_arity_defined:3:4]
+             1 │ fun foo(a: bool) {}
+               ·     ─┬─
+               ·      ╰── Function declared here
              2 │ debug_print(3);
              3 │ foo();
                ·    ───
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_string_operator: "\"foo\" * 3;" => expect![[r#"
             × Unsupported binary operator for string: *
                ╭─[wrong_string_operator:1:7]
              1 │ "foo" * 3;
                ·       ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_boolean_operand1: "3 || true;" => expect![[r#"
             × Unsupported operand for boolean Or operation: 3
                ╭─[wrong_boolean_operand1:1:1]
              1 │ 3 || true;
                · ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_boolean_operand2: "false || 3;" => expect![[r#"
             × Unsupported operand for boolean Or operation: 3
                ╭─[wrong_boolean_operand2:1:10]
              1 │ false || 3;
                ·          ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_negation_operand: "-true;" => expect![[r#"
             × Value 'Bool(true)' cannot be negated
                ╭─[wrong_negation_operand:1:1]
              1 │ -true;
                · ──────
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_bang_operand: "!3;" => expect![[r#"
             × Unsupported unary operator Bang
                ╭─[wrong_bang_operand:1:1]
              1 │ !3;
                · ───
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_type_in_if: "if(3) {}" => expect![[r#"
             × Expected true or false in if condition, but found '3' instead
                ╭─[wrong_type_in_if:1:4]
              1 │ if(3) {}
                ·    ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         wrong_type_in_while: "while(3) {}" => expect![[r#"
             × Expected true or false in loop condition, but found '3' instead
                ╭─[wrong_type_in_while:1:7]
              1 │ while(3) {}
                ·       ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
         sqrt_true: "sqrt(true);" => expect![[r#"
             × Cannot coerce argument of type ❬bool❭ as parameter of type ❬f64❭ in function invocation
                ╭─[sqrt_true:1:6]
              1 │ sqrt(true);
                ·      ────
-               ╰────"#]];
+               ╰────
+
+        "#]];
         endless_loop: "while(true) {}" => expect![[r#"
             × Out of fuel! Execution took to many loops/function calls.
                ╭─[endless_loop:1:7]
              1 │ while(true) {}
                ·       ────
-               ╰────"#]];
+               ╰────
+
+        "#]];
         endless_recursion: "fun a() {a();} a();" => expect![[r#"
             × Stack size exceeded.
                ╭─[endless_recursion:1:11]
              1 │ fun a() {a();} a();
                ·           ───
-               ╰────"#]];
+               ╰────
+
+        "#]];
     );
 }

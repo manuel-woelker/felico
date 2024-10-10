@@ -241,16 +241,13 @@ mod tests {
         assert_diagnostic::<()>(
             &Err(FelicoReport { report }),
             expect![[r#"
-            code::foo::bar
+                × foo
+                   ╭─[<ephemeral file>:1:1]
+                   ╰────
 
-              × Something went wrong
-               ╭─[foo.txt:1:5]
-             1 │ foo rocks!
-               · ─┬─ ──┬──
-               ·  │    ╰── Yay!
-               ·  ╰── This should be Rust
-               ╰────
-              help: Helpful hint"#]],
+                Io { cause: Kind(AddrNotAvailable) }
+
+            "#]],
         );
     }
 }

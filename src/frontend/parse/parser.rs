@@ -1232,36 +1232,48 @@ mod tests {
             × Unexpected token 'EOF' in expression
                ╭─[incomplete_if_statement:1:5]
              1 │ if x
-               ╰────"#]];
+               ╰────
+
+        "#]];
         unclosed_parens: "(3 4" => expect![[r#"
             × Expect closing ')' after expression, found '4' (Number) instead
                ╭─[unclosed_parens:1:4]
              1 │ (3 4
                ·    ─
-               ╰────"#]];
+               ╰────
+
+        "#]];
          invalid_assignment: "3 = true" => expect![[r#"
              × Literal(F64(3.0)) is not a valid assignment target
                 ╭─[invalid_assignment:1:1]
               1 │ 3 = true
                 · ─
                 ╰────
-               help: Assignment target must be an l-value (e.g. a variable or field)"#]];
+               help: Assignment target must be an l-value (e.g. a variable or field)
+
+         "#]];
          unexpected_expression_part: "3 + if" => expect![[r#"
              × Unexpected token 'EOF' in expression
                 ╭─[unexpected_expression_part:1:7]
               1 │ 3 + if
-                ╰────"#]];
+                ╰────
+
+         "#]];
          incomplete_statement: "print true" => expect![[r#"
              × Expected statement terminator (';'), found 'true' (True) instead
                 ╭─[incomplete_statement:1:7]
               1 │ print true
                 ·       ────
-                ╰────"#]];
+                ╰────
+
+         "#]];
          chained_values: "true \"foo\"" => expect![[r#"
              × Expected statement terminator (';'), found '"foo"' (String) instead
                 ╭─[chained_values:1:6]
               1 │ true "foo"
                 ·      ─────
-                ╰────"#]];
+                ╰────
+
+         "#]];
     );
 }
