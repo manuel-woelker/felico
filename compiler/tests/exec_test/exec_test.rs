@@ -1,4 +1,4 @@
-use felico::interpret::interpreter::run_program_to_string;
+use felico_compiler::interpret::interpreter::run_program_to_string;
 
 #[path = "../transform_test.rs"]
 pub mod transform_test;

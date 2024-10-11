@@ -1,37 +1,6 @@
-[package]
-name = "felico"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[dependencies]
-thiserror = "1.0.64"
-error-stack = "0.5.0"
-arcstr = "1.2.0"
-miette = { version = "7.2.0", features = ["fancy"] }
-utf8-chars = "3.0.4"
-phf = { version = "0.11.2", features = ["macros"] }
-ouroboros = "0.18.4"
-termtree = "0.5.1"
-once_cell = "1.20.1"
-itertools = "0.13.0"
-
-[dev-dependencies]
-expect-test = "1.5.0"
-yaml-rust = "0.4.5"
-libtest-mimic = "0.7.3"
-pretty_assertions = "1.4.1"
-located_yaml = "0.2.1"
-
-[[test]]
-name = "exec"
-path = "tests/exec_test/exec_test.rs"
-harness = false
-
-[[test]]
-name = "error"
-path = "tests/error_test/error_test.rs"
-harness = false
-
-
-[lints.clippy]
-new_without_default = "allow"
+members = [
+    "compiler",
+]

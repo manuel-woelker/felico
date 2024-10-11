@@ -1,4 +1,4 @@
-use felico::infra::result::FelicoResult;
+use felico_compiler::infra::result::FelicoResult;
 use libtest_mimic::{Arguments, Trial};
 use located_yaml::{Marker, Yaml, YamlElt, YamlLoader};
 use pretty_assertions::assert_eq;
