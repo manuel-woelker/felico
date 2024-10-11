@@ -14,6 +14,9 @@ impl Type {
     pub fn is_unknown(&self) -> bool {
         matches!(self.inner.kind, TypeKind::Unknown)
     }
+    pub fn is_bool(&self) -> bool {
+        matches!(self.inner.kind, TypeKind::Primitive(PrimitiveType::Bool))
+    }
     pub fn kind(&self) -> &TypeKind {
         &self.inner.kind
     }

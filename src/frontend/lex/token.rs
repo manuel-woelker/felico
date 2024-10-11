@@ -66,17 +66,6 @@ pub struct Token {
     pub value: Option<SharedString>,
 }
 
-impl Display for Token {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self.token_type {
-            TokenType::EOF => f.write_str("End of file"),
-            _other => {
-                write!(f, "'{}' ({})", self.lexeme(), self.token_type)
-            }
-        }
-    }
-}
-
 impl Token {
     pub fn lexeme(&self) -> &str {
         if let Some(value) = &self.value {
@@ -85,6 +74,29 @@ impl Token {
             let location = &self.location;
             &self.location.source_file.source_code()
                 [location.start_byte as usize..location.end_byte as usize]
+        }
+    }
+
+    pub fn is_comparison_operator(&self) -> bool {
+        match self.token_type {
+            TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Equal
+            | TokenType::BangEqual
+            | TokenType::Less
+            | TokenType::LessEqual => true,
+            _ => false,
+        }
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.token_type {
+            TokenType::EOF => f.write_str("End of file"),
+            _other => {
+                write!(f, "'{}' ({})", self.lexeme(), self.token_type)
+            }
         }
     }
 }

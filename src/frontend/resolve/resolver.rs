@@ -106,9 +106,8 @@ impl Resolver {
         }
     }
 
-    pub fn diagnose(&mut self, ty: &mut Type, diagnostic: InterpreterDiagnostic) {
+    pub fn diagnose(&mut self, diagnostic: InterpreterDiagnostic) {
         self.diagnostics.push(diagnostic);
-        *ty = self.type_factory.unresolved();
     }
 
     pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
@@ -187,9 +186,20 @@ impl Resolver {
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut if_expr.condition)?;
+        let condition_type = &if_expr.condition.ty;
+        if !condition_type.is_bool() {
+            self.diagnose(InterpreterDiagnostic::new(ast_info.location, format!("Condition in if statement must evaluate to a boolean, but was of type {} instead", condition_type)))
+        }
         self.resolve_expr(&mut if_expr.then_expr)?;
-        if let Some(else_expr) = &mut if_expr.else_expr {
+        let else_type = if let Some(else_expr) = &mut if_expr.else_expr {
             self.resolve_expr(else_expr)?;
+            &else_expr.ty
+        } else {
+            &self.type_factory.unit()
+        };
+        let then_type = &if_expr.then_expr.ty;
+        if else_type != then_type {
+            self.diagnose(InterpreterDiagnostic::new(ast_info.location, format!("Then and else branch of if statement must evaluate to the same type, but then evaluates to {}, while else evaluates to {}", then_type, else_type)))
         }
         *ast_info.ty = if_expr.then_expr.ty.clone();
         Ok(())
@@ -313,9 +323,11 @@ impl Resolver {
             .is_assignable_to(expression_type, &variable_type)
         {
             let diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
-            self.diagnose(ast_info.ty, diagnostic);
+            self.diagnose(diagnostic);
+            *ast_info.ty = self.type_factory.unresolved();
+        } else {
+            *ast_info.ty = variable_type.clone();
         }
-        *ast_info.ty = variable_type.clone();
         let symbol = self.current_scope().get_mut(name).unwrap();
         symbol.is_defined = true;
         symbol.ty = variable_type;
@@ -401,16 +413,14 @@ impl Resolver {
             self.resolve_expr(arg)?
         }
         let TypeKind::Function(function_type) = call.callee.ty.kind() else {
-            self.diagnose(
-                ast_info.ty,
-                InterpreterDiagnostic::new(
-                    &call.callee.location,
-                    format!(
-                        "Expected a function to call, but instead found type {}",
-                        call.callee.ty
-                    ),
+            self.diagnose(InterpreterDiagnostic::new(
+                &call.callee.location,
+                format!(
+                    "Expected a function to call, but instead found type {}",
+                    call.callee.ty
                 ),
-            );
+            ));
+            *ast_info.ty = self.type_factory.unresolved();
             return Ok(());
         };
         *ast_info.ty = function_type.return_type.clone();
@@ -472,16 +482,15 @@ impl Resolver {
                     &symbol.declaration_site,
                     format!("is declared as {} here", destination_type),
                 );
-                self.diagnose(ast_info.ty, diagnostic)
+                self.diagnose(diagnostic);
+                *ast_info.ty = self.type_factory.unresolved();
             }
         } else {
-            self.diagnose(
-                ast_info.ty,
-                InterpreterDiagnostic::new(
-                    &destination.location,
-                    format!("Variable '{}' is not defined here", destination.lexeme()),
-                ),
-            );
+            self.diagnose(InterpreterDiagnostic::new(
+                &destination.location,
+                format!("Variable '{}' is not defined here", destination.lexeme()),
+            ));
+            *ast_info.ty = self.type_factory.unresolved();
         }
         Ok(())
     }
@@ -496,16 +505,14 @@ impl Resolver {
             var_use.distance = distance;
             *ast_info.ty = symbol.ty.clone();
         } else {
-            self.diagnose(
-                ast_info.ty,
-                InterpreterDiagnostic::new(
-                    &var_use.variable.location,
-                    format!(
-                        "Variable '{}' is not defined here",
-                        var_use.variable.lexeme()
-                    ),
+            self.diagnose(InterpreterDiagnostic::new(
+                &var_use.variable.location,
+                format!(
+                    "Variable '{}' is not defined here",
+                    var_use.variable.lexeme()
                 ),
-            );
+            ));
+            *ast_info.ty = self.type_factory.unresolved();
         }
         Ok(())
     }
@@ -532,8 +539,12 @@ impl Resolver {
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut binary.left)?;
         self.resolve_expr(&mut binary.right)?;
-        if binary.left.ty == binary.right.ty {
-            *ast_info.ty = binary.left.ty.clone();
+        if binary.operator.is_comparison_operator() {
+            *ast_info.ty = self.type_factory.bool();
+        } else {
+            if binary.left.ty == binary.right.ty {
+                *ast_info.ty = binary.left.ty.clone();
+            }
         }
         Ok(())
     }
@@ -579,7 +590,7 @@ impl Resolver {
                     format!("The name '{}' already declared", name),
                 );
                 diagnostic.add_label(&value.get().declaration_site, "is already declared here");
-                self.diagnose(&mut Type::ty(), diagnostic);
+                self.diagnose(diagnostic);
             }
             Entry::Vacant(slot) => {
                 slot.insert(symbol);
@@ -621,7 +632,7 @@ impl Resolver {
                         current_function_info.declared_return_type
                     ),
                 );
-                self.diagnose(ast.ty, diagnostic);
+                self.diagnose(diagnostic);
             }
         } else {
             bail!("Cannot return in a non function context");
@@ -1053,6 +1064,30 @@ mod tests {
                ╭─[multiple_diagnostics_followup_error:1:9]
              1 │ let x = a+3;x+3;
                ·         ─
+               ╰────
+
+        "#]];
+        different_if_types: "if true 3 else true;" => expect![[r#"
+            × Then and else branch of if statement must evaluate to the same type, but then evaluates to ❬f64❭, while else evaluates to ❬bool❭
+               ╭─[different_if_types:1:1]
+             1 │ if true 3 else true;
+               · ────────────────────
+               ╰────
+
+        "#]];
+        different_if_types_no_else: "if true 3;" => expect![[r#"
+            × Then and else branch of if statement must evaluate to the same type, but then evaluates to ❬f64❭, while else evaluates to ❬Unit❭
+               ╭─[different_if_types_no_else:1:1]
+             1 │ if true 3;
+               · ──────────
+               ╰────
+
+        "#]];
+        wrong_type_in_if_condition: "if 3 {};" => expect![[r#"
+            × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
+               ╭─[wrong_type_in_if_condition:1:1]
+             1 │ if 3 {};
+               · ────────
                ╰────
 
         "#]];

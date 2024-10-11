@@ -740,10 +740,10 @@ mod tests {
 
         "#]];
         wrong_type_in_if: "if(3) {}" => expect![[r#"
-            × Expected true or false in if condition, but found '3' instead
-               ╭─[wrong_type_in_if:1:4]
+            × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
+               ╭─[wrong_type_in_if:1:1]
              1 │ if(3) {}
-               ·    ─
+               · ────────
                ╰────
 
         "#]];
