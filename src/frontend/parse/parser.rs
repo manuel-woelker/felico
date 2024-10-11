@@ -234,7 +234,7 @@ impl Parser {
 
     fn create_unit_var_use(&mut self, start_location: &Location) -> FelicoResult<AstNode<Expr>> {
         self.create_node(
-            &start_location,
+            start_location,
             Expr::Variable(VarUse {
                 variable: Token {
                     token_type: TokenType::Identifier,

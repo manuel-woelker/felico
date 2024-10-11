@@ -541,10 +541,8 @@ impl Resolver {
         self.resolve_expr(&mut binary.right)?;
         if binary.operator.is_comparison_operator() {
             *ast_info.ty = self.type_factory.bool();
-        } else {
-            if binary.left.ty == binary.right.ty {
-                *ast_info.ty = binary.left.ty.clone();
-            }
+        } else if binary.left.ty == binary.right.ty {
+            *ast_info.ty = binary.left.ty.clone();
         }
         Ok(())
     }

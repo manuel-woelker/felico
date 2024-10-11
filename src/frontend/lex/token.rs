@@ -78,15 +78,15 @@ impl Token {
     }
 
     pub fn is_comparison_operator(&self) -> bool {
-        match self.token_type {
+        matches!(
+            self.token_type,
             TokenType::Greater
-            | TokenType::GreaterEqual
-            | TokenType::Equal
-            | TokenType::BangEqual
-            | TokenType::Less
-            | TokenType::LessEqual => true,
-            _ => false,
-        }
+                | TokenType::GreaterEqual
+                | TokenType::Equal
+                | TokenType::BangEqual
+                | TokenType::Less
+                | TokenType::LessEqual
+        )
     }
 }
 
