@@ -1,16 +1,23 @@
-use axum::{
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
+use axum::body::{Body, Bytes};
+use axum::extract::{Path, Request};
+use axum::middleware::Next;
+use axum::response::{ErrorResponse, Response};
+use axum::{http::StatusCode, middleware, routing::get, Json, Router};
+use http::{HeaderName, HeaderValue};
+use http_body_util::{BodyExt, Limited};
+use log::{info, warn};
+use serde::Serialize;
+use std::time::Duration;
+use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::services::{ServeDir, ServeFile};
+use tower_http::trace::TraceLayer;
+use tracing::Span;
 
 #[tokio::main]
 async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
-
+    info!("Starting up;");
     let serve_dir = ServeDir::new("./docui/dist/assets")
         .not_found_service(ServeFile::new("./docui/dist/index.html"));
     // build our application with a route
@@ -21,56 +28,104 @@ async fn main() {
         // `GET /` goes to `root`
         //        .route("/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/api/modules", get(get_modules))
-        .route("/users", post(create_user));
+        .route("/api/packages", get(get_packages))
+        .route("/api/packages/:package_name/:package_version", get(get_package))
+        .layer(middleware::from_fn(error_logging_middleware))
+        .layer(TraceLayer::new_for_http()
+            .on_response(|response: &Response<_>, _latency: Duration, _span: &Span| {
+                if !response.status().is_success() {
+                    warn!("HTTP Error {} for {:?}", response.status(), response)
+                }
+            })
+            .on_failure(|_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
+                tracing::error!("something went wrong: {:?}", _error);
+            }))
+        // end
+        ;
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listen_address = "0.0.0.0:3000";
+    let listener = tokio::net::TcpListener::bind(listen_address).await.unwrap();
+    info!("Listening on {listen_address}");
     axum::serve(listener, app).await.unwrap();
 }
 
-// basic handler that responds with a static string
-async fn root() -> &'static str {
-    "Hello, World!"
+async fn error_logging_middleware(req: Request, next: Next) -> Response {
+    let response = next.run(req).await;
+    if !response.status().is_success() {
+        warn!("HTTP Error {} for {:?}", response.status(), response);
+        let (mut parts, body) = response.into_parts();
+        let collect = Limited::new(body, 10000).collect().await.unwrap();
+        let bytes = collect.to_bytes();
+        warn!("Collected {:?}", bytes);
+        let bytes1 = "f00".as_bytes();
+        let len = bytes1.len();
+        let new_body = Body::from(bytes1);
+        parts.headers.remove(http::header::CONTENT_LENGTH);
+        parts
+            .headers
+            .insert(http::header::CONTENT_LENGTH, HeaderValue::from(len));
+        return Response::from_parts(parts, new_body);
+    }
+    response
 }
 
-async fn get_modules() -> (StatusCode, Json<ModuleIndex>) {
-    let module_index = ModuleIndex {
-        modules: vec!["foo".to_string(), "bar".to_string()],
-    };
-    (StatusCode::CREATED, Json(module_index))
+async fn get_package(
+    Path((package_name, package_version)): Path<(String, String)>,
+) -> Result<Json<PackageDescription>, ErrorResponse> {
+    return Err(ErrorResponse::from(
+        Response::builder()
+            .status(500)
+            .body(Body::from("oh no!"))
+            .unwrap(),
+    ));
+    /*
+    Json(PackageDescription {
+        info: PackageInfo {
+            name: package_name,
+            version: package_version,
+            /*
+            functions: vec![FunctionDescription {
+                name: "debug_print".to_string(),
+                signature: "fun debug_print(item: any)".to_string(),
+            }],*/
+        },
+        functions: vec![FunctionDescription {
+            name: "debug_print".to_string(),
+            signature: "fun debug_print(item: any)".to_string(),
+        }],
+    })*/
 }
 
-async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
+async fn get_packages() -> (StatusCode, Json<PackageIndex>) {
+    let package_index = PackageIndex {
+        packages: vec![PackageInfo {
+            name: "std".to_string(),
+            version: "0.0.1".to_string(),
+        }],
     };
-
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
+    (StatusCode::CREATED, Json(package_index))
 }
 
 #[derive(Serialize)]
-struct ModuleIndex {
-    modules: Vec<String>,
+struct PackageInfo {
+    name: String,
+    version: String,
 }
 
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-struct CreateUser {
-    username: String,
-}
-
-// the output to our `create_user` handler
 #[derive(Serialize)]
-struct User {
-    id: u64,
-    username: String,
+struct PackageDescription {
+    info: PackageInfo,
+    functions: Vec<FunctionDescription>,
+}
+
+#[derive(Serialize)]
+struct FunctionDescription {
+    name: String,
+    signature: String,
+}
+
+#[derive(Serialize)]
+struct PackageIndex {
+    packages: Vec<PackageInfo>,
 }

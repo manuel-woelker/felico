@@ -2,11 +2,26 @@
 import {RouterLink, RouterView} from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
 
+interface PackageIndex {
+  packages: PackageInfo[],
+}
+
+interface PackageInfo {
+  name: string,
+  version: string,
+}
+
 (async function getModuleIndex() {
   try {
-    const response = await fetch('/api/modules');
-    const moduleIndex = await response.json();
-    console.log(moduleIndex);
+    const response = await fetch('/api/packages');
+    const packageIndex = await response.json() as PackageIndex;
+    console.log(packageIndex);
+    packageIndex.packages.forEach(async packageInfo => {
+      const response = await fetch(`/api/packages/${packageInfo.name}/${packageInfo.version}`);
+      const packageDescription = await response.json() as PackageIndex;
+      console.log(packageDescription);
+
+    });
   } catch (error) {
     console.error(error);
   }
