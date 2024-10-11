@@ -299,6 +299,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "felico-base"
+version = "0.1.0"
+dependencies = [
+    "arcstr",
+    "error-stack",
+    "thiserror",
+]
+
+[[package]]
 name = "felico-compiler"
 version = "0.1.0"
 dependencies = [

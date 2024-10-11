@@ -2,5 +2,11 @@
 resolver = "2"
 
 members = [
-    "compiler", "server",
+    "base",
+    "compiler",
+    "server",
 ]
+
+
+[workspace.lints.clippy]
+new_without_default = "allow"

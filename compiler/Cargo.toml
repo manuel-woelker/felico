@@ -31,7 +31,3 @@ harness = false
 name = "error"
 path = "tests/error_test/error_test.rs"
 harness = false
-
-
-[lints.clippy]
-new_without_default = "allow"
