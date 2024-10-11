@@ -14,7 +14,7 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
 use crate::infra::shared_string::{Name, SharedString};
-use crate::infra::source_file::SourceFileHandle;
+use crate::infra::source_file::SourceFile;
 use crate::interpret::core_definitions::TypeFactory;
 
 #[derive(Debug)]
@@ -22,13 +22,13 @@ pub struct Parser {
     lexer: Lexer,
     current_token: Token,
     next_token: Token,
-    source_file: SourceFileHandle,
+    source_file: SourceFile,
     type_factory: TypeFactory,
     module_name: Name,
 }
 
 impl Parser {
-    pub fn new(source_file: SourceFileHandle, type_factory: &TypeFactory) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile, type_factory: &TypeFactory) -> FelicoResult<Self> {
         let mut lexer = Lexer::new(source_file.clone()).whatever_context("oops")?;
         let current_token = lexer
             .next()
@@ -56,10 +56,7 @@ impl Parser {
         source_code: &str,
         type_factory: &TypeFactory,
     ) -> FelicoResult<Self> {
-        Self::new(
-            SourceFileHandle::from_string(filename, source_code),
-            type_factory,
-        )
+        Self::new(SourceFile::from_string(filename, source_code), type_factory)
     }
 
     pub fn advance(&mut self) {
@@ -731,13 +728,13 @@ impl Parser {
     }
 }
 
-pub fn parse_expression(code_source: SourceFileHandle) -> FelicoResult<AstNode<Expr>> {
+pub fn parse_expression(code_source: SourceFile) -> FelicoResult<AstNode<Expr>> {
     let parser = Parser::new(code_source, &TypeFactory::new())?;
     parser.parse_expression()
 }
 
 pub fn parse_script(
-    code_source: SourceFileHandle,
+    code_source: SourceFile,
     type_factory: &TypeFactory,
 ) -> FelicoResult<AstNode<Module>> {
     let parser = Parser::new(code_source, type_factory)?;

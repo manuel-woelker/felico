@@ -5,19 +5,19 @@ use std::str::Chars;
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::location::{ByteOffset, Location};
 use crate::infra::result::FelicoResult;
-use crate::infra::source_file::SourceFileHandle;
+use crate::infra::source_file::SourceFile;
 use ouroboros::self_referencing;
 
 #[self_referencing]
 struct OwningCharIter {
-    source_file: SourceFileHandle,
+    source_file: SourceFile,
     #[borrows(source_file)]
     #[covariant]
     chars: Chars<'this>,
 }
 
 impl OwningCharIter {
-    fn from_source_file(source_file: &SourceFileHandle) -> Self {
+    fn from_source_file(source_file: &SourceFile) -> Self {
         OwningCharIterBuilder {
             source_file: source_file.clone(),
             chars_builder: |s| s.source_code().chars(),
@@ -41,7 +41,7 @@ impl Debug for OwningCharIter {
 pub struct Lexer {
     chars_left: i64,
     char_iter: OwningCharIter,
-    source_file: SourceFileHandle,
+    source_file: SourceFile,
     current_offset: ByteOffset,
     start_offset: ByteOffset,
     lexeme_collector: Vec<char>,
@@ -153,7 +153,7 @@ impl Lexer {
         self.lexeme_collector.clear();
     }
 
-    pub fn new(source_file: SourceFileHandle) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
         let mut char_iter = OwningCharIter::from_source_file(&source_file);
         let mut next_char = '\0';
         let mut next_next_char = '\0';
@@ -315,7 +315,7 @@ mod tests {
         }
     */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
-        let s = Lexer::new(SourceFileHandle::from_string(name, input)).unwrap();
+        let s = Lexer::new(SourceFile::from_string(name, input)).unwrap();
         let result = s.collect::<Vec<_>>();
         let result_tokens = result
             .iter()

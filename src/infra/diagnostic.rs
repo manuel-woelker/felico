@@ -1,6 +1,6 @@
 use crate::infra::location::Location;
 use crate::infra::result::{FelicoError, FelicoResult};
-use crate::infra::source_file::SourceFileHandle;
+use crate::infra::source_file::SourceFile;
 use miette::{
     Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ReportHandler, Severity,
     SourceCode,
@@ -34,7 +34,7 @@ pub struct InterpreterDiagnostic {
     pub severity: Option<Severity>,
     pub help: Option<String>,
     pub labels: Vec<LabeledSpan>,
-    pub source_file: SourceFileHandle,
+    pub source_file: SourceFile,
 }
 
 impl InterpreterDiagnostic {
@@ -58,7 +58,7 @@ impl InterpreterDiagnostic {
     }
 
     #[track_caller]
-    pub fn from_source_file(source_file: &SourceFileHandle, message: String) -> Self {
+    pub fn from_source_file(source_file: &SourceFile, message: String) -> Self {
         InterpreterDiagnostic {
             message,
             code: None,
@@ -167,7 +167,7 @@ mod tests {
     };
     use crate::infra::location::Location;
     use crate::infra::result::{FelicoError, FelicoReport};
-    use crate::infra::source_file::SourceFileHandle;
+    use crate::infra::source_file::SourceFile;
     use error_stack::Report;
     use expect_test::expect;
     use miette::{GraphicalReportHandler, GraphicalTheme, LabeledSpan};
@@ -184,7 +184,7 @@ mod tests {
                 LabeledSpan::at(0..3, "This should be Rust"),
                 LabeledSpan::new_primary_with_span(Some("Yay!".to_string()), 4..9),
             ],
-            source_file: SourceFileHandle::from_string("foo.txt", "foo rocks!"),
+            source_file: SourceFile::from_string("foo.txt", "foo rocks!"),
         };
 
         let mut graphical_report_handler = GraphicalReportHandler::new();

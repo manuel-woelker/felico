@@ -8,12 +8,12 @@ use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Debug)]
-pub struct SourceFile {
+pub struct SourceFileInner {
     filename: String,
     source_code: String,
 }
 
-impl SourceFile {
+impl SourceFileInner {
     pub fn filename(&self) -> &str {
         &self.filename
     }
@@ -23,11 +23,11 @@ impl SourceFile {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceFileHandle {
-    inner: Arc<SourceFile>,
+pub struct SourceFile {
+    inner: Arc<SourceFileInner>,
 }
 
-impl SourceFileHandle {
+impl SourceFile {
     pub fn from_path<T: AsRef<Path>>(path: T) -> FelicoResult<Self> {
         let filename = path
             .as_ref()
@@ -42,7 +42,7 @@ impl SourceFileHandle {
 
     pub fn from_string<F: Into<String>, S: Into<String>>(filename: F, source_code: S) -> Self {
         Self {
-            inner: Arc::new(SourceFile {
+            inner: Arc::new(SourceFileInner {
                 filename: filename.into(),
                 source_code: source_code.into(),
             }),
@@ -50,15 +50,15 @@ impl SourceFileHandle {
     }
 }
 
-impl Deref for SourceFileHandle {
-    type Target = SourceFile;
+impl Deref for SourceFile {
+    type Target = SourceFileInner;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl SourceCode for SourceFileHandle {
+impl SourceCode for SourceFile {
     fn read_span<'a>(
         &'a self,
         span: &SourceSpan,

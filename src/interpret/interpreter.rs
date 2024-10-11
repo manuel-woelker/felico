@@ -11,7 +11,7 @@ use crate::frontend::parse::parser::{parse_expression, parse_script};
 use crate::frontend::resolve::resolver::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, FelicoResult};
-use crate::infra::source_file::SourceFileHandle;
+use crate::infra::source_file::SourceFile;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::environment::Environment;
 use crate::interpret::value::{
@@ -23,7 +23,7 @@ use std::rc::Rc;
 type PrintFn = Box<dyn Fn(&InterpreterValue)>;
 
 pub struct Interpreter {
-    source_file: SourceFileHandle,
+    source_file: SourceFile,
     type_factory: TypeFactory,
     value_factory: ValueFactory,
     environment: Environment,
@@ -50,7 +50,7 @@ impl InterpreterValue {
 }
 
 impl Interpreter {
-    pub fn new(source_file: SourceFileHandle) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
         let mut environment = Environment::new();
         let type_factory = TypeFactory::new();
         for core_definition in get_core_definitions(&type_factory) {
@@ -575,7 +575,7 @@ impl Interpreter {
 }
 
 pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
-    let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input))?;
+    let mut interpreter = Interpreter::new(SourceFile::from_string(name, input))?;
     let output_buffer = std::sync::Arc::new(std::sync::RwLock::new(String::new()));
     let output_buffer_clone = output_buffer.clone();
     interpreter.set_print_fn(Box::new(move |value| {
@@ -592,13 +592,13 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
 #[cfg(test)]
 mod tests {
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use crate::infra::source_file::SourceFileHandle;
+    use crate::infra::source_file::SourceFile;
     use crate::interpret::eval::eval_expression;
     use crate::interpret::interpreter::{run_program_to_string, Interpreter};
     use expect_test::{expect, Expect};
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {
-        let result = eval_expression(SourceFileHandle::from_string(name, input)).unwrap();
+        let result = eval_expression(SourceFile::from_string(name, input)).unwrap();
         expected.assert_eq(&format!("{:?}", result));
     }
 
@@ -644,7 +644,7 @@ mod tests {
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {
-        let mut interpreter = Interpreter::new(SourceFileHandle::from_string(name, input)).unwrap();
+        let mut interpreter = Interpreter::new(SourceFile::from_string(name, input)).unwrap();
         interpreter.set_print_fn(Box::new(move |_value| {}));
         let result = interpreter.run();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);

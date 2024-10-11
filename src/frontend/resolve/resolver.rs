@@ -14,7 +14,7 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
-use crate::infra::source_file::SourceFileHandle;
+use crate::infra::source_file::SourceFile;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
 use error_stack::Report;
@@ -83,7 +83,7 @@ impl Resolver {
     fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: LexicalScope = LexicalScope::new();
         let location = Location {
-            source_file: SourceFileHandle::from_string("native", "native_code"),
+            source_file: SourceFile::from_string("native", "native_code"),
             start_byte: 0,
             end_byte: 0,
         };
