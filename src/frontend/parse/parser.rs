@@ -13,7 +13,7 @@ use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::location::Location;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
-use crate::infra::shared_string::SharedString;
+use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFileHandle;
 use crate::interpret::core_definitions::TypeFactory;
 
@@ -24,6 +24,7 @@ pub struct Parser {
     next_token: Token,
     source_file: SourceFileHandle,
     type_factory: TypeFactory,
+    module_name: Name,
 }
 
 impl Parser {
@@ -33,7 +34,15 @@ impl Parser {
             .next()
             .ok_or_else(|| failed("Expected at least one token"))?;
         let next_token = lexer.next().unwrap_or(current_token.clone());
+        let module_name = Name::from(
+            source_file
+                .filename()
+                .split_once(".")
+                .map(|a| a.0)
+                .unwrap_or(source_file.filename()),
+        );
         Ok(Parser {
+            module_name,
             lexer,
             current_token,
             next_token,
@@ -101,6 +110,7 @@ impl Parser {
         self.create_node(
             &start_location,
             Module {
+                name: self.module_name.clone(),
                 stmts: vec![main_stmt],
             },
         )

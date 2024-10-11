@@ -65,6 +65,7 @@ pub struct Resolver {
     type_factory: TypeFactory,
     type_checker: TypeChecker,
     diagnostics: Vec<InterpreterDiagnostic>,
+    module_name: Name,
 }
 
 // Ast information extract during resolution to make separate borrows
@@ -103,6 +104,7 @@ impl Resolver {
             type_factory,
             type_checker: TypeChecker::new(),
             diagnostics: vec![],
+            module_name: Name::from("<undefined>"),
         }
     }
 
@@ -111,6 +113,7 @@ impl Resolver {
     }
 
     pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
+        self.module_name = program.data.name.clone();
         self.resolve_stmts(&mut program.data.stmts)?;
         if !self.diagnostics.is_empty() {
             let diagnostics = std::mem::take(&mut self.diagnostics);
@@ -142,7 +145,10 @@ impl Resolver {
                 )
             })
             .collect();
-        Ok(ModuleManifest { module_entries })
+        Ok(ModuleManifest {
+            name: self.module_name.clone(),
+            module_entries,
+        })
     }
 
     fn resolve_stmts(&mut self, stmts: &mut Vec<AstNode<Stmt>>) -> FelicoResult<()> {

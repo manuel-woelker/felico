@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
 pub struct ModuleManifest {
-    // TODO Module name
+    pub name: Name,
     pub module_entries: HashMap<Name, ModuleEntry>,
 }
 
