@@ -40,6 +40,12 @@ struct TypeFactoryInner {
 
 factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
 
+impl Default for TypeFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeFactory {
     pub fn new() -> Self {
         Self {

@@ -12,6 +12,12 @@ pub struct AstPrinter {
     print_types: bool,
 }
 
+impl Default for AstPrinter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AstPrinter {
     pub fn new() -> Self {
         Self {

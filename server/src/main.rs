@@ -1,15 +1,10 @@
-use axum::body::{Body, Bytes};
 use axum::extract::{Path, Request};
 use axum::middleware::Next;
-use axum::response::{ErrorResponse, IntoResponse, Response};
+use axum::response::{IntoResponse, Response};
 use axum::{http::StatusCode, middleware, routing::get, Json, Router};
-use felico_compiler::infra::result::{FelicoError, FelicoResult};
-use http::{HeaderName, HeaderValue};
-use http_body_util::{BodyExt, Limited};
+use felico_compiler::infra::result::FelicoError;
 use log::{info, warn};
 use serde::Serialize;
-use std::time::Duration;
-use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::services::{ServeDir, ServeFile};
 
 #[tokio::main]
