@@ -3,27 +3,36 @@ import {RouterLink, RouterView} from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
 
 interface PackageIndex {
-  packages: PackageInfo[],
+  packages: PackageInfo[]
 }
 
 interface PackageInfo {
-  name: string,
-  version: string,
+  name: string
+  version: string
 }
 
-(async function getModuleIndex() {
-  try {
-    const response = await fetch('/api/packages');
-    const packageIndex = await response.json() as PackageIndex;
-    console.log(packageIndex);
-    packageIndex.packages.forEach(async packageInfo => {
-      const response = await fetch(`/api/packages/${packageInfo.name}/${packageInfo.version}`);
-      const packageDescription = await response.json() as PackageIndex;
-      console.log(packageDescription);
+interface ErrorMessage {
+  error: string
+}
 
-    });
+;(async function getPackageIndex() {
+  try {
+    const error_response = await fetch('/api/test_error')
+    const error_json = (await error_response.json()) as ErrorMessage
+    console.log(error_json)
+    console.log(error_json.error)
+    const response = await fetch('/api/packages')
+    const packageIndex = (await response.json()) as PackageIndex
+    console.log(packageIndex)
+    packageIndex.packages.forEach(async packageInfo => {
+      const response = await fetch(
+          `/api/packages/${packageInfo.name}/${packageInfo.version}`,
+      )
+      const packageDescription = (await response.json()) as PackageIndex
+      console.log(packageDescription)
+    })
   } catch (error) {
-    console.error(error);
+    console.error(error)
   }
 })()
 </script>
@@ -31,11 +40,11 @@ interface PackageInfo {
 <template>
   <header>
     <img
-      alt="Vue logo"
-      class="logo"
-      src="@/assets/logo.svg"
-      width="125"
-      height="125"
+        alt="Vue logo"
+        class="logo"
+        src="@/assets/logo.svg"
+        width="125"
+        height="125"
     />
 
     <div class="wrapper">

@@ -23,6 +23,7 @@ async fn main() {
         .nest_service("/assets", serve_dir.clone())
         .fallback_service(serve_dir)
         .route("/api/packages", get(get_packages))
+        .route("/api/test_error", get(test_error))
         .route("/api/packages/:package_name/:package_version", get(get_package))
         .layer(middleware::from_fn(error_logging_middleware))
         // end
@@ -44,11 +45,11 @@ async fn error_logging_middleware(req: Request, next: Next) -> Response {
     let error_message = response
         .extensions()
         .get::<ErrorMessage>()
-        .map(|e| e.0.to_string())
+        .map(|e| e.error.to_string())
         .unwrap_or_else(|| "Unknown error".to_string());
     warn!(
-        "HTTP Error {} for {}: {}",
-        response.status(),
+        "HTTP Error {} for '{}': {}",
+        response.status().as_u16(),
         uri,
         error_message
     );
@@ -58,8 +59,10 @@ async fn error_logging_middleware(req: Request, next: Next) -> Response {
 #[derive(Debug)]
 pub struct ServerError(FelicoError);
 
-#[derive(Debug, Clone)]
-pub struct ErrorMessage(String);
+#[derive(Debug, Clone, Serialize)]
+pub struct ErrorMessage {
+    error: String,
+}
 
 impl<T: Into<FelicoError>> From<T> for ServerError {
     fn from(value: T) -> Self {
@@ -69,16 +72,22 @@ impl<T: Into<FelicoError>> From<T> for ServerError {
 
 impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
+        let error_message = ErrorMessage {
+            error: self.0.to_string(),
+        };
         let mut response = (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
+            Json(error_message.clone()),
         )
             .into_response();
-        response
-            .extensions_mut()
-            .insert(ErrorMessage(self.0.to_string()));
+        response.extensions_mut().insert(error_message);
+        *response.status_mut() = StatusCode::from_u16(599).unwrap();
         response
     }
+}
+
+async fn test_error() -> Result<Json<PackageDescription>, ServerError> {
+    Err("test error, please ignore".into())
 }
 
 async fn get_package(
