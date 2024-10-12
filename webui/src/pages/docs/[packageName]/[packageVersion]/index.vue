@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {usePackageStore} from '@/stores/PackageStore'
-import {FlowerSpinner} from 'epic-spinners'
 import {storeToRefs} from 'pinia'
 
 const packageStore = usePackageStore();
@@ -20,11 +19,6 @@ const {pkg} = storeToRefs(packageStore)
   </div>
   <div v-else>
     <div>
-      <flower-spinner
-          :animation-duration="1000"
-          :color="'rgba(0,73,31,0.35)'"
-          :size="60"
-      />
       Loading...
     </div>
   </div>
