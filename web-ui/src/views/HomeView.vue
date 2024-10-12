@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
 </script>
 
 <template>
   <main>
-    <TheWelcome/>
+    <h2>Welcome to the felico web ui</h2>
   </main>
 </template>
