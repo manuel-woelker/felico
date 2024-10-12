@@ -1,0 +1,14 @@
+.main {
+    background: bisque;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: 1fr;
+}
+
+.sidebar {
+    padding: 10px;
+}
+
+.bundleName {
+    font-size: 20px;
+}
