@@ -1,6 +1,6 @@
 use crate::frontend::lex::token::Token;
-use crate::infra::location::Location;
 use crate::infra::shared_string::SharedString;
+use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
@@ -21,7 +21,7 @@ impl Type {
         &self.inner.kind
     }
 
-    pub fn declaration_site(&self) -> &Location {
+    pub fn declaration_site(&self) -> &SourceSpan {
         &self.inner.declaration_site
     }
 }
@@ -39,7 +39,11 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn new<S: Into<SharedString>>(name: S, kind: TypeKind, declaration_site: Location) -> Self {
+    pub fn new<S: Into<SharedString>>(
+        name: S,
+        kind: TypeKind,
+        declaration_site: SourceSpan,
+    ) -> Self {
         Self {
             inner: Rc::new(TypeInner {
                 name: name.into(),
@@ -50,7 +54,7 @@ impl Type {
     }
 
     pub fn new_ephemeral<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
-        Self::new(name, kind, Location::ephemeral())
+        Self::new(name, kind, SourceSpan::ephemeral())
     }
 
     pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
@@ -61,7 +65,7 @@ impl Type {
         name: &str,
         parameter_types: Vec<Type>,
         return_type: Type,
-        declaration_site: Location,
+        declaration_site: SourceSpan,
     ) -> Self {
         Self::new(
             name,
@@ -93,7 +97,7 @@ impl Eq for Type {}
 #[derive(Debug)]
 pub struct TypeInner {
     name: SharedString,
-    declaration_site: Location,
+    declaration_site: SourceSpan,
     kind: TypeKind,
 }
 

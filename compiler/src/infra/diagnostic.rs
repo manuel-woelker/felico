@@ -1,6 +1,6 @@
-use crate::infra::location::Location;
 use crate::infra::result::{FelicoError, FelicoResult};
 use crate::infra::source_file::SourceFile;
+use crate::infra::source_span::SourceSpan;
 use miette::{
     Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ReportHandler, Severity,
     SourceCode,
@@ -39,7 +39,7 @@ pub struct InterpreterDiagnostic {
 
 impl InterpreterDiagnostic {
     #[track_caller]
-    pub fn new(location: &Location, message: String) -> Self {
+    pub fn new(location: &SourceSpan, message: String) -> Self {
         let mut diagnostic =
             InterpreterDiagnostic::from_source_file(&location.source_file, message);
         diagnostic.add_primary_label(location);
@@ -48,7 +48,7 @@ impl InterpreterDiagnostic {
 
     #[track_caller]
     pub fn new_with(
-        location: &Location,
+        location: &SourceSpan,
         message: String,
         mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> Self {
@@ -69,14 +69,14 @@ impl InterpreterDiagnostic {
         }
     }
 
-    pub fn add_primary_label(&mut self, location: &Location) {
+    pub fn add_primary_label(&mut self, location: &SourceSpan) {
         self.labels.push(LabeledSpan::new_primary_with_span(
             None,
             location.start_byte as usize..location.end_byte as usize,
         ));
     }
 
-    pub fn add_label<S: Into<String>>(&mut self, location: &Location, message: S) {
+    pub fn add_label<S: Into<String>>(&mut self, location: &SourceSpan, message: S) {
         self.labels.push(LabeledSpan::at(
             location.start_byte as usize..location.end_byte as usize,
             message,
@@ -165,9 +165,9 @@ mod tests {
     use crate::infra::diagnostic::{
         assert_diagnostic, diagnostic_to_string, InterpreterDiagnostic,
     };
-    use crate::infra::location::Location;
     use crate::infra::result::{FelicoError, FelicoReport};
     use crate::infra::source_file::SourceFile;
+    use crate::infra::source_span::SourceSpan;
     use error_stack::Report;
     use expect_test::expect;
     use miette::{GraphicalReportHandler, GraphicalTheme, LabeledSpan};
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn test_diagnostic_printing_multiple_frames() {
         let mut report = Report::from(FelicoError::from(InterpreterDiagnostic::new(
-            &Location::ephemeral(),
+            &SourceSpan::ephemeral(),
             "foo".to_string(),
         )));
         let error = FelicoError::from(std::io::Error::from(ErrorKind::AddrNotAvailable));

@@ -1,5 +1,5 @@
-use crate::infra::location::Location;
 use crate::infra::shared_string::SharedString;
+use crate::infra::source_span::SourceSpan;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -62,7 +62,7 @@ impl Display for TokenType {
 #[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
-    pub location: Location,
+    pub location: SourceSpan,
     pub value: Option<SharedString>,
 }
 

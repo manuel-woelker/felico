@@ -1,7 +1,7 @@
 use crate::frontend::ast::stmt::FunStmt;
 use crate::frontend::ast::types::Type;
-use crate::infra::location::Location;
 use crate::infra::result::FelicoResult;
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
 use crate::interpret::interpreter::Interpreter;
@@ -16,7 +16,7 @@ pub struct InterpreterValue {
 }
 
 impl InterpreterValue {
-    pub fn with_panic_stack_frame(&mut self, location: &Location) {
+    pub fn with_panic_stack_frame(&mut self, location: &SourceSpan) {
         let ValueKind::Panic(panic) = &self.val else {
             return;
         };
@@ -221,7 +221,7 @@ impl Debug for Callable {
 #[derive(Debug, Clone)]
 pub struct Panic {
     pub message: String,
-    pub stack: Vec<Location>,
+    pub stack: Vec<SourceSpan>,
 }
 
 impl Display for Panic {

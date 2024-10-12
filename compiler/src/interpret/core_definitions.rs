@@ -1,8 +1,8 @@
 use crate::frontend::ast::types::{PrimitiveType, StructField, StructType, Type, TypeKind};
 use crate::frontend::lex::token::{Token, TokenType};
-use crate::infra::location::Location;
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -57,7 +57,7 @@ impl TypeFactory {
                     TypeKind::Struct(StructType {
                         name: Token {
                             token_type: TokenType::Identifier,
-                            location: Location::ephemeral(),
+                            location: SourceSpan::ephemeral(),
                             value: Some(SharedString::from("Unit")),
                         },
                         fields: Default::default(),
@@ -78,7 +78,7 @@ impl TypeFactory {
         &self,
         parameter_types: Vec<Type>,
         return_type: Type,
-        declaration_site: Location,
+        declaration_site: SourceSpan,
     ) -> Type {
         let name = "Fn(".to_string()
             + &parameter_types
@@ -95,7 +95,7 @@ impl TypeFactory {
         &self,
         name: &Token,
         fields: HashMap<SharedString, StructField>,
-        declaration_site: Location,
+        declaration_site: SourceSpan,
     ) -> Type {
         Type::new(
             name.lexeme(),
@@ -139,7 +139,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             type_factory.function(
                 vec![type_factory.f64()],
                 type_factory.f64(),
-                Location::ephemeral(),
+                SourceSpan::ephemeral(),
             ),
         ),
     );
@@ -158,7 +158,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             type_factory.function(
                 vec![Type::new_ephemeral("any".to_string(), TypeKind::Any)],
                 type_factory.unit(),
-                Location::ephemeral(),
+                SourceSpan::ephemeral(),
             ),
         ),
     );
@@ -177,7 +177,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             type_factory.function(
                 vec![type_factory.str()],
                 type_factory.never(),
-                Location::ephemeral(),
+                SourceSpan::ephemeral(),
             ),
         ),
     );

@@ -11,10 +11,10 @@ use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::location::Location;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
 use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFile;
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::TypeFactory;
 
 #[derive(Debug)]
@@ -239,13 +239,13 @@ impl Parser {
         )
     }
 
-    fn create_unit_var_use(&mut self, start_location: &Location) -> FelicoResult<AstNode<Expr>> {
+    fn create_unit_var_use(&mut self, start_location: &SourceSpan) -> FelicoResult<AstNode<Expr>> {
         self.create_node(
             start_location,
             Expr::Variable(VarUse {
                 variable: Token {
                     token_type: TokenType::Identifier,
-                    location: Location {
+                    location: SourceSpan {
                         source_file: self.source_file.clone(),
                         start_byte: start_location.start_byte,
                         end_byte: start_location.end_byte,
@@ -686,7 +686,7 @@ impl Parser {
     fn finish_call(
         &mut self,
         callee: AstNode<Expr>,
-        start_location: Location,
+        start_location: SourceSpan,
     ) -> FelicoResult<AstNode<Expr>> {
         let arguments = self.parse_separated(|parser| {
             if parser.is_at(TokenType::RightParen) {
@@ -706,7 +706,7 @@ impl Parser {
 
     fn create_node<T: AstData>(
         &mut self,
-        start_location: &Location,
+        start_location: &SourceSpan,
         data: T,
     ) -> FelicoResult<AstNode<T>> {
         let start = start_location;
@@ -718,7 +718,7 @@ impl Parser {
         Ok(AstNode::new(data, location, self.type_factory.unknown()))
     }
 
-    fn current_location(&self) -> Location {
+    fn current_location(&self) -> SourceSpan {
         self.current_token.location.clone()
     }
 

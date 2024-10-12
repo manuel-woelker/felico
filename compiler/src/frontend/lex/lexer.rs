@@ -3,9 +3,9 @@ use std::fmt::{Debug, Formatter};
 use std::str::Chars;
 
 use crate::frontend::lex::token::{Token, TokenType};
-use crate::infra::location::{ByteOffset, Location};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFile;
+use crate::infra::source_span::{ByteOffset, SourceSpan};
 use ouroboros::self_referencing;
 
 #[self_referencing]
@@ -67,7 +67,7 @@ impl Lexer {
     pub(crate) fn emit_token(&mut self, token_type: TokenType) -> Token {
         let token = Token {
             token_type,
-            location: Location {
+            location: SourceSpan {
                 source_file: self.source_file.clone(),
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,

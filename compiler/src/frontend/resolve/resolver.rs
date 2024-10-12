@@ -11,10 +11,10 @@ use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::location::Location;
 use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFile;
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
 use error_stack::Report;
@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 
 struct Symbol {
-    declaration_site: Location,
+    declaration_site: SourceSpan,
     is_defined: bool,
     ty: Type,
     value: Option<InterpreterValue>,
@@ -31,7 +31,7 @@ struct Symbol {
 
 struct CurrentFunctionInfo {
     declared_return_type: Type,
-    return_type_declaration_site: Location,
+    return_type_declaration_site: SourceSpan,
 }
 
 pub struct LexicalScope {
@@ -70,11 +70,11 @@ pub struct Resolver {
 
 // Ast information extract during resolution to make separate borrows
 struct CommonAstInfo<'a> {
-    location: &'a Location,
+    location: &'a SourceSpan,
     ty: &'a mut Type,
 }
 impl<'a> CommonAstInfo<'a> {
-    fn new(location: &'a Location, ty: &'a mut Type) -> Self {
+    fn new(location: &'a SourceSpan, ty: &'a mut Type) -> Self {
         Self { location, ty }
     }
 }
@@ -82,7 +82,7 @@ impl<'a> CommonAstInfo<'a> {
 impl Resolver {
     fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: LexicalScope = LexicalScope::new();
-        let location = Location {
+        let location = SourceSpan {
             source_file: SourceFile::from_string("native", "native_code"),
             start_byte: 0,
             end_byte: 0,
@@ -431,7 +431,7 @@ impl Resolver {
         };
         *ast_info.ty = function_type.return_type.clone();
         let mut diagnostics = vec![];
-        let mut diagnose = |location: &Location, message: String| {
+        let mut diagnose = |location: &SourceSpan, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message);
             let declaration_site = call.callee.ty.declaration_site();
             if !declaration_site.is_ephemeral() {
