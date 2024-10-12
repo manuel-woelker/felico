@@ -1,10 +1,9 @@
 use crate::frontend::ast::stmt::FunStmt;
 use crate::frontend::ast::types::Type;
 use crate::infra::result::FelicoResult;
-use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
-use crate::interpret::interpreter::Interpreter;
+use crate::interpret::interpreter::{Interpreter, StackFrame};
 use itertools::{Itertools, Position};
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
@@ -13,23 +12,6 @@ use std::rc::Rc;
 pub struct InterpreterValue {
     pub val: ValueKind,
     pub ty: Type,
-}
-
-impl InterpreterValue {
-    pub fn with_panic_stack_frame(&mut self, location: &SourceSpan) {
-        let ValueKind::Panic(panic) = &self.val else {
-            return;
-        };
-        let mut stack = panic.stack.clone();
-        stack.push(location.clone());
-        *self = Self {
-            val: ValueKind::Panic(Rc::new(Panic {
-                message: panic.message.clone(),
-                stack,
-            })),
-            ty: self.ty.clone(),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -93,12 +75,9 @@ impl ValueFactory {
         }
     }
 
-    pub fn panic(&self, message: String) -> InterpreterValue {
+    pub fn panic(&self, message: String, stack: Vec<StackFrame>) -> InterpreterValue {
         InterpreterValue {
-            val: ValueKind::Panic(Rc::new(Panic {
-                message,
-                stack: vec![],
-            })),
+            val: ValueKind::Panic(Rc::new(Panic { message, stack })),
             ty: self.type_factory.unit(),
         }
     }
@@ -218,25 +197,26 @@ impl Debug for Callable {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Panic {
-    pub message: String,
-    pub stack: Vec<SourceSpan>,
-}
-
 impl Display for Panic {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.message, f)?;
-        for location in &self.stack {
+        for frame in self.stack.iter().rev() {
+            let source_span = &frame.call_source_span;
             write!(
                 f,
                 "\n\t[{}:{}:{}] {}",
-                location.source_file.filename(),
-                location.get_line_number(),
-                location.get_column_number(),
-                location.get_source_code(),
+                source_span.source_file.filename(),
+                source_span.get_line_number(),
+                source_span.get_column_number(),
+                source_span.get_source_code(),
             )?;
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Panic {
+    pub message: String,
+    pub stack: Vec<StackFrame>,
 }

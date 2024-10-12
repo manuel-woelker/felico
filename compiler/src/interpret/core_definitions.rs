@@ -168,11 +168,11 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
         value_factory.new_native_callable(
             "panic",
             1,
-            move |_interpreter, arguments| {
-                Ok(
-                    value_factory_clone
-                        .panic(arguments.iter().map(|arg| arg.to_string()).join(",")),
-                )
+            move |interpreter, arguments| {
+                Ok(value_factory_clone.panic(
+                    arguments.iter().map(|arg| arg.to_string()).join(","),
+                    interpreter.get_current_call_stack(),
+                ))
             },
             type_factory.function(
                 vec![type_factory.str()],

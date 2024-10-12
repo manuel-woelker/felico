@@ -12,6 +12,7 @@ use crate::frontend::resolve::resolver::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, FelicoError, FelicoResult};
 use crate::infra::source_file::SourceFile;
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::environment::Environment;
 use crate::interpret::value::{
@@ -22,6 +23,11 @@ use std::rc::Rc;
 
 type PrintFn = Box<dyn Fn(&InterpreterValue)>;
 
+#[derive(Debug, Clone)]
+pub struct StackFrame {
+    pub call_source_span: SourceSpan,
+}
+
 pub struct Interpreter {
     source_file: SourceFile,
     type_factory: TypeFactory,
@@ -30,6 +36,7 @@ pub struct Interpreter {
     print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
+    frame_stack: Vec<StackFrame>,
 }
 
 macro_rules! check_early_return {
@@ -67,7 +74,12 @@ impl Interpreter {
             available_stack: 20,
             value_factory: ValueFactory::new(&type_factory),
             type_factory,
+            frame_stack: Vec::new(),
         })
+    }
+
+    pub fn get_current_call_stack(&self) -> Vec<StackFrame> {
+        self.frame_stack.clone()
     }
 
     pub fn set_print_fn(&mut self, print_fn: PrintFn) {
@@ -180,7 +192,10 @@ impl Interpreter {
                 check_early_return!(argument);
                 arguments.push(argument);
             }
-            let mut result = match &callable.fun.as_ref() {
+            self.frame_stack.push(StackFrame {
+                call_source_span: expr.location.clone(),
+            });
+            let result = match &callable.fun.as_ref() {
                 CallableFun::Native(fun) => match fun(self, arguments) {
                     Ok(result) => result,
                     Err(err) => {
@@ -202,8 +217,8 @@ impl Interpreter {
                             self.environment.define(parameter.name.lexeme(), value);
                         });
                     let result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
-                    // this is a return itself
                     let value = match result.val {
+                        // this is a return itself
                         ValueKind::Return(value) => *value,
                         _ => result,
                     };
@@ -211,7 +226,7 @@ impl Interpreter {
                     value
                 }
             };
-            result.with_panic_stack_frame(&expr.location);
+            self.frame_stack.pop();
             self.available_stack += 1;
             Ok(result)
         } else {
@@ -619,7 +634,6 @@ mod tests {
         .unwrap();
         let error = interpreter.run().expect_err("Expected some error");
         let message = error.to_string();
-        println!("{}", message);
         expect![[r#"
             Execution panicked: something went wrong
             	[panicking:3:17] panic("something went wrong");
