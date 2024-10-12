@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+felico-compiler = { path = "../compiler" }
 axum = "0.7.7"
 http = "1.1.0"
 serde = { version = "1.0.210", features = ["derive"] }

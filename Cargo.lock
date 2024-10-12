@@ -333,6 +333,7 @@ name = "felico-server"
 version = "0.1.0"
 dependencies = [
     "axum",
+    "felico-compiler",
     "http",
     "http-body-util",
     "hyper",
