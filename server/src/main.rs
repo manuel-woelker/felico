@@ -12,9 +12,9 @@ async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
     info!("Starting up;");
-    let serve_index_html = ServeFile::new("./docui/dist/index.html");
+    let serve_index_html = ServeFile::new("./webui/dist/index.html");
     let serve_dir =
-        ServeDir::new("./docui/dist/assets").not_found_service(serve_index_html.clone());
+        ServeDir::new("./webui/dist/assets").not_found_service(serve_index_html.clone());
 
     // build our application with a route
     let app = Router::new()
