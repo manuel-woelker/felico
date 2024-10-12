@@ -10,7 +10,7 @@ use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_script};
 use crate::frontend::resolve::resolver::resolve_variables;
 use crate::infra::diagnostic::InterpreterDiagnostic;
-use crate::infra::result::{bail, FelicoResult};
+use crate::infra::result::{bail, FelicoError, FelicoResult};
 use crate::infra::source_file::SourceFile;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::environment::Environment;
@@ -34,15 +34,15 @@ pub struct Interpreter {
 
 macro_rules! check_early_return {
     ($expr:expr) => {
-        if $expr.is_return() {
+        if $expr.should_return_early() {
             return Ok($expr);
         }
     };
 }
 
 impl InterpreterValue {
-    fn is_return(&self) -> bool {
-        matches!(self.val, ValueKind::Return(_))
+    fn should_return_early(&self) -> bool {
+        matches!(self.val, ValueKind::Return(_) | ValueKind::Panic(_))
     }
     fn val(value: InterpreterValue) -> Self {
         value
@@ -120,7 +120,13 @@ impl Interpreter {
         let CallableFun::Defined(main_function) = &*callable.fun else {
             bail!("main() is not a user defined function");
         };
-        self.evaluate_expr(&main_function.fun_stmt.body)?;
+        let result = self.evaluate_expr(&main_function.fun_stmt.body)?;
+        if let ValueKind::Panic(panic) = result.val {
+            return Err(FelicoError::Panic {
+                panic: panic.as_ref().clone(),
+            }
+            .into());
+        };
         Ok(())
     }
 
@@ -155,7 +161,7 @@ impl Interpreter {
             return self.create_diagnostic(expr, "Stack size exceeded.");
         }
         let callee = self.evaluate_expr(&call.callee)?;
-        if callee.is_return() {
+        if callee.should_return_early() {
             self.available_stack += 1;
             return Ok(callee);
         }
@@ -174,7 +180,7 @@ impl Interpreter {
                 check_early_return!(argument);
                 arguments.push(argument);
             }
-            let result = match &callable.fun.as_ref() {
+            let mut result = match &callable.fun.as_ref() {
                 CallableFun::Native(fun) => match fun(self, arguments) {
                     Ok(result) => result,
                     Err(err) => {
@@ -197,16 +203,15 @@ impl Interpreter {
                         });
                     let result = self.evaluate_expr(&defined_function.fun_stmt.body)?;
                     // this is a return itself
-                    let value = if let ValueKind::Return(value) = result.val {
-                        *value
-                    } else {
-                        result
+                    let value = match result.val {
+                        ValueKind::Return(value) => *value,
+                        _ => result,
                     };
                     self.environment = old_environment;
-                    self.available_stack += 1;
-                    return Ok(value);
+                    value
                 }
             };
+            result.with_panic_stack_frame(&expr.location);
             self.available_stack += 1;
             Ok(result)
         } else {
@@ -299,7 +304,7 @@ impl Interpreter {
     fn evaluate_block_expr(&mut self, block: &BlockExpr) -> FelicoResult<InterpreterValue> {
         self.environment.enter_new();
         let stmt_result = self.evaluate_stmts(&block.stmts[..])?;
-        if stmt_result.is_return() {
+        if stmt_result.should_return_early() {
             self.environment.exit();
             return Ok(stmt_result);
         }
@@ -437,7 +442,7 @@ impl Interpreter {
         unary: &UnaryExpr,
     ) -> FelicoResult<InterpreterValue> {
         let sub_expression = self.evaluate_expr(&unary.right)?;
-        if sub_expression.is_return() {
+        if sub_expression.should_return_early() {
             return Ok(sub_expression);
         }
         Ok(match unary.operator.token_type {
@@ -556,7 +561,7 @@ impl Interpreter {
     fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<InterpreterValue> {
         for stmt in stmts {
             let result = self.evaluate_stmt(stmt)?;
-            if result.is_return() {
+            if result.should_return_early() {
                 return Ok(result);
             }
         }
@@ -596,6 +601,32 @@ mod tests {
     use crate::interpret::eval::eval_expression;
     use crate::interpret::interpreter::{run_program_to_string, Interpreter};
     use expect_test::{expect, Expect};
+
+    #[test]
+    fn test_panic() {
+        let interpreter = Interpreter::new(SourceFile::from_string(
+            "panicking",
+            r#"
+            fun p() {
+                panic("something went wrong");
+            }
+            fun x() {
+                p();
+            }
+            x();
+            "#,
+        ))
+        .unwrap();
+        let error = interpreter.run().expect_err("Expected some error");
+        let message = error.to_string();
+        println!("{}", message);
+        expect![[r#"
+            Execution panicked: something went wrong
+            	[panicking:3:17] panic("something went wrong");
+            	[panicking:6:17] p();
+            	[panicking:8:13] x();"#]]
+        .assert_eq(&message);
+    }
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {
         let result = eval_expression(SourceFile::from_string(name, input)).unwrap();
@@ -681,21 +712,21 @@ mod tests {
         "#]];
         call_wrong_arity: "sqrt();" => expect![[r#"
             × Wrong number of arguments in call - expected: 1, actual 0
-               ╭─[call_wrong_arity:1:5]
+               ╭─[call_wrong_arity:1:1]
              1 │ sqrt();
-               ·     ───
+               · ───────
                ╰────
 
         "#]];
         call_wrong_arity_defined: "fun foo(a: bool) {}\ndebug_print(3);\nfoo();" => expect![[r#"
             × Wrong number of arguments in call - expected: 1, actual 0
-               ╭─[call_wrong_arity_defined:3:4]
+               ╭─[call_wrong_arity_defined:3:1]
              1 │ fun foo(a: bool) {}
                ·     ─┬─
                ·      ╰── Function declared here
              2 │ debug_print(3);
              3 │ foo();
-               ·    ───
+               · ──────
                ╰────
 
         "#]];
@@ -773,9 +804,9 @@ mod tests {
         "#]];
         endless_recursion: "fun a() {a();} a();" => expect![[r#"
             × Stack size exceeded.
-               ╭─[endless_recursion:1:11]
+               ╭─[endless_recursion:1:10]
              1 │ fun a() {a();} a();
-               ·           ───
+               ·          ────
                ╰────
 
         "#]];

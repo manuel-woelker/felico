@@ -1,5 +1,6 @@
 use crate::frontend::ast::stmt::FunStmt;
 use crate::frontend::ast::types::Type;
+use crate::infra::location::Location;
 use crate::infra::result::FelicoResult;
 use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
@@ -14,10 +15,29 @@ pub struct InterpreterValue {
     pub ty: Type,
 }
 
+impl InterpreterValue {
+    pub fn with_panic_stack_frame(&mut self, location: &Location) {
+        let ValueKind::Panic(panic) = &self.val else {
+            return;
+        };
+        let mut stack = panic.stack.clone();
+        stack.push(location.clone());
+        *self = Self {
+            val: ValueKind::Panic(Rc::new(Panic {
+                message: panic.message.clone(),
+                stack,
+            })),
+            ty: self.ty.clone(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ValueFactory {
     type_factory: TypeFactory,
 }
+
+impl ValueFactory {}
 
 impl ValueFactory {
     pub fn new(type_factory: &TypeFactory) -> Self {
@@ -73,6 +93,16 @@ impl ValueFactory {
         }
     }
 
+    pub fn panic(&self, message: String) -> InterpreterValue {
+        InterpreterValue {
+            val: ValueKind::Panic(Rc::new(Panic {
+                message,
+                stack: vec![],
+            })),
+            ty: self.type_factory.unit(),
+        }
+    }
+
     pub fn new_native_callable(
         &self,
         name: &str,
@@ -96,6 +126,7 @@ impl ValueFactory {
 pub enum ValueKind {
     Unit,
     Return(Box<InterpreterValue>),
+    Panic(Rc<Panic>),
     Tuple(Vec<InterpreterValue>),
     String(String),
     Bool(bool),
@@ -154,6 +185,9 @@ impl Display for ValueKind {
             ValueKind::Return(value) => {
                 write!(f, "ret {:?}", value)
             }
+            ValueKind::Panic(message) => {
+                write!(f, "panic {:?}", message)
+            }
         }
     }
 }
@@ -181,5 +215,28 @@ pub struct DefinedFunction {
 impl Debug for Callable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Callable '{}/{}'", self.name, self.arity)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Panic {
+    pub message: String,
+    pub stack: Vec<Location>,
+}
+
+impl Display for Panic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.message, f)?;
+        for location in &self.stack {
+            write!(
+                f,
+                "\n\t[{}:{}:{}] {}",
+                location.source_file.filename(),
+                location.get_line_number(),
+                location.get_column_number(),
+                location.get_source_code(),
+            )?;
+        }
+        Ok(())
     }
 }

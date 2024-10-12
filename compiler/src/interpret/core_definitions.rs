@@ -4,6 +4,7 @@ use crate::infra::location::Location;
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
 use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -157,6 +158,25 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             type_factory.function(
                 vec![Type::new_ephemeral("any".to_string(), TypeKind::Any)],
                 type_factory.unit(),
+                Location::ephemeral(),
+            ),
+        ),
+    );
+    let value_factory_clone = value_factory.clone();
+    add_definition(
+        "panic",
+        value_factory.new_native_callable(
+            "panic",
+            1,
+            move |_interpreter, arguments| {
+                Ok(
+                    value_factory_clone
+                        .panic(arguments.iter().map(|arg| arg.to_string()).join(",")),
+                )
+            },
+            type_factory.function(
+                vec![type_factory.str()],
+                type_factory.never(),
                 Location::ephemeral(),
             ),
         ),

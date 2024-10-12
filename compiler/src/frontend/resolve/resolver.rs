@@ -125,7 +125,7 @@ impl Resolver {
                     a
                 })
                 .unwrap();
-            return Err(FelicoReport { report });
+            return Err(FelicoReport::new(report));
         }
         Ok(())
     }
@@ -1011,10 +1011,10 @@ mod tests {
         sqrt(1,2);
         "# => expect![[r#"
             × Wrong number of arguments in call - expected: 1, actual 2
-               ╭─[call_wrong_number_of_arguments:2:13]
+               ╭─[call_wrong_number_of_arguments:2:9]
              1 │ 
              2 │         sqrt(1,2);
-               ·             ──────
+               ·         ──────────
              3 │         
                ╰────
 
@@ -1025,13 +1025,13 @@ mod tests {
         foo(true);
         "# => expect![[r#"
             × Wrong number of arguments in call - expected: 0, actual 1
-               ╭─[call_with_wrong_argument:3:12]
+               ╭─[call_with_wrong_argument:3:9]
              1 │ 
              2 │         fun foo() {};
                ·             ─┬─
                ·              ╰── Function declared here
              3 │         foo(true);
-               ·            ───────
+               ·         ──────────
              4 │         
                ╰────
 

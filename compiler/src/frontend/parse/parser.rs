@@ -665,8 +665,8 @@ impl Parser {
     }
 
     fn parse_call(&mut self) -> FelicoResult<AstNode<Expr>> {
-        let mut expr = self.parse_primary()?;
         let start_location = self.current_location();
+        let mut expr = self.parse_primary()?;
         loop {
             if self.is_at(TokenType::LeftParen) {
                 self.advance();
@@ -943,29 +943,29 @@ mod tests {
                 └── Read 'c'     [10+1]
         "#]];
         expression_call_empty: "foo()" => expect![[r#"
-            Call     [3+2]
+            Call     [0+5]
             └── Read 'foo'     [0+3]
         "#]];
         expression_call_one_arg: "foo(bar)" => expect![[r#"
-            Call     [3+5]
+            Call     [0+8]
             ├── Read 'foo'     [0+3]
             └── Read 'bar'     [4+3]
         "#]];
         expression_call_two_args: "foo(bar,baz)" => expect![[r#"
-            Call     [3+9]
+            Call     [0+12]
             ├── Read 'foo'     [0+3]
             ├── Read 'bar'     [4+3]
             └── Read 'baz'     [8+3]
         "#]];
         expression_call_with_trailing_comma: "foo(bar,baz,)" => expect![[r#"
-            Call     [3+10]
+            Call     [0+13]
             ├── Read 'foo'     [0+3]
             ├── Read 'bar'     [4+3]
             └── Read 'baz'     [8+3]
         "#]];
         expression_call_twice: "foo()()" => expect![[r#"
-            Call     [3+4]
-            └── Call     [3+3]
+            Call     [0+7]
+            └── Call     [0+6]
                 └── Read 'foo'     [0+3]
         "#]];
 
@@ -1242,7 +1242,7 @@ mod tests {
                    Module
                    └── Declare fun 'main()'     [0+4]
                        ├── Return type: Read 'unit'     [0+4]
-                       ├── Get b     [1+3]
+                       ├── Get b     [0+4]
                        │   └── Read 'a'     [0+1]
                        └── Unit     [0+4]
                "#]];
@@ -1317,20 +1317,20 @@ mod tests {
                        │   │       │   └── F64(1.0)     [80+1]
                        │   │       ├── Read 'n'     [83+1]
                        │   │       └── +     [115+24]
-                       │   │           ├── Call     [118+9]
+                       │   │           ├── Call     [115+12]
                        │   │           │   ├── Read 'fib'     [115+3]
                        │   │           │   └── -     [119+6]
                        │   │           │       ├── Read 'n'     [119+1]
                        │   │           │       └── F64(2.0)     [123+1]
-                       │   │           └── Call     [131+8]
+                       │   │           └── Call     [128+11]
                        │   │               ├── Read 'fib'     [128+3]
                        │   │               └── -     [132+6]
                        │   │                   ├── Read 'n'     [132+1]
                        │   │                   └── F64(1.0)     [136+1]
                        │   └── Unit     [160+1]
-                       ├── Call     [193+9]
+                       ├── Call     [182+20]
                        │   ├── Read 'debug_print'     [182+11]
-                       │   └── Call     [197+4]
+                       │   └── Call     [194+7]
                        │       ├── Read 'fib'     [194+3]
                        │       └── F64(6.0)     [198+1]
                        └── Unit     [21+197]

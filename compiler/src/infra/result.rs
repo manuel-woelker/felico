@@ -16,6 +16,12 @@ pub enum FelicoError {
     #[error("{message}")]
     Message { message: String },
 
+    #[error("Execution panicked: {panic}")]
+    Panic {
+        panic: Panic,
+        //        call_stack: Vec<Location>,
+    },
+
     #[error("{inner}")]
     Generic {
         inner: Box<dyn std::error::Error + Sync + Send + 'static>,
@@ -25,6 +31,14 @@ pub enum FelicoError {
 // Wrap error_stack::Report for better encapsulation, and to implement Into Transformations
 pub struct FelicoReport {
     pub report: Report<FelicoError>,
+}
+
+impl FelicoReport {
+    pub fn new(report: impl Into<Report<FelicoError>>) -> Self {
+        Self {
+            report: report.into(),
+        }
+    }
 }
 
 pub type FelicoResult<T> = Result<T, FelicoReport>;
@@ -87,11 +101,11 @@ impl<T, E: Into<FelicoReport>> FelicoResultExt<T, E> for Result<T, E> {
             Err(e) => {
                 let message = f(&e);
                 let stack = e.into();
-                let stack = FelicoReport {
-                    report: stack
+                let stack = FelicoReport::new(
+                    stack
                         .report
                         .change_context(FelicoError::Message { message }),
-                };
+                );
                 Err(stack)
             }
         }
@@ -113,6 +127,7 @@ macro_rules! bail {
         return Err(crate::infra::result::failed(message));
     }};
 }
+use crate::interpret::value::Panic;
 pub(crate) use bail;
 
 #[cfg(test)]

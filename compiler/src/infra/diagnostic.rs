@@ -238,7 +238,7 @@ mod tests {
         let other_report = Report::from(error);
         report.extend_one(other_report);
         assert_diagnostic::<()>(
-            &Err(FelicoReport { report }),
+            &Err(FelicoReport::new(report)),
             expect![[r#"
                 × foo
                    ╭─[<ephemeral file>:1:1]
