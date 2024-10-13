@@ -1,14 +1,16 @@
-use axum::extract::{Path, Request};
-use axum::middleware::Next;
+use crate::infra::error::ErrorMessage;
+use crate::middleware::logging_middleware::error_logging_middleware;
+use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
-use axum::{http::StatusCode, middleware, routing::get, Json, Router};
+use axum::routing::get;
+use axum::{middleware, Json, Router};
 use felico_compiler::infra::result::FelicoError;
-use log::{info, warn};
+use http::StatusCode;
+use log::info;
 use serde::Serialize;
 use tower_http::services::{ServeDir, ServeFile};
 
-#[tokio::main]
-async fn main() {
+pub async fn start_server() {
     // initialize tracing
     tracing_subscriber::fmt::init();
     info!("Starting up;");
@@ -34,60 +36,6 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(listen_address).await.unwrap();
     info!("Listening on {listen_address}");
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn error_logging_middleware(req: Request, next: Next) -> Response {
-    let uri = req.uri().clone();
-    let response = next.run(req).await;
-    if response.status().is_success() || response.status() == StatusCode::NOT_MODIFIED {
-        return response;
-    }
-    let error_message = response
-        .extensions()
-        .get::<ErrorMessage>()
-        .map(|e| e.error.to_string())
-        .unwrap_or_else(|| "Unknown error".to_string());
-    warn!(
-        "HTTP Error {} for '{}': {}",
-        response.status().as_u16(),
-        uri,
-        error_message
-    );
-    response
-}
-
-#[derive(Debug)]
-pub struct ServerError(FelicoError);
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ErrorMessage {
-    error: String,
-}
-
-impl<T: Into<FelicoError>> From<T> for ServerError {
-    fn from(value: T) -> Self {
-        Self(value.into())
-    }
-}
-
-impl IntoResponse for ServerError {
-    fn into_response(self) -> Response {
-        let error_message = ErrorMessage {
-            error: self.0.to_string(),
-        };
-        let mut response = (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(error_message.clone()),
-        )
-            .into_response();
-        response.extensions_mut().insert(error_message);
-        *response.status_mut() = StatusCode::from_u16(599).unwrap();
-        response
-    }
-}
-
-async fn test_error() -> Result<Json<PackageDescription>, ServerError> {
-    Err("test error, please ignore".into())
 }
 
 async fn get_package(
@@ -119,27 +67,4 @@ async fn get_packages() -> (StatusCode, Json<PackageIndex>) {
         }],
     };
     (StatusCode::CREATED, Json(package_index))
-}
-
-#[derive(Serialize)]
-struct PackageInfo {
-    name: String,
-    version: String,
-}
-
-#[derive(Serialize)]
-struct PackageDescription {
-    info: PackageInfo,
-    functions: Vec<FunctionDescription>,
-}
-
-#[derive(Serialize)]
-struct FunctionDescription {
-    name: String,
-    signature: String,
-}
-
-#[derive(Serialize)]
-struct PackageIndex {
-    packages: Vec<PackageInfo>,
 }
