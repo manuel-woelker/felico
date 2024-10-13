@@ -34,13 +34,12 @@ impl Parser {
             .next()
             .ok_or_else(|| failed("Expected at least one token"))?;
         let next_token = lexer.next().unwrap_or(current_token.clone());
-        let module_name = Name::from(
-            source_file
-                .filename()
-                .split_once(".")
-                .map(|a| a.0)
-                .unwrap_or(source_file.filename()),
-        );
+        let file_path = source_file.filename();
+        let file_name = file_path
+            .rsplit_once("/")
+            .map(|(_prefix, file_name)| file_name)
+            .unwrap_or(file_path);
+        let module_name = Name::from(file_name.split_once(".").map(|a| a.0).unwrap_or(file_name));
         Ok(Parser {
             module_name,
             lexer,
@@ -71,15 +70,9 @@ impl Parser {
 
     pub fn parse_script(mut self) -> FelicoResult<AstNode<Module>> {
         let start_location = self.current_location();
-        let mut stmts: Vec<AstNode<Stmt>> = vec![];
-        while self.current_token.token_type != TokenType::EOF {
-            if self.is_at(TokenType::Semicolon) {
-                self.advance();
-                continue;
-            }
-            stmts.push(self.parse_decl()?)
-        }
-        self.consume(TokenType::EOF, "Expected end of file")?;
+
+        let module = self.parse_module()?;
+
         // Create artificial main function
         let return_type = self.create_unit_var_use(&start_location)?;
         let result_expression =
@@ -87,10 +80,11 @@ impl Parser {
         let body = self.create_node(
             &start_location,
             Expr::Block(BlockExpr {
-                stmts,
+                stmts: module.data.stmts,
                 result_expression,
             }),
         )?;
+
         let main_stmt = self.create_node(
             &start_location,
             Stmt::Fun(FunStmt {
@@ -104,11 +98,34 @@ impl Parser {
                 body,
             }),
         )?;
+        let name = self.module_name.clone();
+        self.create_node(
+            &start_location,
+            Module {
+                name: name,
+                stmts: vec![main_stmt],
+            },
+        )
+    }
+
+    pub fn parse_module(&mut self) -> FelicoResult<AstNode<Module>> {
+        let start_location = self.current_location();
+
+        let mut stmts: Vec<AstNode<Stmt>> = vec![];
+        while self.current_token.token_type != TokenType::EOF {
+            if self.is_at(TokenType::Semicolon) {
+                self.advance();
+                continue;
+            }
+            stmts.push(self.parse_decl()?)
+        }
+        self.consume(TokenType::EOF, "Expected end of file")?;
+
         self.create_node(
             &start_location,
             Module {
                 name: self.module_name.clone(),
-                stmts: vec![main_stmt],
+                stmts,
             },
         )
     }

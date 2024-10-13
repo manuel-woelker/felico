@@ -80,7 +80,7 @@ impl<'a> CommonAstInfo<'a> {
 }
 
 impl Resolver {
-    fn new(type_factory: TypeFactory) -> Self {
+    pub fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: LexicalScope = LexicalScope::new();
         let location = SourceSpan {
             source_file: SourceFile::from_string("native", "native_code"),

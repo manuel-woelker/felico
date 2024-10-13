@@ -2,7 +2,7 @@ import {A} from "@solidjs/router";
 import {For} from "solid-js";
 import {bundleIndexStore} from "../stores/BundleIndexStore";
 
-export const BundleDocsOverview = (props) => {
+export const BundleDocsOverview = (props: {}) => {
   return (
       <div>
         <h4>Bundles</h4>

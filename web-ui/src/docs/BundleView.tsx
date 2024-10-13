@@ -3,7 +3,7 @@ import styles from "./BundleView.module.css"
 import {bundle, setBundleCoordinates} from "../stores/BundleStore";
 import {createEffect, For, Show} from "solid-js";
 
-export const BundleView = (props) => {
+export const BundleView = (props: {}) => {
   const params = useParams();
   createEffect(() => {
     setBundleCoordinates({bundleName: params.bundleName, bundleVersion: params.bundleVersion});

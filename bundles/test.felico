@@ -1,0 +1,13 @@
+
+
+fun assert_equal(a: str, b: str) {
+	if a != b {
+		panic(a + " != " + b);
+	}
+}
+
+fun assert(condition: bool) {
+	if !condition {
+		panic("Condition failed");
+	}
+}

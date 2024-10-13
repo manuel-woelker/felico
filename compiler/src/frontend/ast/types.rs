@@ -3,11 +3,11 @@ use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Type {
-    inner: Rc<TypeInner>,
+    inner: Arc<TypeInner>,
 }
 
 impl Type {
@@ -45,7 +45,7 @@ impl Type {
         declaration_site: SourceSpan,
     ) -> Self {
         Self {
-            inner: Rc::new(TypeInner {
+            inner: Arc::new(TypeInner {
                 name: name.into(),
                 kind,
                 declaration_site,
