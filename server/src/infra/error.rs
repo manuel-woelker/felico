@@ -1,3 +1,4 @@
+use crate::model::bundle::PackageDescription;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use felico_compiler::infra::result::FelicoError;
@@ -34,6 +35,6 @@ impl IntoResponse for ServerError {
     }
 }
 
-async fn test_error() -> Result<Json<crate::http::start_server::PackageDescription>, ServerError> {
+pub async fn test_error() -> Result<Json<PackageDescription>, ServerError> {
     Err("test error, please ignore".into())
 }
