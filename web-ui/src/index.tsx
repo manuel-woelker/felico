@@ -3,9 +3,10 @@ import {render} from 'solid-js/web';
 import {Route, Router} from "@solidjs/router";
 
 import './index.css';
-import {App} from './App';
-import {Home} from "./Home";
+import {App} from './layouts/App';
+import {Home} from "./views/Home";
 import {BundleView} from "./docs/BundleView";
+import {BundleDocsOverview} from "./docs/BundleDocsOverview";
 
 const root = document.getElementById('root');
 
@@ -18,5 +19,6 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 //render(() => <App />, root!);
 render(() => <Router root={App}>
   <Route path="/" component={Home}/>
+  <Route path="/docs" component={BundleDocsOverview}/>
   <Route path="/docs/:bundleName/:bundleVersion" component={BundleView}/>
 </Router>, root!);

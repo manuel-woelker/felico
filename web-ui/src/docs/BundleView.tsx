@@ -1,7 +1,7 @@
 import {useParams} from "@solidjs/router";
 import styles from "./BundleView.module.css"
 import {bundle, setBundleCoordinates} from "../stores/BundleStore";
-import {createEffect} from "solid-js";
+import {createEffect, For, Show} from "solid-js";
 
 export const BundleView = (props) => {
   const params = useParams();
@@ -19,6 +19,14 @@ export const BundleView = (props) => {
             </div>
             <div>
               x{JSON.stringify(bundle())}x
+            </div>
+            <div>
+              <Show when={bundle() && bundle().functions}>
+                <h4>Functions</h4>
+                <For each={bundle().functions}>{(fn => <div>
+                  {fn.name} {fn.signature}
+                </div>)}</For>
+              </Show>
             </div>
           </div>
           <div>body</div>

@@ -59,10 +59,16 @@ async fn get_package(
 
 async fn get_packages() -> (StatusCode, Json<PackageIndex>) {
     let package_index = PackageIndex {
-        packages: vec![PackageInfo {
-            name: "std".to_string(),
-            version: "0.0.1".to_string(),
-        }],
+        packages: vec![
+            PackageInfo {
+                name: "std".to_string(),
+                version: "0.0.2".to_string(),
+            },
+            PackageInfo {
+                name: "test".to_string(),
+                version: "0.0.1".to_string(),
+            },
+        ],
     };
     (StatusCode::CREATED, Json(package_index))
 }
