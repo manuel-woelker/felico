@@ -1,14 +1,14 @@
 use serde::Serialize;
 
 #[derive(Serialize)]
-pub struct PackageInfo {
+pub struct BundleInfo {
     pub name: String,
     pub version: String,
 }
 
 #[derive(Serialize)]
-pub struct PackageDescription {
-    pub info: PackageInfo,
+pub struct BundleDescription {
+    pub info: BundleInfo,
     pub functions: Vec<FunctionDescription>,
 }
 
@@ -19,6 +19,6 @@ pub struct FunctionDescription {
 }
 
 #[derive(Serialize)]
-pub struct PackageIndex {
-    pub packages: Vec<PackageInfo>,
+pub struct BundleIndex {
+    pub bundles: Vec<BundleInfo>,
 }

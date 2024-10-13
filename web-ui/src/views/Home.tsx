@@ -1,6 +1,6 @@
 import {Component} from 'solid-js';
 
-import {PackageIndex} from "../stores/PackageIndexStore";
+import {BundleIndex} from "../stores/BundleIndexStore";
 import {A} from "@solidjs/router";
 import styles from "./Home.module.css";
 
@@ -12,21 +12,21 @@ export const Home: Component = () => {
     error: string
   }
 
-  (async function getPackageIndex() {
+  (async function getBundleIndex() {
     try {
       const error_response = await fetch('/api/test_error')
       const error_json = (await error_response.json()) as ErrorMessage
       console.log(error_json)
       console.log(error_json.error)
-      const response = await fetch('/api/packages')
-      const packageIndex = (await response.json()) as PackageIndex
-      console.log(packageIndex)
-      for (const packageInfo of packageIndex.packages) {
+      const response = await fetch('/api/bundles')
+      const bundleIndex = (await response.json()) as BundleIndex
+      console.log(bundleIndex)
+      for (const bundleInfo of bundleIndex.bundles) {
         const response = await fetch(
-            `/api/packages/${packageInfo.name}/${packageInfo.version}`,
+            `/api/bundles/${bundleInfo.name}/${bundleInfo.version}`,
         )
-        const packageDescription = (await response.json()) as PackageIndex
-        console.log(packageDescription)
+        const bundleIndex = (await response.json()) as BundleIndex
+        console.log(bundleIndex)
       }
     } catch (error) {
       console.error(error)

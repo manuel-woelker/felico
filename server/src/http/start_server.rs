@@ -1,6 +1,6 @@
 use crate::infra::error::{test_error, ServerError};
 use crate::middleware::logging_middleware::error_logging_middleware;
-use crate::model::bundle::{FunctionDescription, PackageDescription, PackageIndex, PackageInfo};
+use crate::model::bundle::{BundleDescription, BundleIndex, BundleInfo, FunctionDescription};
 use axum::extract::Path;
 use axum::routing::get;
 use axum::{middleware, Json, Router};
@@ -22,9 +22,9 @@ pub async fn start_server() {
         .route("/foo", get(|| async { "Hi from /foo" }))
         .nest_service("/assets", serve_dir.clone())
         .fallback_service(serve_dir)
-        .route("/api/packages", get(get_packages))
+        .route("/api/bundles", get(get_bundles))
+        .route("/api/bundles/:bundle_name/:bundle_version", get(get_bundle))
         .route("/api/test_error", get(test_error))
-        .route("/api/packages/:package_name/:package_version", get(get_package))
         .layer(middleware::from_fn(error_logging_middleware))
         // end
         ;
@@ -36,14 +36,14 @@ pub async fn start_server() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_package(
-    Path((package_name, package_version)): Path<(String, String)>,
-) -> Result<Json<PackageDescription>, ServerError> {
+async fn get_bundle(
+    Path((bundle_name, bundle_version)): Path<(String, String)>,
+) -> Result<Json<BundleDescription>, ServerError> {
     //    Err("foo".into())
-    Ok(Json(PackageDescription {
-        info: PackageInfo {
-            name: package_name,
-            version: package_version,
+    Ok(Json(BundleDescription {
+        info: BundleInfo {
+            name: bundle_name,
+            version: bundle_version,
             /*
             functions: vec![FunctionDescription {
                 name: "debug_print".to_string(),
@@ -57,18 +57,18 @@ async fn get_package(
     }))
 }
 
-async fn get_packages() -> (StatusCode, Json<PackageIndex>) {
-    let package_index = PackageIndex {
-        packages: vec![
-            PackageInfo {
+async fn get_bundles() -> (StatusCode, Json<BundleIndex>) {
+    let bundle_index = BundleIndex {
+        bundles: vec![
+            BundleInfo {
                 name: "std".to_string(),
                 version: "0.0.2".to_string(),
             },
-            PackageInfo {
+            BundleInfo {
                 name: "test".to_string(),
                 version: "0.0.1".to_string(),
             },
         ],
     };
-    (StatusCode::CREATED, Json(package_index))
+    (StatusCode::CREATED, Json(bundle_index))
 }
