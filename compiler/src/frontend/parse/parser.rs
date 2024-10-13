@@ -102,7 +102,7 @@ impl Parser {
         self.create_node(
             &start_location,
             Module {
-                name: name,
+                name,
                 stmts: vec![main_stmt],
             },
         )
