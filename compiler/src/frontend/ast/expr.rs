@@ -17,6 +17,7 @@ pub enum Expr {
     Set(SetExpr),
     Block(BlockExpr),
     If(IfExpr),
+    CreateStruct(CreateStructExpr),
 }
 
 impl AstData for Expr {}
@@ -95,5 +96,17 @@ pub struct IfExpr {
 
 #[derive(Debug, Clone)]
 pub struct ReturnExpr {
+    pub expression: AstNode<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateStructExpr {
+    pub type_expression: AstNode<Expr>,
+    pub field_initializers: Vec<CreateStructInitializer>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateStructInitializer {
+    pub field_name: Token,
     pub expression: AstNode<Expr>,
 }

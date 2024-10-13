@@ -1,6 +1,6 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
-    SetExpr, UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, CreateStructExpr, Expr, GetExpr, IfExpr,
+    LiteralExpr, ReturnExpr, SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
@@ -18,6 +18,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::value::{
     Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
 };
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -160,6 +161,9 @@ impl Interpreter {
             Expr::Get(get_expr) => self.evaluate_get_expr(get_expr)?,
             Expr::Set(set_expr) => self.evaluate_set_expr(set_expr)?,
             Expr::Call(call) => self.evaluate_call_expr(expr, call)?,
+            Expr::CreateStruct(create_struct) => {
+                self.evaluate_create_struct_expr(expr, create_struct)?
+            }
         }))
     }
 
@@ -519,8 +523,8 @@ impl Interpreter {
                 let result = self.evaluate_while_stmt(&while_stmt)?;
                 check_early_return!(result);
             }
-            Stmt::Struct(_) => {
-                todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {
+                // TODO: implement struct stmt
             }
         }
         Ok(self.cont())
@@ -591,6 +595,19 @@ impl Interpreter {
             LiteralExpr::I64(number) => self.value_factory.i64(*number),
             LiteralExpr::Bool(bool) => self.value_factory.bool(*bool),
         })
+    }
+
+    fn evaluate_create_struct_expr(
+        &mut self,
+        ast_node: &AstNode<Expr>,
+        create_struct_expr: &CreateStructExpr,
+    ) -> FelicoResult<InterpreterValue> {
+        let mut fields = HashMap::new();
+        for field in &create_struct_expr.field_initializers {
+            let value = self.evaluate_expr(&field.expression)?;
+            fields.insert(field.field_name.lexeme().into(), value);
+        }
+        Ok(self.value_factory.make_struct(&ast_node.ty, fields))
     }
 }
 
@@ -686,6 +703,12 @@ mod tests {
             }
             debug_print(fib(6));
         " => expect!["8"];
+        program_struct: "
+            struct Foo {
+                bar: str,
+            }
+            debug_print(Foo {bar: \"19\"});
+        " => expect![[r#"Struct StructInstance { fields: {"bar": String("19")} }"#]];
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {

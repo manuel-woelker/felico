@@ -395,6 +395,9 @@ impl Resolver {
             Expr::Return(return_expr) => {
                 self.resolve_return_expr(return_expr, &mut ast_info)?;
             }
+            Expr::CreateStruct(_) => {
+                // TODO: resolve create struct
+            }
         }
         Ok(())
     }
@@ -1071,27 +1074,27 @@ mod tests {
                ╰────
 
         "#]];
-        different_if_types: "if true 3 else true;" => expect![[r#"
+        different_if_types: "if (true) 3 else true;" => expect![[r#"
             × Then and else branch of if statement must evaluate to the same type, but then evaluates to ❬f64❭, while else evaluates to ❬bool❭
                ╭─[different_if_types:1:1]
-             1 │ if true 3 else true;
-               · ────────────────────
+             1 │ if (true) 3 else true;
+               · ──────────────────────
                ╰────
 
         "#]];
-        different_if_types_no_else: "if true 3;" => expect![[r#"
+        different_if_types_no_else: "if (true) 3;" => expect![[r#"
             × Then and else branch of if statement must evaluate to the same type, but then evaluates to ❬f64❭, while else evaluates to ❬Unit❭
                ╭─[different_if_types_no_else:1:1]
-             1 │ if true 3;
-               · ──────────
+             1 │ if (true) 3;
+               · ────────────
                ╰────
 
         "#]];
-        wrong_type_in_if_condition: "if 3 {};" => expect![[r#"
+        wrong_type_in_if_condition: "if (3) {};" => expect![[r#"
             × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
                ╭─[wrong_type_in_if_condition:1:1]
-             1 │ if 3 {};
-               · ────────
+             1 │ if (3) {};
+               · ──────────
                ╰────
 
         "#]];

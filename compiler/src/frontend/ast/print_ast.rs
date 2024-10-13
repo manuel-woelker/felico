@@ -146,6 +146,16 @@ impl<'a> AstPrinterWorker<'a> {
                 tree.push(self.expr_to_tree(&return_expr.expression));
                 tree
             }
+            Expr::CreateStruct(create_struct_exp) => {
+                let mut tree = Tree::new("Create struct".to_string());
+                tree.push(self.expr_to_tree(&create_struct_exp.type_expression));
+                for field in &create_struct_exp.field_initializers {
+                    let mut subtree = self.expr_to_tree(&field.expression);
+                    subtree.root = format!("{}: {}", field.field_name.lexeme(), subtree.root);
+                    tree.push(subtree);
+                }
+                tree
+            }
         };
         self.add_location(tree, ast)
     }

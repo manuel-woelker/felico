@@ -1,6 +1,6 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
-    SetExpr, UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, CreateStructExpr, CreateStructInitializer, Expr,
+    GetExpr, IfExpr, LiteralExpr, ReturnExpr, SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
@@ -313,7 +313,9 @@ impl Parser {
     fn parse_if(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
         self.consume(TokenType::If, "Expected 'if'")?;
+        self.consume(TokenType::LeftParen, "Expected '(' after 'if'")?;
         let condition = self.parse_expr()?;
+        self.consume(TokenType::RightParen, "Expected ')' after 'if' condition")?;
         let then_expr = self.parse_expr()?;
         let else_expr = if self.is_at(TokenType::Else) {
             self.advance();
@@ -596,6 +598,42 @@ impl Parser {
         self.parse_primary()
     }
 
+    fn parse_create_struct(&mut self) -> FelicoResult<AstNode<Expr>> {
+        let start_location = self.current_location();
+        let primary = self.parse_primary()?;
+        if !self.is_at(TokenType::LeftBrace) {
+            return Ok(primary);
+        }
+        self.consume(
+            TokenType::LeftBrace,
+            "Expected '{' after struct constructor",
+        )?;
+        let field_initializers = self.parse_separated(|parser| {
+            if !parser.is_at(TokenType::Identifier) {
+                return Ok(None);
+            }
+            let field_name =
+                parser.consume(TokenType::Identifier, "Expected field name in struct")?;
+            parser.consume(TokenType::Colon, "Expected ':' after field name")?;
+            let expression = parser.parse_expr()?;
+            Ok(Some(CreateStructInitializer {
+                field_name,
+                expression,
+            }))
+        })?;
+        self.consume(
+            TokenType::RightBrace,
+            "Expected '}' to complete struct instance creation",
+        )?;
+        self.create_node(
+            &start_location,
+            Expr::CreateStruct(CreateStructExpr {
+                type_expression: primary,
+                field_initializers,
+            }),
+        )
+    }
+
     fn parse_primary(&mut self) -> FelicoResult<AstNode<Expr>> {
         let result = self.create_node(
             &self.current_location(),
@@ -683,7 +721,7 @@ impl Parser {
 
     fn parse_call(&mut self) -> FelicoResult<AstNode<Expr>> {
         let start_location = self.current_location();
-        let mut expr = self.parse_primary()?;
+        let mut expr = self.parse_create_struct()?;
         loop {
             if self.is_at(TokenType::LeftParen) {
                 self.advance();
@@ -1141,34 +1179,15 @@ mod tests {
                        │   └── Read 'b'     [13+1]
                        └── Unit     [0+15]
                "#]];
-               script_if_no_parentheses: "if c a;" => expect![[r#"
+               script_if_no_semicolon: "if (c) {}" => expect![[r#"
                    Module
-                   └── Declare fun 'main()'     [0+7]
-                       ├── Return type: Read 'unit'     [0+7]
-                       ├── If     [0+7]
-                       │   ├── Read 'c'     [3+1]
-                       │   └── Read 'a'     [5+1]
-                       └── Unit     [0+7]
-               "#]];
-               script_if_no_semicolon: "if c {}" => expect![[r#"
-                   Module
-                   └── Declare fun 'main()'     [0+7]
-                       ├── Return type: Read 'unit'     [0+7]
-                       ├── If     [0+7]
-                       │   ├── Read 'c'     [3+1]
-                       │   └── Block     [5+2]
-                       │       └── Unit     [6+1]
-                       └── Unit     [0+7]
-               "#]];
-               script_if_else_no_parentheses: "if c a else b;" => expect![[r#"
-                   Module
-                   └── Declare fun 'main()'     [0+14]
-                       ├── Return type: Read 'unit'     [0+14]
-                       ├── If     [0+14]
-                       │   ├── Read 'c'     [3+1]
-                       │   ├── Read 'a'     [5+1]
-                       │   └── Read 'b'     [12+1]
-                       └── Unit     [0+14]
+                   └── Declare fun 'main()'     [0+9]
+                       ├── Return type: Read 'unit'     [0+9]
+                       ├── If     [0+9]
+                       │   ├── Read 'c'     [4+1]
+                       │   └── Block     [7+2]
+                       │       └── Unit     [8+1]
+                       └── Unit     [0+9]
                "#]];
 
                script_while: "while(a) b;" => expect![[r#"
@@ -1313,6 +1332,26 @@ mod tests {
                        ├── Struct 'Empty'     [16+31]
                        └── Unit     [16+31]
                "#]];
+                script_struct_create: "
+               struct Something {
+                    bar: bool,
+               }
+                let a = Something {
+                    bar: true,
+                };
+               " => expect![[r#"
+                   Module
+                   └── Declare fun 'main()'     [16+168]
+                       ├── Return type: Read 'unit'     [16+168]
+                       ├── Struct 'Something'     [16+86]
+                       │   └── Field bar     [55+10]
+                       │       └── Read 'bool'     [60+4]
+                       ├── Let ''a' (Identifier)'     [99+69]
+                       │   └── Create struct     [107+61]
+                       │       ├── Read 'Something'     [107+9]
+                       │       └── bar: Bool(true)     [144+4]
+                       └── Unit     [16+168]
+               "#]];
                 script_fib: "
                     fun fib(n: f64) {
                          return if (n <= 1) n else
@@ -1374,10 +1413,10 @@ mod tests {
     }
 
     test_parse_error!(
-        incomplete_if_statement: "if x" => expect![[r#"
+        incomplete_if_statement: "if (x)" => expect![[r#"
             × Unexpected token 'EOF' in expression
-               ╭─[incomplete_if_statement:1:5]
-             1 │ if x
+               ╭─[incomplete_if_statement:1:7]
+             1 │ if (x)
                ╰────
 
         "#]];
@@ -1399,7 +1438,7 @@ mod tests {
 
          "#]];
          unexpected_expression_part: "3 + if" => expect![[r#"
-             × Unexpected token 'EOF' in expression
+             × Expected '(' after 'if', found End of file instead
                 ╭─[unexpected_expression_part:1:7]
               1 │ 3 + if
                 ╰────
@@ -1421,5 +1460,21 @@ mod tests {
                 ╰────
 
          "#]];
+           script_if_no_parentheses: "if c a;" => expect![[r#"
+               × Expected '(' after 'if', found 'c' (Identifier) instead
+                  ╭─[script_if_no_parentheses:1:4]
+                1 │ if c a;
+                  ·    ─
+                  ╰────
+
+           "#]];
+           script_if_else_no_parentheses: "if c a else b;" => expect![[r#"
+               × Expected '(' after 'if', found 'c' (Identifier) instead
+                  ╭─[script_if_else_no_parentheses:1:4]
+                1 │ if c a else b;
+                  ·    ─
+                  ╰────
+
+           "#]];
     );
 }

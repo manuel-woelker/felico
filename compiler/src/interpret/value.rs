@@ -1,10 +1,12 @@
 use crate::frontend::ast::stmt::FunStmt;
 use crate::frontend::ast::types::Type;
 use crate::infra::result::FelicoResult;
+use crate::infra::shared_string::SharedString;
 use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
 use crate::interpret::interpreter::{Interpreter, StackFrame};
 use itertools::{Itertools, Position};
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
@@ -18,8 +20,6 @@ pub struct InterpreterValue {
 pub struct ValueFactory {
     type_factory: TypeFactory,
 }
-
-impl ValueFactory {}
 
 impl ValueFactory {
     pub fn new(type_factory: &TypeFactory) -> Self {
@@ -99,6 +99,17 @@ impl ValueFactory {
             ty,
         )
     }
+
+    pub fn make_struct(
+        &self,
+        ty: &Type,
+        fields: HashMap<SharedString, InterpreterValue>,
+    ) -> InterpreterValue {
+        InterpreterValue {
+            val: ValueKind::Struct(StructInstance { fields }),
+            ty: ty.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +124,7 @@ pub enum ValueKind {
     I64(i64),
     Callable(Callable),
     Type(Type),
+    Struct(StructInstance),
 }
 
 impl Display for InterpreterValue {
@@ -167,6 +179,9 @@ impl Display for ValueKind {
             ValueKind::Panic(message) => {
                 write!(f, "panic {:?}", message)
             }
+            ValueKind::Struct(struct_instance) => {
+                write!(f, "Struct {:?}", struct_instance)
+            }
         }
     }
 }
@@ -219,4 +234,9 @@ impl Display for Panic {
 pub struct Panic {
     pub message: String,
     pub stack: Vec<StackFrame>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructInstance {
+    pub fields: HashMap<SharedString, InterpreterValue>,
 }
