@@ -1,0 +1,15 @@
+testcases:
+  - name: struct field access
+    input: |-
+      struct Something {
+            bar: bool,
+       }
+        let a = Something {
+            bar: true,
+        };
+        debug_print(a.bar);
+        a.bar = false;
+        debug_print(a.bar);
+    output: |-
+      truefalse
+

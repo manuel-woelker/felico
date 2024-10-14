@@ -1352,6 +1352,35 @@ mod tests {
                        │       └── bar: Bool(true)     [144+4]
                        └── Unit     [16+168]
                "#]];
+                script_struct_field_access: "
+               struct Something {
+                    bar: bool,
+               }
+                let a = Something {
+                    bar: true,
+                };
+                a.bar = false;
+                debug_print(a.bar);
+               " => expect![[r#"
+                   Module
+                   └── Declare fun 'main()'     [16+235]
+                       ├── Return type: Read 'unit'     [16+235]
+                       ├── Struct 'Something'     [16+86]
+                       │   └── Field bar     [55+10]
+                       │       └── Read 'bool'     [60+4]
+                       ├── Let ''a' (Identifier)'     [99+69]
+                       │   └── Create struct     [107+61]
+                       │       ├── Read 'Something'     [107+9]
+                       │       └── bar: Bool(true)     [144+4]
+                       ├── Set bar     [185+14]
+                       │   ├── Read 'a'     [185+1]
+                       │   └── Bool(false)     [193+5]
+                       ├── Call     [216+19]
+                       │   ├── Read 'debug_print'     [216+11]
+                       │   └── Get bar     [228+6]
+                       │       └── Read 'a'     [228+1]
+                       └── Unit     [16+235]
+               "#]];
                 script_fib: "
                     fun fib(n: f64) {
                          return if (n <= 1) n else

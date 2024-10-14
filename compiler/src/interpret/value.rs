@@ -6,6 +6,7 @@ use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
 use crate::interpret::interpreter::{Interpreter, StackFrame};
 use itertools::{Itertools, Position};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
@@ -106,7 +107,7 @@ impl ValueFactory {
         fields: HashMap<SharedString, InterpreterValue>,
     ) -> InterpreterValue {
         InterpreterValue {
-            val: ValueKind::Struct(StructInstance { fields }),
+            val: ValueKind::Struct(StructInstance::new(fields)),
             ty: ty.clone(),
         }
     }
@@ -238,5 +239,33 @@ pub struct Panic {
 
 #[derive(Debug, Clone)]
 pub struct StructInstance {
+    pub inner: Rc<RefCell<StructInstanceInner>>,
+}
+
+impl StructInstance {
+    pub fn new(fields: HashMap<SharedString, InterpreterValue>) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(StructInstanceInner { fields })),
+        }
+    }
+
+    pub fn set_field(&self, field_name: &str, value: InterpreterValue) -> FelicoResult<()> {
+        self.inner
+            .borrow_mut()
+            .fields
+            .insert(SharedString::from(field_name), value);
+        Ok(())
+    }
+    pub fn get_field(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue>> {
+        let inner = self.inner.borrow();
+        let Some(value) = inner.fields.get(field_name) else {
+            return Ok(None);
+        };
+        Ok(Some(value.clone()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StructInstanceInner {
     pub fields: HashMap<SharedString, InterpreterValue>,
 }

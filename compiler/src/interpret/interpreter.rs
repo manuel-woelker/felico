@@ -158,8 +158,8 @@ impl Interpreter {
             Expr::Return(return_stmt) => self.evaluate_return_expr(return_stmt)?,
             Expr::Block(block) => self.evaluate_block_expr(block)?,
             Expr::If(if_expr) => self.evaluate_if_expr(if_expr)?,
-            Expr::Get(get_expr) => self.evaluate_get_expr(get_expr)?,
-            Expr::Set(set_expr) => self.evaluate_set_expr(set_expr)?,
+            Expr::Get(get_expr) => self.evaluate_get_expr(expr, get_expr)?,
+            Expr::Set(set_expr) => self.evaluate_set_expr(expr, set_expr)?,
             Expr::Call(call) => self.evaluate_call_expr(expr, call)?,
             Expr::CreateStruct(create_struct) => {
                 self.evaluate_create_struct_expr(expr, create_struct)?
@@ -241,15 +241,34 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_get_expr(&mut self, _get_expr: &GetExpr) -> FelicoResult<InterpreterValue> {
-        todo!("Get not supported");
-        /*
-        let object = self.evaluate_expr(&get.object)?;
-        return if let self.value_factory.Object(instance) = &object {
-            if let Some(value) = instance.borrow().fields.get(get.name.lexeme()) {
-                return Ok(value.clone());
-            }
-            if let Some(method) = instance.borrow().class.method_map.get(get.name.lexeme()) {
+    fn evaluate_get_expr(
+        &mut self,
+        expr: &AstNode<Expr>,
+        get_expr: &GetExpr,
+    ) -> FelicoResult<InterpreterValue> {
+        let object = self.evaluate_expr(&get_expr.object)?;
+        let ValueKind::Struct(instance) = &object.val else {
+            return self.create_diagnostic(
+                expr,
+                format!(
+                    "Expected object for dot access, instead found {:?}",
+                    &object
+                ),
+            );
+        };
+        if let Some(value) = instance.get_field(get_expr.name.lexeme())? {
+            return Ok(value.clone());
+        }
+        self.create_diagnostic(
+            expr,
+            format!(
+                "No property '{}' found on object {:?}",
+                get_expr.name.lexeme(),
+                instance
+            ),
+        )
+
+        /*            if let Some(method) = instance.borrow().class.method_map.get(get.name.lexeme()) {
                 if let self.value_factory.Callable(callable) = &method {
                     if let CallableFun::Defined(fun) = &*callable.fun {
                         let closure = fun.closure.child_environment();
@@ -280,8 +299,24 @@ impl Interpreter {
          */
     }
 
-    fn evaluate_set_expr(&mut self, _set_expr: &SetExpr) -> FelicoResult<InterpreterValue> {
-        todo!("Get not supported");
+    fn evaluate_set_expr(
+        &mut self,
+        expr: &AstNode<Expr>,
+        set_expr: &SetExpr,
+    ) -> FelicoResult<InterpreterValue> {
+        let object = self.evaluate_expr(&set_expr.object)?;
+        let ValueKind::Struct(instance) = &object.val else {
+            return self.create_diagnostic(
+                expr,
+                format!(
+                    "Expected object for dot access, instead found {:?}",
+                    &object
+                ),
+            );
+        };
+        let value = self.evaluate_expr(&set_expr.value)?;
+        instance.set_field(set_expr.name.lexeme(), value.clone())?;
+        Ok(value)
         /*
         let object = self.evaluate_expr(&set.object)?;
         return if let self.value_factory.Object(instance) = object {
@@ -523,7 +558,7 @@ impl Interpreter {
                 let result = self.evaluate_while_stmt(&while_stmt)?;
                 check_early_return!(result);
             }
-            Stmt::Struct(struct_stmt) => {
+            Stmt::Struct(_struct_stmt) => {
                 // TODO: implement struct stmt
             }
         }
@@ -708,7 +743,7 @@ mod tests {
                 bar: str,
             }
             debug_print(Foo {bar: \"19\"});
-        " => expect![[r#"Struct StructInstance { fields: {"bar": String("19")} }"#]];
+        " => expect![[r#"Struct StructInstance { inner: RefCell { value: StructInstanceInner { fields: {"bar": String("19")} } } }"#]];
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {
