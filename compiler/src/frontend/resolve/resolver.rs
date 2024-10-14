@@ -1,6 +1,6 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, GetExpr, IfExpr, LiteralExpr, ReturnExpr,
-    SetExpr, UnaryExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, CreateStructExpr, Expr, GetExpr, IfExpr,
+    LiteralExpr, ReturnExpr, SetExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
@@ -395,8 +395,8 @@ impl Resolver {
             Expr::Return(return_expr) => {
                 self.resolve_return_expr(return_expr, &mut ast_info)?;
             }
-            Expr::CreateStruct(_) => {
-                // TODO: resolve create struct
+            Expr::CreateStruct(create_struct_expr) => {
+                self.resolve_create_struct_expr(create_struct_expr, &mut ast_info)?;
             }
         }
         Ok(())
@@ -460,6 +460,94 @@ impl Resolver {
                     format!(
                         "Cannot coerce argument of type {} as parameter of type {} in function invocation",
                         argument.ty, parameter,
+                    ),
+                );
+            }
+        }
+        self.diagnostics.append(&mut diagnostics);
+        Ok(())
+    }
+
+    fn resolve_create_struct_expr(
+        &mut self,
+        create_struct_expr: &mut CreateStructExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let type_expression = &mut create_struct_expr.type_expression;
+        self.resolve_expr(type_expression)?;
+        let TypeKind::Struct(struct_type) = type_expression.ty.kind() else {
+            self.diagnose(InterpreterDiagnostic::new(
+                &type_expression.location,
+                format!(
+                    "Expected a struct to create, but instead found type {}",
+                    type_expression.ty
+                ),
+            ));
+            *ast_info.ty = self.type_factory.unresolved();
+            return Ok(());
+        };
+        *ast_info.ty = type_expression.ty.clone();
+        let mut diagnostics = vec![];
+        let mut diagnose = |location: &SourceSpan, message: String| {
+            let mut diagnostic = InterpreterDiagnostic::new(location, message);
+            let declaration_site = type_expression.ty.declaration_site();
+            if !declaration_site.is_ephemeral() {
+                diagnostic.add_label(declaration_site, "Struct declared here".to_string());
+            }
+            diagnostics.push(diagnostic);
+        };
+        let mut seen_fields: HashMap<&str, SourceSpan> = Default::default();
+        for field_initializer in &mut create_struct_expr.field_initializers {
+            self.resolve_expr(&mut field_initializer.expression)?;
+            let Some(field) = struct_type
+                .fields
+                .get(field_initializer.field_name.lexeme())
+            else {
+                diagnose(
+                    &field_initializer.field_name.location,
+                    format!(
+                        "Struct {} does not have a field named '{}'",
+                        type_expression.ty,
+                        field_initializer.field_name.lexeme(),
+                    ),
+                );
+                continue;
+            };
+            if !self
+                .type_checker
+                .is_assignable_to(&field_initializer.expression.ty, &field.ty)
+            {
+                diagnose(
+                    &field_initializer.field_name.location,
+                    format!(
+                        "Cannot coerce field initializer value of type {} to field '{}' type {} in construction of struct {}",
+                        field_initializer.expression.ty, field_initializer.field_name.lexeme(), field.ty, type_expression.ty
+                    ),
+                );
+            }
+            if let Some(previous) = seen_fields.insert(
+                field_initializer.field_name.lexeme(),
+                field_initializer.field_name.location.clone(),
+            ) {
+                let mut diagnostic = InterpreterDiagnostic::new(
+                    &field_initializer.field_name.location,
+                    format!(
+                        "Field {} is already initialized",
+                        field_initializer.field_name
+                    ),
+                );
+                diagnostic.add_label(&previous, "Already initialized here".to_string());
+                self.diagnostics.push(diagnostic);
+            }
+        }
+
+        for (name, field) in &struct_type.fields {
+            if !seen_fields.contains_key(name.as_str()) {
+                diagnose(
+                    ast_info.location,
+                    format!(
+                        "Struct initializer for struct {} is missing field '{}' of type '{}'",
+                        type_expression.ty, name, field.ty,
                     ),
                 );
             }
@@ -1095,6 +1183,75 @@ mod tests {
                ╭─[wrong_type_in_if_condition:1:1]
              1 │ if (3) {};
                · ──────────
+               ╰────
+
+        "#]];
+
+        wrong_struct_type: "struct Foo {}; if (Foo {}) {};" => expect![[r#"
+            × Condition in if statement must evaluate to a boolean, but was of type ❬Foo❭ instead
+               ╭─[wrong_struct_type:1:16]
+             1 │ struct Foo {}; if (Foo {}) {};
+               ·                ───────────────
+               ╰────
+
+        "#]];
+
+        struct_initialize_to_non_existant_fields: "struct Foo {}; Foo {a: 3, b: true};" => expect![[r#"
+            × Struct ❬Foo❭ does not have a field named 'a'
+               ╭─[struct_initialize_to_non_existant_fields:1:21]
+             1 │ struct Foo {}; Foo {a: 3, b: true};
+               ·        ─┬─          ─
+               ·         ╰── Struct declared here
+               ╰────
+
+            × Struct ❬Foo❭ does not have a field named 'b'
+               ╭─[struct_initialize_to_non_existant_fields:1:27]
+             1 │ struct Foo {}; Foo {a: 3, b: true};
+               ·        ─┬─                ─
+               ·         ╰── Struct declared here
+               ╰────
+
+        "#]];
+
+        struct_initialize_with_wrong_types: "struct Foo {a: bool, b: i64,}; Foo {a: 3, b: true};" => expect![[r#"
+            × Cannot coerce field initializer value of type ❬f64❭ to field 'a' type ❬bool❭ in construction of struct ❬Foo❭
+               ╭─[struct_initialize_with_wrong_types:1:37]
+             1 │ struct Foo {a: bool, b: i64,}; Foo {a: 3, b: true};
+               ·        ─┬─                          ─
+               ·         ╰── Struct declared here
+               ╰────
+
+            × Cannot coerce field initializer value of type ❬bool❭ to field 'b' type ❬i64❭ in construction of struct ❬Foo❭
+               ╭─[struct_initialize_with_wrong_types:1:43]
+             1 │ struct Foo {a: bool, b: i64,}; Foo {a: 3, b: true};
+               ·        ─┬─                                ─
+               ·         ╰── Struct declared here
+               ╰────
+
+        "#]];      
+        struct_initialize_missing_fields: "struct Foo {a: bool, b: i64,}; Foo {};" => expect![[r#"
+            × Struct initializer for struct ❬Foo❭ is missing field 'a' of type '❬bool❭'
+               ╭─[struct_initialize_missing_fields:1:32]
+             1 │ struct Foo {a: bool, b: i64,}; Foo {};
+               ·        ─┬─                     ───────
+               ·         ╰── Struct declared here
+               ╰────
+
+            × Struct initializer for struct ❬Foo❭ is missing field 'b' of type '❬i64❭'
+               ╭─[struct_initialize_missing_fields:1:32]
+             1 │ struct Foo {a: bool, b: i64,}; Foo {};
+               ·        ─┬─                     ───────
+               ·         ╰── Struct declared here
+               ╰────
+
+        "#]];
+
+        struct_initialize_field_twice: "struct Foo {a: bool}; Foo {a: true, a: false};" => expect![[r#"
+            × Field 'a' (Identifier) is already initialized
+               ╭─[struct_initialize_field_twice:1:37]
+             1 │ struct Foo {a: bool}; Foo {a: true, a: false};
+               ·                            ┬        ─
+               ·                            ╰── Already initialized here
                ╰────
 
         "#]];

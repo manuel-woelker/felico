@@ -116,7 +116,7 @@ pub enum TypeKind {
 impl Eq for StructType {}
 impl PartialEq for StructType {
     fn eq(&self, other: &Self) -> bool {
-        self.name.value.is_some() && self.name.value == other.name.value
+        self.name.lexeme() == other.name.lexeme()
     }
 }
 

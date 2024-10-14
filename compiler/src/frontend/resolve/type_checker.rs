@@ -14,6 +14,9 @@ impl TypeChecker {
     }
 
     pub fn is_assignable_to(&self, source: &Type, destination: &Type) -> bool {
+        if source == destination {
+            return true;
+        }
         // Bottom Type never is assignable to everything, since it never actually exists
         if matches!(source.kind(), TypeKind::Never) {
             return true;
@@ -28,9 +31,6 @@ impl TypeChecker {
         }
         // Resolution failed do not produce additional errors
         if matches!(source.kind(), TypeKind::Unresolved) {
-            return true;
-        }
-        if source == destination {
             return true;
         }
         false
