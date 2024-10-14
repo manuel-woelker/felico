@@ -1,14 +1,22 @@
 .main {
-    background: bisque;
     display: grid;
     grid-template-columns: 300px 1fr;
     grid-template-rows: 1fr;
 }
 
 .sidebar {
+    margin: 10px;
     padding: 10px;
+    overflow: clip;
+}
+
+.center {
+    border-left: 1px solid #ddd;
+    padding: 10px;
+
 }
 
 .bundleName {
-    font-size: 20px;
+    font-size: 24px;
+    font-weight: bold;
 }

@@ -1,13 +1,15 @@
 
 
 fun assert_equal(a: str, b: str) {
-	if a != b {
+	if (a != b) {
 		panic(a + " != " + b);
 	}
 }
 
 fun assert(condition: bool) {
-	if !condition {
+	if (!condition) {
 		panic("Condition failed");
 	}
 }
+
+struct Test {}

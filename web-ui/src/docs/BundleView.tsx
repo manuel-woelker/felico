@@ -13,15 +13,16 @@ export const BundleView = (props: {}) => {
       <>
         <div class={styles.main}>
           <div class={styles.sidebar}>
+            Bundle
             <div class={styles.bundleName}>{params.bundleName}</div>
             {params.bundleVersion}
             <div>
             </div>
-            <div>
-              x{JSON.stringify(bundle())}x
-            </div>
+          </div>
+          <div class={styles.center}>
             <div>
               <Show when={bundle() && bundle().functions}>
+                <div class={styles.bundleName}>Bundle {params.bundleName}</div>
                 <h4>Functions</h4>
                 <For each={bundle().functions}>{(fn => <div>
                   {fn.name} {fn.signature}
@@ -29,7 +30,6 @@ export const BundleView = (props: {}) => {
               </Show>
             </div>
           </div>
-          <div>body</div>
         </div>
       </>
   );
