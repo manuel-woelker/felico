@@ -18,6 +18,7 @@ use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::value::{InterpreterValue, ValueKind};
 use error_stack::Report;
+use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -402,6 +403,43 @@ impl Resolver {
         Ok(())
     }
 
+    fn resolve_method_call_expr(
+        &mut self,
+        call: &mut CallExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<bool> {
+        if let Expr::Get(get_expr) = &mut *call.callee.data {
+            self.resolve_expr(&mut get_expr.object)?;
+            if self
+                .get_struct_field(&get_expr.object.ty, get_expr.name.lexeme())?
+                .is_none()
+            {
+                // Not a field, try to resolve function instead
+                let distance_and_symbol = self.get_definition_distance_and_symbol(&get_expr.name);
+                if let Some((distance, symbol)) = distance_and_symbol {
+                    // Matching name found
+                    if let TypeKind::Function(_fun) = symbol.ty.kind() {
+                        // function in method call position, replace ast
+                        let fun_node = AstNode::new(
+                            Expr::Variable(VarUse {
+                                variable: get_expr.name.clone(),
+                                distance,
+                            }),
+                            get_expr.name.location.clone(),
+                            symbol.ty.clone(),
+                        );
+                        let first_argument = get_expr.object.clone();
+                        call.callee = fun_node;
+                        call.arguments.insert(0, first_argument);
+                        self.resolve_call_expr(call, ast_info)?;
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
     fn resolve_set_expr(
         &mut self,
         set: &mut SetExpr,
@@ -409,8 +447,16 @@ impl Resolver {
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut set.value)?;
         self.resolve_expr(&mut set.object)?;
-        let Some(field) = self.get_struct_field(&set.object.ty, set.name.lexeme(), ast_info)?
-        else {
+        let Some(field) = self.get_struct_field(&set.object.ty, set.name.lexeme())? else {
+            let diagnostic = InterpreterDiagnostic::new(
+                ast_info.location,
+                format!(
+                    "Type {} has no field '{}'",
+                    set.object.ty,
+                    set.name.lexeme()
+                ),
+            );
+            self.diagnose(diagnostic);
             return Ok(());
         };
         if !self.type_checker.is_assignable_to(&set.value.ty, &field.ty) {
@@ -436,8 +482,16 @@ impl Resolver {
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut get.object)?;
-        let Some(field) = self.get_struct_field(&get.object.ty, get.name.lexeme(), ast_info)?
-        else {
+        let Some(field) = self.get_struct_field(&get.object.ty, get.name.lexeme())? else {
+            let diagnostic = InterpreterDiagnostic::new(
+                ast_info.location,
+                format!(
+                    "Type {} has no field '{}'",
+                    get.object.ty,
+                    get.name.lexeme()
+                ),
+            );
+            self.diagnose(diagnostic);
             return Ok(());
         };
         *ast_info.ty = field.ty.clone();
@@ -448,20 +502,20 @@ impl Resolver {
         &mut self,
         ty: &'a Type,
         field_name: &str,
-        ast_info: &mut CommonAstInfo,
+        //_ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<Option<&'a StructField>> {
         let TypeKind::Struct(struct_type) = ty.kind() else {
-            let diagnostic = InterpreterDiagnostic::new(ast_info.location,
+            /*            let diagnostic = InterpreterDiagnostic::new(ast_info.location,
                                                         format!("Using the dot operator to access a field, but the type of the object is not a struct but {}", ty));
-            self.diagnose(diagnostic);
+            self.diagnose(diagnostic);*/
             return Ok(None);
         };
         let Some(field) = struct_type.fields.get(field_name) else {
-            let diagnostic = InterpreterDiagnostic::new(
+            /*            let diagnostic = InterpreterDiagnostic::new(
                 ast_info.location,
                 format!("Struct {} has no field '{}'", ty, field_name),
             );
-            self.diagnose(diagnostic);
+            self.diagnose(diagnostic);*/
             return Ok(None);
         };
         Ok(Some(field))
@@ -472,7 +526,12 @@ impl Resolver {
         call: &mut CallExpr,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
+        if self.resolve_method_call_expr(call, ast_info)? {
+            return Ok(());
+        }
+
         self.resolve_expr(&mut call.callee)?;
+
         for arg in &mut call.arguments {
             self.resolve_expr(arg)?
         }
@@ -596,7 +655,7 @@ impl Resolver {
             }
         }
 
-        for (name, field) in &struct_type.fields {
+        for (name, field) in struct_type.fields.iter().sorted_by_key(|(name, _)| *name) {
             if !seen_fields.contains_key(name.as_str()) {
                 diagnose(
                     ast_info.location,
@@ -1312,7 +1371,7 @@ mod tests {
         "#]];
 
         struct_get_on_wrong_type: "debug_print.foo;" => expect![[r#"
-            × Using the dot operator to access a field, but the type of the object is not a struct but ❬Fn(❬any❭) -> ❬Unit❭❭
+            × Type ❬Fn(❬any❭) -> ❬Unit❭❭ has no field 'foo'
                ╭─[struct_get_on_wrong_type:1:1]
              1 │ debug_print.foo;
                · ────────────────
@@ -1321,7 +1380,7 @@ mod tests {
         "#]];
 
         struct_get_wrong_name: "struct Foo {a: f64}; Foo {a: 3}.b;" => expect![[r#"
-            × Struct ❬Foo❭ has no field 'b'
+            × Type ❬Foo❭ has no field 'b'
                ╭─[struct_get_wrong_name:1:22]
              1 │ struct Foo {a: f64}; Foo {a: 3}.b;
                ·                      ─────────────

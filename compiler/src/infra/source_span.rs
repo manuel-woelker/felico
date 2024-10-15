@@ -1,8 +1,9 @@
 use crate::infra::source_file::SourceFile;
+use std::fmt::{Debug, Formatter};
 
 pub type ByteOffset = i32;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SourceSpan {
     pub source_file: SourceFile,
     pub start_byte: ByteOffset,
@@ -40,5 +41,17 @@ impl SourceSpan {
             .take_while(|&&c| c != b'\n')
             .count()
             + 1
+    }
+}
+
+impl Debug for SourceSpan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}:{}:{}]",
+            self.source_file.filename(),
+            self.get_line_number(),
+            self.get_column_number()
+        )
     }
 }

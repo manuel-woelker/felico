@@ -143,3 +143,21 @@ testcases:
     output: |-
       122
 
+  - name: function call
+    input: |-
+      debug_print(abs(-3));
+    output: |-
+      3
+
+  - name: function call in method position
+    input: |-
+      debug_print(9.sqrt());
+    output: |-
+      3
+
+
+  - name: function call in method position 2
+    input: |-
+      "foo".debug_print();
+    output: |-
+      foo

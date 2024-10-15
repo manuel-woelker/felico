@@ -181,5 +181,25 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             ),
         ),
     );
+    let value_factory_clone = value_factory.clone();
+    add_definition(
+        "abs",
+        value_factory.new_native_callable(
+            "abs",
+            1,
+            move |_interpreter, arguments| {
+                if let ValueKind::F64(arg) = arguments[0].val {
+                    Ok(value_factory_clone.f64(arg.abs()))
+                } else {
+                    bail!("Expected number as argument to sqrt")
+                }
+            },
+            type_factory.function(
+                vec![type_factory.f64()],
+                type_factory.f64(),
+                SourceSpan::ephemeral(),
+            ),
+        ),
+    );
     core_definitions
 }
