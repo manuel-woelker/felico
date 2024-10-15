@@ -194,7 +194,7 @@ impl Resolver {
         self.resolve_expr(&mut if_expr.condition)?;
         let condition_type = &if_expr.condition.ty;
         if !condition_type.is_bool() {
-            self.diagnose(InterpreterDiagnostic::new(ast_info.location, format!("Condition in if statement must evaluate to a boolean, but was of type {} instead", condition_type)))
+            self.diagnose(InterpreterDiagnostic::new(&if_expr.condition.location, format!("Condition in if statement must evaluate to a boolean, but was of type {} instead", condition_type)))
         }
         self.resolve_expr(&mut if_expr.then_expr)?;
         let else_type = if let Some(else_expr) = &mut if_expr.else_expr {
@@ -381,10 +381,10 @@ impl Resolver {
             }
             Expr::Variable(var_use) => self.resolve_var_use_expr(var_use, &mut ast_info)?,
             Expr::Get(get) => {
-                self.resolve_get_expr(get)?;
+                self.resolve_get_expr(get, &mut ast_info)?;
             }
             Expr::Set(set) => {
-                self.resolve_set_expr(set)?;
+                self.resolve_set_expr(set, &mut ast_info)?;
             }
             Expr::Block(block) => {
                 self.resolve_block_expr(block, &mut ast_info)?;
@@ -402,14 +402,69 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_set_expr(&mut self, set: &mut SetExpr) -> FelicoResult<()> {
+    fn resolve_set_expr(
+        &mut self,
+        set: &mut SetExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
         self.resolve_expr(&mut set.value)?;
         self.resolve_expr(&mut set.object)?;
+        let Some(field) = self.get_struct_field(&set.object.ty, set.name.lexeme(), ast_info)?
+        else {
+            return Ok(());
+        };
+        if !self.type_checker.is_assignable_to(&set.value.ty, &field.ty) {
+            let diagnostic = InterpreterDiagnostic::new(
+                ast_info.location,
+                format!(
+                    "Expression value of type {} cannot be assigned to field '{}.{}' of type {}",
+                    set.value.ty,
+                    set.object.ty,
+                    set.name.lexeme(),
+                    field.ty
+                ),
+            );
+            self.diagnose(diagnostic);
+        }
+        *ast_info.ty = field.ty.clone();
         Ok(())
     }
 
-    fn resolve_get_expr(&mut self, get: &mut GetExpr) -> FelicoResult<()> {
-        self.resolve_expr(&mut get.object)
+    fn resolve_get_expr(
+        &mut self,
+        get: &mut GetExpr,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        self.resolve_expr(&mut get.object)?;
+        let Some(field) = self.get_struct_field(&get.object.ty, get.name.lexeme(), ast_info)?
+        else {
+            return Ok(());
+        };
+        *ast_info.ty = field.ty.clone();
+        Ok(())
+    }
+
+    fn get_struct_field<'a>(
+        &mut self,
+        ty: &'a Type,
+        field_name: &str,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<Option<&'a StructField>> {
+        let TypeKind::Struct(struct_type) = ty.kind() else {
+            let diagnostic = InterpreterDiagnostic::new(ast_info.location,
+                                                        format!("Using the dot operator to access a field, but the type of the object is not a struct but {}", ty));
+            self.diagnose(diagnostic);
+            return Ok(None);
+        };
+        let Some(field) = struct_type.fields.get(field_name) else {
+            let diagnostic = InterpreterDiagnostic::new(
+                ast_info.location,
+                format!("Struct {} has no field '{}'", ty, field_name),
+            );
+            self.diagnose(diagnostic);
+            return Ok(None);
+        };
+        Ok(Some(field))
     }
 
     fn resolve_call_expr(
@@ -1180,18 +1235,18 @@ mod tests {
         "#]];
         wrong_type_in_if_condition: "if (3) {};" => expect![[r#"
             × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
-               ╭─[wrong_type_in_if_condition:1:1]
+               ╭─[wrong_type_in_if_condition:1:5]
              1 │ if (3) {};
-               · ──────────
+               ·     ─
                ╰────
 
         "#]];
 
         wrong_struct_type: "struct Foo {}; if (Foo {}) {};" => expect![[r#"
             × Condition in if statement must evaluate to a boolean, but was of type ❬Foo❭ instead
-               ╭─[wrong_struct_type:1:16]
+               ╭─[wrong_struct_type:1:20]
              1 │ struct Foo {}; if (Foo {}) {};
-               ·                ───────────────
+               ·                    ───────
                ╰────
 
         "#]];
@@ -1252,6 +1307,41 @@ mod tests {
              1 │ struct Foo {a: bool}; Foo {a: true, a: false};
                ·                            ┬        ─
                ·                            ╰── Already initialized here
+               ╰────
+
+        "#]];
+
+        struct_get_on_wrong_type: "debug_print.foo;" => expect![[r#"
+            × Using the dot operator to access a field, but the type of the object is not a struct but ❬Fn(❬any❭) -> ❬Unit❭❭
+               ╭─[struct_get_on_wrong_type:1:1]
+             1 │ debug_print.foo;
+               · ────────────────
+               ╰────
+
+        "#]];
+
+        struct_get_wrong_name: "struct Foo {a: f64}; Foo {a: 3}.b;" => expect![[r#"
+            × Struct ❬Foo❭ has no field 'b'
+               ╭─[struct_get_wrong_name:1:22]
+             1 │ struct Foo {a: f64}; Foo {a: 3}.b;
+               ·                      ─────────────
+               ╰────
+
+        "#]];
+
+        struct_get_wrong_type: "struct Foo {a: f64}; if(Foo {a: 3}.a) {};" => expect![[r#"
+            × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
+               ╭─[struct_get_wrong_type:1:25]
+             1 │ struct Foo {a: f64}; if(Foo {a: 3}.a) {};
+               ·                         ─────────────
+               ╰────
+
+        "#]];
+        struct_set_wrong_type: "struct Foo {a: f64}; Foo {a: 3}.a = true;" => expect![[r#"
+            × Expression value of type ❬bool❭ cannot be assigned to field '❬Foo❭.a' of type ❬f64❭
+               ╭─[struct_set_wrong_type:1:22]
+             1 │ struct Foo {a: f64}; Foo {a: 3}.a = true;
+               ·                      ────────────────────
                ╰────
 
         "#]];

@@ -844,9 +844,9 @@ mod tests {
         "#]];
         wrong_type_in_if: "if(3) {}" => expect![[r#"
             × Condition in if statement must evaluate to a boolean, but was of type ❬f64❭ instead
-               ╭─[wrong_type_in_if:1:1]
+               ╭─[wrong_type_in_if:1:4]
              1 │ if(3) {}
-               · ────────
+               ·    ─
                ╰────
 
         "#]];
