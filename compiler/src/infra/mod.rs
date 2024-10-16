@@ -1,4 +1,5 @@
 pub mod diagnostic;
+pub mod full_name;
 pub mod result;
 pub mod shared_string;
 pub mod source_file;
