@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 
 #[derive(Clone)]
-struct FullName {
+pub struct FullName {
     inner: Arc<FullNameInner>,
 }
 
@@ -64,6 +64,7 @@ impl<S: Into<Name>> From<S> for FullName {
 #[cfg(test)]
 mod tests {
     use crate::infra::full_name::FullName;
+    use crate::infra::test_util::catch_unwind_silent;
 
     fn assert_name(name: &FullName, expected: &str) {
         assert_eq!(format!("{}", name), expected);
@@ -133,8 +134,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "name part is empty")]
     fn assert_not_empty() {
-        let _name = FullName::from("");
+        let err = catch_unwind_silent(|| {
+            let _name = FullName::from("");
+        })
+        .unwrap_err();
+        assert_eq!(*err.downcast::<&str>().unwrap(), "name part is empty");
     }
 }

@@ -1,4 +1,5 @@
 use crate::frontend::lex::token::Token;
+use crate::infra::full_name::FullName;
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
@@ -39,11 +40,7 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn new<S: Into<SharedString>>(
-        name: S,
-        kind: TypeKind,
-        declaration_site: SourceSpan,
-    ) -> Self {
+    pub fn new<S: Into<FullName>>(name: S, kind: TypeKind, declaration_site: SourceSpan) -> Self {
         Self {
             inner: Arc::new(TypeInner {
                 name: name.into(),
@@ -81,8 +78,11 @@ impl Type {
         Self::new_ephemeral("Type", TypeKind::Type)
     }
 
-    pub fn name(&self) -> &SharedString {
+    pub fn name(&self) -> &FullName {
         &self.inner.name
+    }
+    pub fn short_name(&self) -> &str {
+        self.inner.name.short_name()
     }
 }
 
@@ -96,7 +96,7 @@ impl Eq for Type {}
 
 #[derive(Debug)]
 pub struct TypeInner {
-    name: SharedString,
+    name: FullName,
     declaration_site: SourceSpan,
     kind: TypeKind,
 }
