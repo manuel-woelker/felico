@@ -11,8 +11,9 @@ use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
+use crate::infra::full_name::FullName;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
-use crate::infra::shared_string::{Name, SharedString};
+use crate::infra::shared_string::SharedString;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::TypeFactory;
@@ -24,7 +25,7 @@ pub struct Parser {
     next_token: Token,
     source_file: SourceFile,
     type_factory: TypeFactory,
-    module_name: Name,
+    module_name: FullName,
 }
 
 impl Parser {
@@ -39,9 +40,9 @@ impl Parser {
             .rsplit_once("/")
             .map(|(_prefix, file_name)| file_name)
             .unwrap_or(file_path);
-        let module_name = Name::from(file_name.split_once(".").map(|a| a.0).unwrap_or(file_name));
+        let module_name = file_name.split_once(".").map(|a| a.0).unwrap_or(file_name);
         Ok(Parser {
-            module_name,
+            module_name: module_name.into(),
             lexer,
             current_token,
             next_token,

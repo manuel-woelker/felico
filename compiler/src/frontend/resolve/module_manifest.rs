@@ -1,11 +1,18 @@
 use crate::frontend::ast::types::{Type, TypeKind};
+use crate::infra::full_name::FullName;
 use crate::infra::shared_string::Name;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
+#[derive(Debug)]
+pub struct BundleManifest {
+    pub name: FullName,
+    pub modules: Vec<ModuleManifest>,
+}
+
 pub struct ModuleManifest {
-    pub name: Name,
+    pub name: FullName,
     pub module_entries: HashMap<Name, ModuleEntry>,
 }
 

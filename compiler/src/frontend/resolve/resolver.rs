@@ -11,6 +11,7 @@ use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
+use crate::infra::full_name::FullName;
 use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFile;
@@ -38,13 +39,15 @@ struct CurrentFunctionInfo {
 pub struct LexicalScope {
     symbols: HashMap<SharedString, Symbol>,
     current_function: Option<CurrentFunctionInfo>,
+    base_name: FullName,
 }
 
 impl LexicalScope {
-    fn new() -> Self {
+    fn new(base_name: FullName) -> Self {
         Self {
             symbols: Default::default(),
             current_function: None,
+            base_name,
         }
     }
     fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol) {
@@ -66,7 +69,7 @@ pub struct Resolver {
     type_factory: TypeFactory,
     type_checker: TypeChecker,
     diagnostics: Vec<InterpreterDiagnostic>,
-    module_name: Name,
+    module_name: FullName,
 }
 
 // Ast information extract during resolution to make separate borrows
@@ -82,7 +85,7 @@ impl<'a> CommonAstInfo<'a> {
 
 impl Resolver {
     pub fn new(type_factory: TypeFactory) -> Self {
-        let mut global_scope: LexicalScope = LexicalScope::new();
+        let mut global_scope: LexicalScope = LexicalScope::new(FullName::from("__global"));
         let location = SourceSpan {
             source_file: SourceFile::from_string("native", "native_code"),
             start_byte: 0,
@@ -99,13 +102,12 @@ impl Resolver {
                 },
             );
         }
-        let script_scope = LexicalScope::new();
         Resolver {
-            scopes: vec![global_scope, script_scope],
+            scopes: vec![global_scope],
             type_factory,
             type_checker: TypeChecker::new(),
             diagnostics: vec![],
-            module_name: Name::from("<undefined>"),
+            module_name: "<undefined>".into(),
         }
     }
 
@@ -115,6 +117,8 @@ impl Resolver {
 
     pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
         self.module_name = program.data.name.clone();
+        let module_scope = LexicalScope::new(self.module_name.clone());
+        self.scopes.push(module_scope);
         self.resolve_stmts(&mut program.data.stmts)?;
         if !self.diagnostics.is_empty() {
             let diagnostics = std::mem::take(&mut self.diagnostics);
@@ -217,7 +221,8 @@ impl Resolver {
         block: &mut BlockExpr,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
-        self.scopes.push(LexicalScope::new());
+        let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
+        self.scopes.push(new_scope);
         self.resolve_stmts(&mut block.stmts)?;
         self.resolve_expr(&mut block.result_expression)?;
         self.scopes.pop();
@@ -253,7 +258,7 @@ impl Resolver {
             },
         )?;
         *ast_info.ty = function_type;
-        let mut function_scope = LexicalScope::new();
+        let mut function_scope = LexicalScope::new(self.current_scope().base_name.clone());
         function_scope.current_function = Some(CurrentFunctionInfo {
             return_type_declaration_site: fun_stmt.return_type.location.clone(),
             declared_return_type: return_type,

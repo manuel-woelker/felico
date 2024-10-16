@@ -1,11 +1,14 @@
 use crate::infra::error::{test_error, ServerError};
 use crate::middleware::logging_middleware::error_logging_middleware;
-use crate::model::bundle::{BundleDescription, BundleIndex, BundleInfo, FunctionDescription};
+use crate::model::bundle::{
+    BundleDescription, BundleIndex, BundleInfo, FunctionDescription, ModuleDescription,
+};
 use crate::model::model_facade::ModelFacade;
 use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{middleware, Json, Router};
 use felico_compiler::frontend::compile::compile_module;
+use felico_compiler::frontend::resolve::module_manifest::BundleManifest;
 use felico_compiler::infra::result::FelicoResult;
 use felico_compiler::infra::source_file::SourceFile;
 use http::StatusCode;
@@ -23,7 +26,11 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     tracing_subscriber::fmt::init();
     info!("Starting up;");
     let module = compile_module(SourceFile::from_path("bundles/test.felico")?)?;
-    let model_facade = ModelFacade::new(vec![module]);
+    let bundle = BundleManifest {
+        name: module.name.clone(),
+        modules: vec![module],
+    };
+    let model_facade = ModelFacade::new(vec![bundle]);
     let serve_index_html = ServeFile::new("./web-ui/dist/index.html");
     let serve_dir =
         ServeDir::new("./web-ui/dist/assets").not_found_service(serve_index_html.clone());
@@ -56,9 +63,9 @@ async fn get_bundle(
 ) -> Result<Json<BundleDescription>, ServerError> {
     //    Err("foo".into())
     let found = model_facade
-        .modules()
+        .bundles()
         .iter()
-        .find(|module| module.name == bundle_name);
+        .find(|bundle| bundle.name == *bundle_name);
     let Some(bundle) = found else {
         return Err("Bundle not found".into());
     };
@@ -72,12 +79,19 @@ async fn get_bundle(
                 signature: "fun debug_print(item: any)".to_string(),
             }],*/
         },
-        functions: bundle
-            .module_entries
-            .values()
-            .map(|entry| FunctionDescription {
-                name: entry.name.to_string(),
-                signature: entry.ty.to_string(),
+        modules: bundle
+            .modules
+            .iter()
+            .map(|module| ModuleDescription {
+                name: module.name.to_string(),
+                functions: module
+                    .module_entries
+                    .values()
+                    .map(|entry| FunctionDescription {
+                        name: entry.name.to_string(),
+                        signature: entry.ty.to_string(),
+                    })
+                    .collect(),
             })
             .collect(),
         /*        functions: vec![FunctionDescription {
@@ -90,7 +104,7 @@ async fn get_bundle(
 async fn get_bundles(State(model_facade): State<ModelFacade>) -> (StatusCode, Json<BundleIndex>) {
     let bundle_index = BundleIndex {
         bundles: model_facade
-            .modules()
+            .bundles()
             .iter()
             .map(|module| BundleInfo {
                 name: module.name.to_string(),

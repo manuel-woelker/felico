@@ -9,6 +9,12 @@ pub struct BundleInfo {
 #[derive(Serialize)]
 pub struct BundleDescription {
     pub info: BundleInfo,
+    pub modules: Vec<ModuleDescription>,
+}
+
+#[derive(Serialize)]
+pub struct ModuleDescription {
+    pub name: String,
     pub functions: Vec<FunctionDescription>,
 }
 

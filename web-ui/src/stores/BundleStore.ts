@@ -8,6 +8,9 @@ export interface BundleCoordinates {
 export const [bundleCoordinates, setBundleCoordinates] = createSignal({bundleName: "foo", bundleVersion: "bar"});
 
 const fetchBundle = async ({bundleName, bundleVersion}: BundleCoordinates/*, bundleVersion: string*/) => {
+  if (bundleName === "foo") {
+    return null;
+  }
   const response = await fetch(`/api/bundles/${bundleName}/${bundleVersion}`)
   let json = await response.json();
   console.log(json);

@@ -21,11 +21,14 @@ export const BundleView = (props: {}) => {
           </div>
           <div class={styles.center}>
             <div>
-              <Show when={bundle() && bundle().functions}>
+              <Show when={bundle()}>
                 <div class={styles.bundleName}>Bundle {params.bundleName}</div>
-                <h4>Functions</h4>
-                <For each={bundle().functions}>{(fn => <div>
-                  {fn.name} {fn.signature}
+                <h4>Modules</h4>
+                <For each={bundle().modules}>{(module => <div>
+                  <h5>{module.name}</h5>
+                  <For each={module.functions}>{(fn => <div>
+                    {fn.name} {fn.signature}
+                  </div>)}</For>
                 </div>)}</For>
               </Show>
             </div>

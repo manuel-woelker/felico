@@ -34,7 +34,20 @@ impl PartialEq<Self> for FullName {
     }
 }
 
+impl PartialEq<str> for FullName {
+    #[allow(clippy::cmp_owned)]
+    fn eq(&self, other: &str) -> bool {
+        self.to_string() == other
+    }
+}
+
 impl Eq for FullName {}
+
+impl From<&FullName> for String {
+    fn from(value: &FullName) -> String {
+        value.to_string()
+    }
+}
 
 impl FullName {
     pub fn new(name_part: Name, parent: Option<FullName>) -> Self {

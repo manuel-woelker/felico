@@ -1,4 +1,4 @@
-use felico_compiler::frontend::resolve::module_manifest::ModuleManifest;
+use felico_compiler::frontend::resolve::module_manifest::BundleManifest;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -7,18 +7,18 @@ pub struct ModelFacade {
 }
 
 impl ModelFacade {
-    pub fn new(modules: Vec<ModuleManifest>) -> Self {
+    pub fn new(bundles: Vec<BundleManifest>) -> Self {
         Self {
-            inner: Arc::new(ModelFacadeInner { modules }),
+            inner: Arc::new(ModelFacadeInner { bundles }),
         }
     }
 
-    pub fn modules(&self) -> &[ModuleManifest] {
-        &self.inner.modules
+    pub fn bundles(&self) -> &[BundleManifest] {
+        &self.inner.bundles
     }
 }
 
 #[derive(Debug)]
 struct ModelFacadeInner {
-    modules: Vec<ModuleManifest>,
+    bundles: Vec<BundleManifest>,
 }
