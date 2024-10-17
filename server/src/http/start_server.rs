@@ -89,7 +89,7 @@ async fn get_bundle(
                     .values()
                     .map(|entry| FunctionDescription {
                         name: entry.name.to_string(),
-                        signature: entry.ty.to_string(),
+                        signature: entry.type_signature.clone(),
                     })
                     .collect(),
             })

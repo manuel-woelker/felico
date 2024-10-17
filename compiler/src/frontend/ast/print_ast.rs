@@ -182,15 +182,14 @@ impl<'a> AstPrinterWorker<'a> {
             Stmt::Impl(impl_stmt) => {
                 let mut tree = Tree::new(format!("Impl '{}'", impl_stmt.name.lexeme()));
                 for method in &impl_stmt.methods {
-                    let mut method_tree = self.fun_to_tree(&*method.data);
+                    let mut method_tree = self.fun_to_tree(&method.data);
                     method_tree.root.insert_str(0, "Method: ");
                     tree.push(method_tree);
                 }
                 tree
             }
             Stmt::Trait(trait_stmt) => {
-                let tree = Tree::new(format!("Trait '{}'", trait_stmt.name.lexeme()));
-                tree
+                return Tree::new(format!("Trait '{}'", trait_stmt.name.lexeme()));
             }
             Stmt::While(while_stmt) => {
                 let mut tree = Tree::new("While".into());

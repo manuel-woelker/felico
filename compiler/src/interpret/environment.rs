@@ -1,7 +1,7 @@
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::qualified_name::QualifiedName;
 use crate::infra::result::{bail, FelicoResult};
-use crate::interpret::value::InterpreterValue;
+use crate::interpret::value::{InterpreterValue, ValueKind};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -75,16 +75,38 @@ impl Environment {
         }
     }
 
-    pub(crate) fn get_at_distance(
+    pub fn get_at_distance(
         &self,
         qualified_name: &AstNode<QualifiedName>,
         distance: i32,
     ) -> FelicoResult<InterpreterValue> {
-        let name = qualified_name.data.parts[0].lexeme();
+        let parts = &qualified_name.data.parts;
+        let name = parts[0].lexeme();
         let environment = self.get_environment_at_distance(name, distance)?;
         let borrowed = environment.inner.lock().unwrap();
         if let Some(value) = borrowed.values.get(name) {
-            Ok(value.clone())
+            let mut value = value.clone();
+            if parts.len() <= 1 {
+                return Ok(value.clone());
+            }
+            for part in parts.iter().skip(1) {
+                let ValueKind::SymbolMap(symbol_map) = &value.val else {
+                    bail!(
+                        "When resolving {}: Not a symbol '{:?}'",
+                        qualified_name,
+                        value
+                    );
+                };
+                let Some(symbol_value) = &symbol_map.get_symbol(part.lexeme())? else {
+                    bail!(
+                        "When resolving {}: Could not find '{:?}'",
+                        qualified_name,
+                        part.lexeme()
+                    );
+                };
+                value = symbol_value.clone();
+            }
+            Ok(value)
         } else {
             bail!(
                 "No variable named '{}' defined (get at distance {}) ",

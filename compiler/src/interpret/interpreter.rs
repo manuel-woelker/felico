@@ -4,7 +4,8 @@ use crate::frontend::ast::expr::{
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::stmt::{FunStmt, Stmt, WhileStmt};
+use crate::frontend::ast::stmt::{FunStmt, ImplStmt, Stmt, WhileStmt};
+use crate::frontend::ast::types::Type;
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_script};
@@ -16,7 +17,7 @@ use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
 use crate::interpret::environment::Environment;
 use crate::interpret::value::{
-    Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind,
+    Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind, ValueMap,
 };
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -247,7 +248,7 @@ impl Interpreter {
         get_expr: &GetExpr,
     ) -> FelicoResult<InterpreterValue> {
         let object = self.evaluate_expr(&get_expr.object)?;
-        let ValueKind::Struct(instance) = &object.val else {
+        let ValueKind::StructInstance(instance) = &object.val else {
             return self.create_diagnostic(
                 expr,
                 format!(
@@ -305,7 +306,7 @@ impl Interpreter {
         set_expr: &SetExpr,
     ) -> FelicoResult<InterpreterValue> {
         let object = self.evaluate_expr(&set_expr.object)?;
-        let ValueKind::Struct(instance) = &object.val else {
+        let ValueKind::StructInstance(instance) = &object.val else {
             return self.create_diagnostic(
                 expr,
                 format!(
@@ -558,8 +559,8 @@ impl Interpreter {
             Stmt::Struct(_struct_stmt) => {
                 // Nothing to do at runtime
             }
-            Stmt::Impl(_impl_stmt) => {
-                // TODO: add functions to struct type
+            Stmt::Impl(impl_stmt) => {
+                self.evaluate_impl_stmt(stmt, impl_stmt)?;
             }
             Stmt::Trait(_trait_stmt) => {
                 // Nothing to do at runtime
@@ -595,12 +596,36 @@ impl Interpreter {
         Ok(self.value_factory.unit())
     }
 
+    fn evaluate_impl_stmt(
+        &mut self,
+        stmt: &AstNode<Stmt>,
+        impl_stmt: &ImplStmt,
+    ) -> FelicoResult<()> {
+        self.environment.enter_new();
+        let symbol_map = ValueMap::new();
+        for fun in &impl_stmt.methods {
+            let callable = self.create_fun_callable(&fun.data, fun.ty.clone());
+            symbol_map.set_symbol(fun.data.name.lexeme(), callable)?;
+        }
+        self.environment.exit();
+        self.environment.define(
+            impl_stmt.name.lexeme(),
+            InterpreterValue {
+                val: ValueKind::SymbolMap(symbol_map),
+                ty: self
+                    .type_factory
+                    .make_namespace(&impl_stmt.name, stmt.location.clone()),
+            },
+        );
+        Ok(())
+    }
+
     fn self_evaluate_fun_stmt(&mut self, stmt: &AstNode<Stmt>, fun: &FunStmt) {
-        let callable = self.create_fun_callable(fun, stmt);
+        let callable = self.create_fun_callable(fun, stmt.ty.clone());
         self.environment.define(fun.name.lexeme(), callable);
     }
 
-    fn create_fun_callable(&mut self, fun: &FunStmt, stmt: &AstNode<Stmt>) -> InterpreterValue {
+    fn create_fun_callable(&mut self, fun: &FunStmt, ty: Type) -> InterpreterValue {
         let callable = self.value_factory.callable(
             Callable {
                 name: fun.name.lexeme().to_string(),
@@ -610,7 +635,7 @@ impl Interpreter {
                     closure: self.environment.clone(),
                 })),
             },
-            stmt.ty.clone(),
+            ty,
         );
         callable
     }
@@ -747,6 +772,20 @@ mod tests {
             }
             debug_print(Foo {bar: \"19\"});
         " => expect![[r#"Struct StructInstance { inner: RefCell { value: StructInstanceInner { fields: {"bar": String("19")} } } }"#]];
+        program_struct_impl: "
+      struct Something {
+           val: f64,
+      }
+      impl Something {
+          fun new(val: f64) -> Something {
+            debug_print(\"Create Something\n\");
+            return Something {val: val};
+          }      
+      };
+      let a = Something::new(123);
+      debug_print(a.val);
+      " => expect![[r#"Create Something
+123"#]];
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {

@@ -227,7 +227,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "felico"
+name = "felico-compiler"
 version = "0.1.0"
 dependencies = [
     "arcstr",

@@ -1,15 +1,19 @@
 use crate::frontend::lex::token::Token;
+use crate::frontend::resolve::resolver::Symbol;
 use crate::infra::full_name::FullName;
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
+use std::rc::Rc;
+use std::sync::Mutex;
 
 #[derive(Clone)]
 pub struct Type {
-    inner: Arc<TypeInner>,
+    inner: Rc<TypeInner>,
 }
+
+pub type SymbolMap = HashMap<SharedString, Symbol>;
 
 impl Type {
     pub fn is_unknown(&self) -> bool {
@@ -24,6 +28,9 @@ impl Type {
 
     pub fn declaration_site(&self) -> &SourceSpan {
         &self.inner.declaration_site
+    }
+    pub fn methods(&self) -> &Mutex<SymbolMap> {
+        &self.inner.methods
     }
 }
 
@@ -42,10 +49,11 @@ impl Display for Type {
 impl Type {
     pub fn new<S: Into<FullName>>(name: S, kind: TypeKind, declaration_site: SourceSpan) -> Self {
         Self {
-            inner: Arc::new(TypeInner {
+            inner: Rc::new(TypeInner {
                 name: name.into(),
                 kind,
                 declaration_site,
+                methods: Mutex::new(SymbolMap::new()),
             }),
         }
     }
@@ -99,6 +107,7 @@ pub struct TypeInner {
     name: FullName,
     declaration_site: SourceSpan,
     kind: TypeKind,
+    methods: Mutex<SymbolMap>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -109,6 +118,7 @@ pub enum TypeKind {
     Unresolved, // failed to resolve
     Primitive(PrimitiveType),
     Type,
+    Namespace,
     Function(FunctionType),
     Struct(StructType),
     Trait(TraitType),

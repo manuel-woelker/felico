@@ -20,10 +20,11 @@ testcases:
       }
       impl Something {
           fun new(val: f64) -> Something {
+            debug_print("Create Something");
             return Something {val: val};
           }      
       };
-      //      let a = Something::new(123);
-      //      debug_print(a.val);
+      let a = Something::new(123);
+      debug_print(a.val);
     output: |-
-      123
+      Create Something123

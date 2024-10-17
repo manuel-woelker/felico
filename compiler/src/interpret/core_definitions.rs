@@ -109,6 +109,15 @@ impl TypeFactory {
         )
     }
 
+    pub fn make_namespace(
+        &self,
+        name: &Token,
+        //        symbol_map: HashMap<SharedString, InterpreterValue>,
+        declaration_site: SourceSpan,
+    ) -> Type {
+        Type::new(name.lexeme(), TypeKind::Namespace, declaration_site)
+    }
+
     pub fn make_trait(&self, name: &Token, declaration_site: SourceSpan) -> Type {
         Type::new(
             name.lexeme(),

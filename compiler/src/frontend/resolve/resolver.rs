@@ -27,7 +27,8 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 
-struct Symbol {
+#[derive(Debug)]
+pub struct Symbol {
     declaration_site: SourceSpan,
     is_defined: bool,
     ty: Type,
@@ -148,7 +149,7 @@ impl Resolver {
                     name.clone(),
                     ModuleEntry {
                         name,
-                        ty: symbol.ty.clone(),
+                        type_signature: symbol.ty.to_string(),
                     },
                 )
             })
@@ -303,15 +304,19 @@ impl Resolver {
             let name = SharedString::from(field.data.name.lexeme());
             fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
         }
-        *ast_info.ty =
+        let ty =
             type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
+        *ast_info.ty = ty.clone();
         self.add_symbol_to_scope(
             struct_stmt.name.lexeme().into(),
             Symbol {
                 declaration_site: struct_stmt.name.location.clone(),
                 is_defined: true,
                 ty: ast_info.ty.clone(),
-                value: None,
+                value: Some(InterpreterValue {
+                    val: ValueKind::Type(ty),
+                    ty: self.type_factory.ty(),
+                }),
             },
         )?;
         Ok(())
@@ -322,16 +327,57 @@ impl Resolver {
         impl_stmt: &mut ImplStmt,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
+        let Some((_distance, symbol)) = self.get_definition_distance_and_symbol(&impl_stmt.name)
+        else {
+            bail!(
+                "Could not find symbol entry for {}",
+                impl_stmt.name.lexeme()
+            );
+        };
+        let Some(value) = &symbol.value else {
+            bail!("No value for symbol entry for {}", impl_stmt.name.lexeme());
+        };
+        let ValueKind::Type(ty) = &value.val else {
+            bail!(
+                "Not a type for symbol entry for {}",
+                impl_stmt.name.lexeme()
+            );
+        };
+        let ty = ty.clone();
+        let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
+        self.scopes.push(new_scope);
+
         for method in &mut impl_stmt.methods {
             self.resolve_fun_stmt(
-                &mut *method.data,
+                &mut method.data,
                 &mut CommonAstInfo {
                     location: &method.location,
                     ty: &mut method.ty,
                 },
             )?;
+            ty.methods().lock().unwrap().insert(
+                SharedString::from(method.data.name.lexeme()),
+                Symbol {
+                    declaration_site: method.location.clone(),
+                    is_defined: true,
+                    ty: method.ty.clone(),
+                    value: None,
+                },
+            );
         }
+        self.scopes.pop();
         *ast_info.ty = self.type_factory.unit();
+        /*        self.add_symbol_to_scope(
+            impl_stmt.name.lexeme().into(),
+            Symbol {
+                declaration_site: impl_stmt.name.location.clone(),
+                is_defined: true,
+                ty: ast_info.ty.clone(),
+                value: None, /*Some(InterpreterValue {
+
+                             })*/
+            },
+        )?;*/
         Ok(())
     }
 
@@ -403,6 +449,7 @@ impl Resolver {
             bail!("Unknown symbol: {}", type_id.name);
         };
         let Some(value) = &symbol.value else {
+            dbg!(&self.current_scope().symbols);
             bail!("Unknown value for symbol: {}", type_id.name);
         };
         let ValueKind::Type(ty) = &value.val else {
@@ -767,11 +814,25 @@ impl Resolver {
         var_use: &mut VarUse,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
-        let distance_and_symbol =
-            self.get_definition_distance_and_symbol(&var_use.name.data.parts[0]);
+        let parts = &var_use.name.data.parts;
+        let distance_and_symbol = self.get_definition_distance_and_symbol(&parts[0]);
         if let Some((distance, symbol)) = distance_and_symbol {
             var_use.distance = distance;
-            *ast_info.ty = symbol.ty.clone();
+            let mut ty = symbol.ty.clone();
+            for part in parts.iter().skip(1) {
+                let Some(value) = symbol.value.clone() else {
+                    bail!("No value found for name {}", var_use.name);
+                };
+                let ValueKind::Type(val_ty) = &value.val else {
+                    bail!("No type found for name {}", var_use.name);
+                };
+                let methods = val_ty.methods().lock().unwrap();
+                let Some(sym) = methods.get(part.lexeme()) else {
+                    bail!("No symbol found for name {}", var_use.name);
+                };
+                ty = sym.ty.clone();
+            }
+            *ast_info.ty = ty;
         } else {
             self.diagnose(InterpreterDiagnostic::new(
                 &var_use.name.location,
@@ -1121,6 +1182,42 @@ mod tests {
                └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
                    ├── Return type: Read 'unit'
                    ├── Struct 'Empty': ❬Empty❭
+                   └── Unit: ❬Unit❭
+           "#]],expect![[r#"
+               Module
+                 main: ❬Fn() -> ❬Unit❭❭
+           "#]];
+        program_struct_impl: "
+              struct Something {
+                   val: f64,
+              }
+              impl Something {
+                  fun new(val: f64) -> Something {
+                    return Something {val: val};
+                  }      
+              };
+            let a = Something::new(123);
+           " => expect![[r#"
+               Module
+               └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
+                   ├── Return type: Read 'unit'
+                   ├── Struct 'Something': ❬Something❭
+                   │   └── Field val: ❬f64❭
+                   │       └── Read 'f64': ❬Type❭
+                   ├── Impl 'Something': ❬Unit❭
+                   │   └── Method: Declare fun 'new(val)'
+                   │       ├── Param val
+                   │       │   └── Read 'f64'
+                   │       ├── Return type: Read 'Something'
+                   │       ├── Return: ❬never❭
+                   │       │   └── Create struct: ❬Something❭
+                   │       │       ├── Read 'Something': ❬Something❭
+                   │       │       └── val: Read 'val': ❬f64❭
+                   │       └── Unit: ❬Unit❭
+                   ├── Let ''a' (Identifier)': ❬Something❭
+                   │   └── Call: ❬Something❭
+                   │       ├── Read 'Something::new': ❬Fn(❬f64❭) -> ❬Something❭❭
+                   │       └── F64(123.0): ❬f64❭
                    └── Unit: ❬Unit❭
            "#]],expect![[r#"
                Module

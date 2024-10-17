@@ -107,7 +107,7 @@ impl ValueFactory {
         fields: HashMap<SharedString, InterpreterValue>,
     ) -> InterpreterValue {
         InterpreterValue {
-            val: ValueKind::Struct(StructInstance::new(fields)),
+            val: ValueKind::StructInstance(StructInstance::new(fields)),
             ty: ty.clone(),
         }
     }
@@ -125,7 +125,8 @@ pub enum ValueKind {
     I64(i64),
     Callable(Callable),
     Type(Type),
-    Struct(StructInstance),
+    StructInstance(StructInstance),
+    SymbolMap(ValueMap),
 }
 
 impl Display for InterpreterValue {
@@ -180,8 +181,11 @@ impl Display for ValueKind {
             ValueKind::Panic(message) => {
                 write!(f, "panic {:?}", message)
             }
-            ValueKind::Struct(struct_instance) => {
+            ValueKind::StructInstance(struct_instance) => {
                 write!(f, "Struct {:?}", struct_instance)
+            }
+            ValueKind::SymbolMap(symbol_map) => {
+                write!(f, "SymbolMap {:?}", symbol_map)
             }
         }
     }
@@ -268,4 +272,49 @@ impl StructInstance {
 #[derive(Debug, Clone)]
 pub struct StructInstanceInner {
     pub fields: HashMap<SharedString, InterpreterValue>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ValueMap {
+    pub inner: Rc<RefCell<ValueMapInner>>,
+}
+
+impl ValueMap {
+    pub fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(ValueMapInner {
+                symbols: HashMap::new(),
+            })),
+        }
+    }
+
+    pub fn set_symbol(&self, field_name: &str, value: InterpreterValue) -> FelicoResult<()> {
+        self.inner
+            .borrow_mut()
+            .symbols
+            .insert(SharedString::from(field_name), value);
+        Ok(())
+    }
+    pub fn get_symbol(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue>> {
+        let inner = self.inner.borrow();
+        let Some(value) = inner.symbols.get(field_name) else {
+            return Ok(None);
+        };
+        Ok(Some(value.clone()))
+    }
+}
+
+#[derive(Debug)]
+pub struct ValueMapInner {
+    pub symbols: HashMap<SharedString, InterpreterValue>,
+}
+
+pub trait Namespace {
+    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue>>;
+}
+
+impl Namespace for ValueMap {
+    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue>> {
+        self.get_symbol(name)
+    }
 }

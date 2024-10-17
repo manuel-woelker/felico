@@ -1,4 +1,3 @@
-use crate::frontend::ast::types::{Type, TypeKind};
 use crate::infra::full_name::FullName;
 use crate::infra::shared_string::Name;
 use itertools::Itertools;
@@ -18,14 +17,14 @@ pub struct ModuleManifest {
 
 pub struct ModuleEntry {
     pub name: Name,
-    pub ty: Type,
+    pub type_signature: String,
 }
 
 impl Debug for ModuleManifest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Module\n")?;
         for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
-            writeln!(f, "  {}: {}", entry.name, entry.ty)?;
+            writeln!(f, "  {}: {}", entry.name, entry.type_signature)?;
         }
         Ok(())
     }
@@ -36,12 +35,12 @@ impl ModuleManifest {
         use std::fmt::Write;
         let mut string = String::from("Module\n");
         for (_name, entry) in self.module_entries.iter().sorted_by_key(|(name, _)| *name) {
-            writeln!(string, "  {}: {}", entry.name, entry.ty).unwrap();
-            if let TypeKind::Struct(struct_type) = entry.ty.kind() {
+            writeln!(string, "  {}: {}", entry.name, entry.type_signature).unwrap();
+            /*            if let TypeKind::Struct(struct_type) = entry.ty.kind() {
                 for (name, field) in struct_type.fields.iter().sorted_by_key(|(name, _)| *name) {
                     writeln!(string, "    {}: {}", name, field.ty).unwrap();
                 }
-            }
+            }*/
         }
         string
     }
