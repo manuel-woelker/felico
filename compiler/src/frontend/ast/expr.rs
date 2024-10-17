@@ -1,4 +1,5 @@
 use crate::frontend::ast::node::AstNode;
+use crate::frontend::ast::qualified_name::QualifiedName;
 use crate::frontend::ast::stmt::Stmt;
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::Token;
@@ -24,7 +25,7 @@ impl AstData for Expr {}
 
 #[derive(Debug, Clone)]
 pub struct VarUse {
-    pub variable: Token,
+    pub name: AstNode<QualifiedName>,
     pub distance: i32,
 }
 
@@ -37,7 +38,7 @@ pub struct BinaryExpr {
 
 #[derive(Debug, Clone)]
 pub struct AssignExpr {
-    pub destination: Token,
+    pub destination: AstNode<QualifiedName>,
     pub value: AstNode<Expr>,
     pub distance: i32,
 }

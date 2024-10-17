@@ -376,18 +376,15 @@ impl Interpreter {
     fn evaluate_assign_expr(&mut self, assign: &AssignExpr) -> FelicoResult<InterpreterValue> {
         let value = self.evaluate_expr(&assign.value)?;
         check_early_return!(value);
-        self.environment.assign_at_distance(
-            assign.destination.lexeme(),
-            assign.distance,
-            value.clone(),
-        )?;
+        self.environment
+            .assign_at_distance(&assign.destination, assign.distance, value.clone())?;
         Ok(value)
     }
 
     fn evaluate_var_use_expr(&mut self, var_use: &VarUse) -> FelicoResult<InterpreterValue> {
         Ok(self
             .environment
-            .get_at_distance(var_use.variable.lexeme(), var_use.distance)?
+            .get_at_distance(&var_use.name, var_use.distance)?
             .clone())
     }
 

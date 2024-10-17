@@ -88,7 +88,7 @@ impl<'a> AstPrinterWorker<'a> {
     fn expr_to_tree(&self, ast: &AstNode<Expr>) -> Tree<String> {
         let tree = match &ast.data.as_ref() {
             Expr::Literal(literal) => Tree::new(format!("{:?}", literal)),
-            Expr::Variable(var_use) => Tree::new(format!("Read '{}'", var_use.variable.lexeme())),
+            Expr::Variable(var_use) => Tree::new(format!("Read '{}'", var_use.name)),
             Expr::Unary(unary) => {
                 let mut tree = Tree::new(unary.operator.lexeme().to_string());
                 tree.push(self.expr_to_tree(&unary.right));

@@ -13,3 +13,17 @@ testcases:
     output: |-
       truefalse
 
+  - name: impl new
+    input: |-
+      struct Something {
+           val: f64,
+      }
+      impl Something {
+          fun new(val: f64) -> Something {
+            return Something {val: val};
+          }      
+      };
+      //      let a = Something::new(123);
+      //      debug_print(a.val);
+    output: |-
+      123

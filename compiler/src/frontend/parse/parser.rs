@@ -4,6 +4,7 @@ use crate::frontend::ast::expr::{
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
+use crate::frontend::ast::qualified_name::QualifiedName;
 use crate::frontend::ast::stmt::{
     ExprStmt, FunParameter, FunStmt, ImplStmt, LetStmt, Stmt, StructStmt, StructStmtField,
     TraitStmt, WhileStmt,
@@ -308,15 +309,21 @@ impl Parser {
         self.create_node(
             start_location,
             Expr::Variable(VarUse {
-                variable: Token {
-                    token_type: TokenType::Identifier,
-                    location: SourceSpan {
-                        source_file: self.source_file.clone(),
-                        start_byte: start_location.start_byte,
-                        end_byte: start_location.end_byte,
+                name: AstNode::new(
+                    QualifiedName {
+                        parts: vec![Token {
+                            token_type: TokenType::Identifier,
+                            location: SourceSpan {
+                                source_file: self.source_file.clone(),
+                                start_byte: start_location.start_byte,
+                                end_byte: start_location.end_byte,
+                            },
+                            value: Some(SharedString::from("unit")),
+                        }],
                     },
-                    value: Some(SharedString::from("unit")),
-                },
+                    SourceSpan::ephemeral(),
+                    self.type_factory.unknown(),
+                ),
                 distance: 0,
             }),
         )
@@ -495,7 +502,7 @@ impl Parser {
                 self.create_node(
                     &start_location,
                     Expr::Assign(AssignExpr {
-                        destination: var_use.variable,
+                        destination: var_use.name,
                         value,
                         distance: -2000,
                     }),
@@ -704,15 +711,18 @@ impl Parser {
                 TokenType::True => LiteralExpr::Bool(true),
                 TokenType::False => LiteralExpr::Bool(false),
                 TokenType::Identifier => {
-                    let result = self.create_node(
-                        &self.current_location(),
+                    let start_location = self.current_location();
+                    let qualified_name = self.parse_qualified_name()?;
+                    let location = qualified_name.location.clone();
+                    let mut result = self.create_node(
+                        &start_location,
                         Expr::Variable(VarUse {
-                            variable: self.current_token.clone(),
+                            name: qualified_name,
                             distance: -1000,
                         }),
-                    );
-                    self.advance();
-                    return result;
+                    )?;
+                    result.location = location;
+                    return Ok(result);
                 }
                 TokenType::LeftParen => {
                     self.advance();
@@ -737,6 +747,25 @@ impl Parser {
         );
         self.advance();
         result
+    }
+
+    fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<QualifiedName>> {
+        let start_location = self.current_location();
+        let token = self.consume(TokenType::Identifier, "expected identifier")?;
+        let mut last_location = token.location.clone();
+        let mut parts = vec![token];
+        while self.is_at(TokenType::ColonColon) {
+            self.advance();
+            let token = self.consume(
+                TokenType::Identifier,
+                "expected identifier after '::' in qualified name",
+            )?;
+            last_location = token.location.clone();
+            parts.push(token);
+        }
+        let mut result = self.create_node(&start_location, QualifiedName { parts })?;
+        result.location.end_byte = last_location.end_byte;
+        Ok(result)
     }
 
     #[track_caller]
@@ -1008,17 +1037,17 @@ mod tests {
                 └── F64(2.0)     [5+1]
         "#]];
         expression_assign: "a=2" => expect![[r#"
-            'a' (Identifier) =      [0+3]
+            a =      [0+3]
             └── F64(2.0)     [2+1]
         "#]];
         expression_assign_twice: "a=b=3" => expect![[r#"
-            'a' (Identifier) =      [0+5]
-            └── 'b' (Identifier) =      [2+3]
+            a =      [0+5]
+            └── b =      [2+3]
                 └── F64(3.0)     [4+1]
         "#]];
         expression_assign_twice2: "a=b=3" => expect![[r#"
-            'a' (Identifier) =      [0+5]
-            └── 'b' (Identifier) =      [2+3]
+            a =      [0+5]
+            └── b =      [2+3]
                 └── F64(3.0)     [4+1]
         "#]];
         expression_and: "a && b" => expect![[r#"
@@ -1175,7 +1204,7 @@ mod tests {
                     Module
                     └── Declare fun 'main()'     [0+4]
                         ├── Return type: Read 'unit'     [0+4]
-                        ├── 'a' (Identifier) =      [0+4]
+                        ├── a =      [0+4]
                         │   └── F64(1.0)     [2+1]
                         └── Unit     [0+4]
                 "#]];
@@ -1183,8 +1212,8 @@ mod tests {
                     Module
                     └── Declare fun 'main()'     [0+6]
                         ├── Return type: Read 'unit'     [0+6]
-                        ├── 'a' (Identifier) =      [0+6]
-                        │   └── 'b' (Identifier) =      [2+4]
+                        ├── a =      [0+6]
+                        │   └── b =      [2+4]
                         │       └── F64(3.0)     [4+1]
                         └── Unit     [0+6]
                 "#]];

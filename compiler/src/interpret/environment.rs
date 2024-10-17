@@ -1,3 +1,5 @@
+use crate::frontend::ast::node::AstNode;
+use crate::frontend::ast::qualified_name::QualifiedName;
 use crate::infra::result::{bail, FelicoResult};
 use crate::interpret::value::InterpreterValue;
 use std::collections::HashMap;
@@ -75,9 +77,10 @@ impl Environment {
 
     pub(crate) fn get_at_distance(
         &self,
-        name: &str,
+        qualified_name: &AstNode<QualifiedName>,
         distance: i32,
     ) -> FelicoResult<InterpreterValue> {
+        let name = qualified_name.data.parts[0].lexeme();
         let environment = self.get_environment_at_distance(name, distance)?;
         let borrowed = environment.inner.lock().unwrap();
         if let Some(value) = borrowed.values.get(name) {
@@ -107,10 +110,11 @@ impl Environment {
 
     pub(crate) fn assign_at_distance(
         &self,
-        name: &str,
+        qualified_name: &AstNode<QualifiedName>,
         distance: i32,
         value: InterpreterValue,
     ) -> FelicoResult<()> {
+        let name = qualified_name.data.parts[0].lexeme();
         let environment = self.get_environment_at_distance(name, distance)?;
         let mut borrowed = environment.inner.lock().unwrap();
         if let Some(slot) = borrowed.values.get_mut(name) {
@@ -119,7 +123,7 @@ impl Environment {
         } else {
             bail!(
                 "No variable named '{}' defined (get at distance {}) ",
-                name,
+                qualified_name,
                 distance
             );
         }

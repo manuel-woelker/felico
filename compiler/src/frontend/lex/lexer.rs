@@ -214,7 +214,13 @@ impl Iterator for Lexer {
                         TokenType::Minus
                     }
                 }
-                ':' => TokenType::Colon,
+                ':' => {
+                    if self.matches(':') {
+                        TokenType::ColonColon
+                    } else {
+                        TokenType::Colon
+                    }
+                }
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
                 '!' => {
@@ -413,6 +419,20 @@ mod tests {
         colon: ":" => expect![[r#"
             Colon      ':' 0+1
             EOF        '' 1+0
+        "#]];
+        coloncolon: "::" => expect![[r#"
+            ColonColon '::' 0+2
+            EOF        '' 2+0
+        "#]];
+        coloncolon_colon: ":::" => expect![[r#"
+            ColonColon '::' 0+2
+            Colon      ':' 2+1
+            EOF        '' 3+0
+        "#]];
+        coloncolon_coloncolon: ":::" => expect![[r#"
+            ColonColon '::' 0+2
+            Colon      ':' 2+1
+            EOF        '' 3+0
         "#]];
         slash_slash: "/ /" => expect![[r#"
             Slash      '/' 0+1

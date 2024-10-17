@@ -4,6 +4,7 @@ use crate::frontend::ast::expr::{
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
+use crate::frontend::ast::qualified_name::QualifiedName;
 use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::ast::stmt::{
     FunStmt, ImplStmt, LetStmt, Stmt, StructStmt, TraitStmt, WhileStmt,
@@ -396,18 +397,16 @@ impl Resolver {
         let Expr::Variable(type_id) = &*expr.data else {
             bail!("Unsupported expression in type position: {:?}", expr);
         };
-        let distance_and_symbol = self.get_definition_distance_and_symbol(&type_id.variable);
+        let distance_and_symbol =
+            self.get_definition_distance_and_symbol(&type_id.name.data.parts[0]);
         let Some((_distance, symbol)) = distance_and_symbol else {
-            bail!("Unknown symbol: {}", type_id.variable.lexeme());
+            bail!("Unknown symbol: {}", type_id.name);
         };
         let Some(value) = &symbol.value else {
-            bail!("Unknown value for symbol: {}", type_id.variable.lexeme());
+            bail!("Unknown value for symbol: {}", type_id.name);
         };
         let ValueKind::Type(ty) = &value.val else {
-            bail!(
-                "Type expression must be a type: {}",
-                type_id.variable.lexeme()
-            );
+            bail!("Type expression must be a type: {}", type_id.name);
         };
         Ok(ty.clone())
     }
@@ -472,7 +471,13 @@ impl Resolver {
                         // function in method call position, replace ast
                         let fun_node = AstNode::new(
                             Expr::Variable(VarUse {
-                                variable: get_expr.name.clone(),
+                                name: AstNode::new(
+                                    QualifiedName {
+                                        parts: vec![get_expr.name.clone()],
+                                    },
+                                    get_expr.name.location.clone(),
+                                    symbol.ty.clone(),
+                                ),
                                 distance,
                             }),
                             get_expr.name.location.clone(),
@@ -727,7 +732,8 @@ impl Resolver {
     ) -> FelicoResult<()> {
         let destination = &assign.destination;
         self.resolve_expr(&mut assign.value)?;
-        let distance_and_symbol = self.get_definition_distance_and_symbol(destination);
+        let distance_and_symbol =
+            self.get_definition_distance_and_symbol(&destination.data.parts[0]);
         if let Some((distance, symbol)) = distance_and_symbol {
             assign.distance = distance;
             let destination_type = &symbol.ty;
@@ -738,7 +744,7 @@ impl Resolver {
                 .type_checker
                 .is_assignable_to(expression_type, destination_type)
             {
-                let mut diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination.lexeme(), destination_type));
+                let mut diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination, destination_type));
                 diagnostic.add_label(
                     &symbol.declaration_site,
                     format!("is declared as {} here", destination_type),
@@ -749,7 +755,7 @@ impl Resolver {
         } else {
             self.diagnose(InterpreterDiagnostic::new(
                 &destination.location,
-                format!("Variable '{}' is not defined here", destination.lexeme()),
+                format!("Variable '{}' is not defined here", destination),
             ));
             *ast_info.ty = self.type_factory.unresolved();
         }
@@ -761,17 +767,15 @@ impl Resolver {
         var_use: &mut VarUse,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
-        let distance_and_symbol = self.get_definition_distance_and_symbol(&var_use.variable);
+        let distance_and_symbol =
+            self.get_definition_distance_and_symbol(&var_use.name.data.parts[0]);
         if let Some((distance, symbol)) = distance_and_symbol {
             var_use.distance = distance;
             *ast_info.ty = symbol.ty.clone();
         } else {
             self.diagnose(InterpreterDiagnostic::new(
-                &var_use.variable.location,
-                format!(
-                    "Variable '{}' is not defined here",
-                    var_use.variable.lexeme()
-                ),
+                &var_use.name.location,
+                format!("Variable '{}' is not defined here", var_use.name),
             ));
             *ast_info.ty = self.type_factory.unresolved();
         }
@@ -825,8 +829,8 @@ impl Resolver {
             .expect("Scope Stack should not be empty")
     }
 
-    fn get_definition_distance_and_symbol(&self, variable: &Token) -> Option<(i32, &Symbol)> {
-        let name = variable.lexeme();
+    fn get_definition_distance_and_symbol(&self, token: &Token) -> Option<(i32, &Symbol)> {
+        let name = token.lexeme();
         let mut distance = -1;
         for scope in self.scopes.iter().rev() {
             distance += 1;
@@ -1017,7 +1021,7 @@ mod tests {
                 ├── Return type: Read 'unit'
                 ├── Let ''a' (Identifier)': ❬f64❭
                 │   └── F64(1.0): ❬f64❭
-                ├── 'a' (Identifier) = : ❬f64❭
+                ├── a = : ❬f64❭
                 │   └── F64(3.0): ❬f64❭
                 └── Unit: ❬Unit❭
         "#]],expect![[r#"
