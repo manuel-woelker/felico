@@ -111,13 +111,7 @@ pub enum TypeKind {
     Type,
     Function(FunctionType),
     Struct(StructType),
-}
-
-impl Eq for StructType {}
-impl PartialEq for StructType {
-    fn eq(&self, other: &Self) -> bool {
-        self.name.lexeme() == other.name.lexeme()
-    }
+    Trait(TraitType),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -130,6 +124,25 @@ pub struct FunctionType {
 pub struct StructType {
     pub name: Token,
     pub fields: HashMap<SharedString, StructField>,
+}
+
+impl Eq for StructType {}
+impl PartialEq for StructType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.lexeme() == other.name.lexeme()
+    }
+}
+
+#[derive(Debug)]
+pub struct TraitType {
+    pub name: Token,
+}
+
+impl Eq for TraitType {}
+impl PartialEq for TraitType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.lexeme() == other.name.lexeme()
+    }
 }
 
 #[derive(Debug)]

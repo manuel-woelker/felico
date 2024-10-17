@@ -1,4 +1,6 @@
-use crate::frontend::ast::types::{PrimitiveType, StructField, StructType, Type, TypeKind};
+use crate::frontend::ast::types::{
+    PrimitiveType, StructField, StructType, TraitType, Type, TypeKind,
+};
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::result::bail;
 use crate::infra::shared_string::SharedString;
@@ -103,6 +105,14 @@ impl TypeFactory {
                 name: name.clone(),
                 fields,
             }),
+            declaration_site,
+        )
+    }
+
+    pub fn make_trait(&self, name: &Token, declaration_site: SourceSpan) -> Type {
+        Type::new(
+            name.lexeme(),
+            TypeKind::Trait(TraitType { name: name.clone() }),
             declaration_site,
         )
     }

@@ -559,7 +559,10 @@ impl Interpreter {
                 check_early_return!(result);
             }
             Stmt::Struct(_struct_stmt) => {
-                // TODO: implement struct stmt
+                // Nothing to do at runtime
+            }
+            Stmt::Trait(_trait_stmt) => {
+                // Nothing to do at runtime
             }
         }
         Ok(self.cont())

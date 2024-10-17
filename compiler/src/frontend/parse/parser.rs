@@ -5,7 +5,8 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::{
-    ExprStmt, FunParameter, FunStmt, LetStmt, Stmt, StructStmt, StructStmtField, WhileStmt,
+    ExprStmt, FunParameter, FunStmt, LetStmt, Stmt, StructStmt, StructStmtField, TraitStmt,
+    WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -142,6 +143,10 @@ impl Parser {
                 let node = self.parse_struct_stmt()?;
                 Ok(node)
             }
+            TokenType::Trait => {
+                let node = self.parse_trait_stmt()?;
+                Ok(node)
+            }
             TokenType::Fun => {
                 let node = self.parse_fun_stmt("function")?;
                 Ok(node)
@@ -215,6 +220,15 @@ impl Parser {
         })?;
         self.consume(TokenType::RightBrace, "Expected '}' to complete class")?;
         self.create_node(&start_location, Stmt::Struct(StructStmt { name, fields }))
+    }
+
+    fn parse_trait_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+        let start_location = self.current_location();
+        self.consume(TokenType::Trait, "trait expected")?;
+        let name = self.consume(TokenType::Identifier, "Expected identifier after trait")?;
+        self.consume(TokenType::LeftBrace, "Expected '{'")?;
+        self.consume(TokenType::RightBrace, "Expected '}' to complete trait")?;
+        self.create_node(&start_location, Stmt::Trait(TraitStmt { name }))
     }
 
     fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<Stmt>> {
@@ -1291,6 +1305,16 @@ mod tests {
                        │   ├── Read 'a'     [0+1]
                        │   └── F64(3.0)     [6+1]
                        └── Unit     [0+8]
+               "#]];
+                script_trait_simple: "
+                trait Panic {
+                }
+               " => expect![[r#"
+                   Module
+                   └── Declare fun 'main()'     [17+47]
+                       ├── Return type: Read 'unit'     [17+47]
+                       ├── Trait 'Panic'     [17+47]
+                       └── Unit     [17+47]
                "#]];
                script_struct_simple: "
                struct Foo {

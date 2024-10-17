@@ -9,6 +9,7 @@ pub enum Stmt {
     Expression(ExprStmt),
     Let(LetStmt),
     Struct(StructStmt),
+    Trait(TraitStmt),
     Fun(FunStmt),
     While(WhileStmt),
 }
@@ -62,6 +63,11 @@ pub struct WhileStmt {
 pub struct StructStmt {
     pub name: Token,
     pub fields: Vec<AstNode<StructStmtField>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitStmt {
+    pub name: Token,
 }
 
 #[derive(Debug, Clone)]

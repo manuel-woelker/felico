@@ -47,6 +47,9 @@ pub enum TokenType {
     Let,
     While,
     Struct,
+    Trait,
+    Enum,
+    Impl,
 
     UnexpectedCharacter,
 

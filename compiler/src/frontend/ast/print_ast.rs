@@ -199,6 +199,10 @@ impl<'a> AstPrinterWorker<'a> {
                 }
                 tree
             }
+            Stmt::Trait(trait_stmt) => {
+                let tree = Tree::new(format!("Trait '{}'", trait_stmt.name.lexeme()));
+                tree
+            }
             Stmt::While(while_stmt) => {
                 let mut tree = Tree::new("While".into());
                 tree.push(self.expr_to_tree(&while_stmt.condition));

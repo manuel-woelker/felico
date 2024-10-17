@@ -5,7 +5,7 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, StructStmt, WhileStmt};
+use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, StructStmt, TraitStmt, WhileStmt};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
@@ -175,6 +175,9 @@ impl Resolver {
             Stmt::Struct(struct_stmt) => {
                 self.resolve_struct_stmt(struct_stmt, &mut ast_info)?;
             }
+            Stmt::Trait(trait_stmt) => {
+                self.resolve_trait_stmt(trait_stmt, &mut ast_info)?;
+            }
             Stmt::Fun(fun_stmt) => {
                 self.resolve_fun_stmt(fun_stmt, &mut ast_info)?;
             }
@@ -300,6 +303,25 @@ impl Resolver {
             struct_stmt.name.lexeme().into(),
             Symbol {
                 declaration_site: struct_stmt.name.location.clone(),
+                is_defined: true,
+                ty: ast_info.ty.clone(),
+                value: None,
+            },
+        )?;
+        Ok(())
+    }
+
+    fn resolve_trait_stmt(
+        &mut self,
+        trait_stmt: &mut TraitStmt,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        let type_factory = self.type_factory.clone();
+        *ast_info.ty = type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location.clone());
+        self.add_symbol_to_scope(
+            trait_stmt.name.lexeme().into(),
+            Symbol {
+                declaration_site: trait_stmt.name.location.clone(),
                 is_defined: true,
                 ty: ast_info.ty.clone(),
                 value: None,

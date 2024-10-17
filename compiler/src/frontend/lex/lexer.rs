@@ -61,6 +61,9 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "let" => TokenType::Let,
     "while" => TokenType::While,
     "struct" => TokenType::Struct,
+    "trait" => TokenType::Trait,
+    "enum" => TokenType::Enum,
+    "impl" => TokenType::Impl,
 };
 
 impl Lexer {
@@ -613,6 +616,14 @@ mod tests {
         keyword_while: "while" => expect![[r#"
             While      'while' 0+5
             EOF        '' 5+0
+        "#]];
+        keyword_enum: "enum" => expect![[r#"
+            Enum       'enum' 0+4
+            EOF        '' 4+0
+        "#]];
+        keyword_impl: "impl" => expect![[r#"
+            Impl       'impl' 0+4
+            EOF        '' 4+0
         "#]];
 
         offset_simple: "\"x\"if" => expect![[r#"

@@ -13,3 +13,5 @@ fun assert(condition: bool) {
 }
 
 struct Test {}
+
+trait Panic {}
