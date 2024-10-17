@@ -5,8 +5,8 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::{
-    ExprStmt, FunParameter, FunStmt, LetStmt, Stmt, StructStmt, StructStmtField, TraitStmt,
-    WhileStmt,
+    ExprStmt, FunParameter, FunStmt, ImplStmt, LetStmt, Stmt, StructStmt, StructStmtField,
+    TraitStmt, WhileStmt,
 };
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::lexer::Lexer;
@@ -147,6 +147,10 @@ impl Parser {
                 let node = self.parse_trait_stmt()?;
                 Ok(node)
             }
+            TokenType::Impl => {
+                let node = self.parse_impl_stmt()?;
+                Ok(node)
+            }
             TokenType::Fun => {
                 let node = self.parse_fun_stmt("function")?;
                 Ok(node)
@@ -229,6 +233,35 @@ impl Parser {
         self.consume(TokenType::LeftBrace, "Expected '{'")?;
         self.consume(TokenType::RightBrace, "Expected '}' to complete trait")?;
         self.create_node(&start_location, Stmt::Trait(TraitStmt { name }))
+    }
+
+    fn parse_impl_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+        let start_location = self.current_location();
+        self.consume(TokenType::Impl, "impl expected")?;
+        let name = self.consume(TokenType::Identifier, "Expected identifier after impl")?;
+        self.consume(TokenType::LeftBrace, "Expected '{'")?;
+        let mut methods = vec![];
+        loop {
+            if self.is_at(TokenType::RightBrace) {
+                break;
+            }
+            let stmt = self.parse_fun_stmt("method")?;
+            let AstNode { location, data, ty } = stmt;
+            let stmt = *data;
+            let Stmt::Fun(fun_stmt) = stmt else {
+                return Err(InterpreterDiagnostic::new(
+                    &location,
+                    format!(
+                        "Expected function definition in impl block, found {:?} instead",
+                        stmt
+                    ),
+                )
+                .into());
+            };
+            methods.push(AstNode::new(fun_stmt, location, ty));
+        }
+        self.consume(TokenType::RightBrace, "Expected '}' to complete impl")?;
+        self.create_node(&start_location, Stmt::Impl(ImplStmt { name, methods }))
     }
 
     fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<Stmt>> {
@@ -1405,6 +1438,27 @@ mod tests {
                        │   └── Get bar     [228+6]
                        │       └── Read 'a'     [228+1]
                        └── Unit     [16+235]
+               "#]];
+                impl_simple: "
+               struct Something {
+                    bar: bool,
+               }
+                impl Something {
+                    fun foo() {
+                    }
+                };
+               " => expect![[r#"
+                   Module
+                   └── Declare fun 'main()'     [16+188]
+                       ├── Return type: Read 'unit'     [16+188]
+                       ├── Struct 'Something'     [16+87]
+                       │   └── Field bar     [55+10]
+                       │       └── Read 'bool'     [60+4]
+                       ├── Impl 'Something'     [99+89]
+                       │   └── Method: Declare fun 'foo()'
+                       │       ├── Return type: Read 'unit'     [136+11]
+                       │       └── Unit     [168+1]
+                       └── Unit     [16+188]
                "#]];
                 script_fib: "
                     fun fib(n: f64) {

@@ -10,6 +10,7 @@ pub enum Stmt {
     Let(LetStmt),
     Struct(StructStmt),
     Trait(TraitStmt),
+    Impl(ImplStmt),
     Fun(FunStmt),
     While(WhileStmt),
 }
@@ -57,6 +58,12 @@ impl AstData for FunStmt {}
 pub struct WhileStmt {
     pub condition: AstNode<Expr>,
     pub body_stmt: AstNode<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImplStmt {
+    pub name: Token,
+    pub methods: Vec<AstNode<FunStmt>>,
 }
 
 #[derive(Debug, Clone)]

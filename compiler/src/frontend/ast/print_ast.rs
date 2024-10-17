@@ -1,7 +1,7 @@
 use crate::frontend::ast::expr::Expr;
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::stmt::Stmt;
+use crate::frontend::ast::stmt::{FunStmt, Stmt};
 use crate::frontend::ast::AstData;
 use crate::infra::result::FelicoResult;
 use std::io::{BufWriter, Cursor, Write};
@@ -168,27 +168,7 @@ impl<'a> AstPrinterWorker<'a> {
                 tree.push(self.expr_to_tree(&var.expression));
                 tree
             }
-            Stmt::Fun(fun) => {
-                let mut tree = Tree::new(format!(
-                    "Declare fun '{}({})'",
-                    fun.name.lexeme(),
-                    fun.parameters
-                        .iter()
-                        .map(|p| p.name.lexeme())
-                        .collect::<Vec<&str>>()
-                        .join(", ")
-                ));
-                for parameter in &fun.parameters {
-                    let mut paramtree = Tree::new(format!("Param {}", parameter.name.lexeme()));
-                    paramtree.push(self.expr_to_tree(&parameter.type_expression));
-                    tree.push(paramtree);
-                }
-                let mut return_type_tree = self.expr_to_tree(&fun.return_type);
-                return_type_tree.root = "Return type: ".to_string() + &return_type_tree.root;
-                tree.push(return_type_tree);
-                tree.leaves.append(&mut self.expr_to_tree(&fun.body).leaves);
-                tree
-            }
+            Stmt::Fun(fun) => self.fun_to_tree(fun),
             Stmt::Struct(struct_stmt) => {
                 let mut tree = Tree::new(format!("Struct '{}'", struct_stmt.name.lexeme()));
                 for field in &struct_stmt.fields {
@@ -196,6 +176,15 @@ impl<'a> AstPrinterWorker<'a> {
                     field_tree.push(self.expr_to_tree(&field.data.type_expression));
                     let field_tree = self.add_location(field_tree, field);
                     tree.push(field_tree);
+                }
+                tree
+            }
+            Stmt::Impl(impl_stmt) => {
+                let mut tree = Tree::new(format!("Impl '{}'", impl_stmt.name.lexeme()));
+                for method in &impl_stmt.methods {
+                    let mut method_tree = self.fun_to_tree(&*method.data);
+                    method_tree.root.insert_str(0, "Method: ");
+                    tree.push(method_tree);
                 }
                 tree
             }
@@ -211,6 +200,28 @@ impl<'a> AstPrinterWorker<'a> {
             }
         };
         self.add_location(tree, ast)
+    }
+
+    fn fun_to_tree(&self, fun: &FunStmt) -> Tree<String> {
+        let mut tree = Tree::new(format!(
+            "Declare fun '{}({})'",
+            fun.name.lexeme(),
+            fun.parameters
+                .iter()
+                .map(|p| p.name.lexeme())
+                .collect::<Vec<&str>>()
+                .join(", ")
+        ));
+        for parameter in &fun.parameters {
+            let mut paramtree = Tree::new(format!("Param {}", parameter.name.lexeme()));
+            paramtree.push(self.expr_to_tree(&parameter.type_expression));
+            tree.push(paramtree);
+        }
+        let mut return_type_tree = self.expr_to_tree(&fun.return_type);
+        return_type_tree.root = "Return type: ".to_string() + &return_type_tree.root;
+        tree.push(return_type_tree);
+        tree.leaves.append(&mut self.expr_to_tree(&fun.body).leaves);
+        tree
     }
 
     fn program_to_tree(&self, ast: &AstNode<Module>) -> Tree<String> {

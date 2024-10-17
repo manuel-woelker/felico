@@ -5,7 +5,9 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::Stmt::Let;
-use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, StructStmt, TraitStmt, WhileStmt};
+use crate::frontend::ast::stmt::{
+    FunStmt, ImplStmt, LetStmt, Stmt, StructStmt, TraitStmt, WhileStmt,
+};
 use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
@@ -175,6 +177,9 @@ impl Resolver {
             Stmt::Struct(struct_stmt) => {
                 self.resolve_struct_stmt(struct_stmt, &mut ast_info)?;
             }
+            Stmt::Impl(impl_stmt) => {
+                self.resolve_impl_stmt(impl_stmt, &mut ast_info)?;
+            }
             Stmt::Trait(trait_stmt) => {
                 self.resolve_trait_stmt(trait_stmt, &mut ast_info)?;
             }
@@ -308,6 +313,24 @@ impl Resolver {
                 value: None,
             },
         )?;
+        Ok(())
+    }
+
+    fn resolve_impl_stmt(
+        &mut self,
+        impl_stmt: &mut ImplStmt,
+        ast_info: &mut CommonAstInfo,
+    ) -> FelicoResult<()> {
+        for method in &mut impl_stmt.methods {
+            self.resolve_fun_stmt(
+                &mut *method.data,
+                &mut CommonAstInfo {
+                    location: &method.location,
+                    ty: &mut method.ty,
+                },
+            )?;
+        }
+        *ast_info.ty = self.type_factory.unit();
         Ok(())
     }
 

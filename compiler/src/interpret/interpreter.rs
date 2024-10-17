@@ -561,6 +561,9 @@ impl Interpreter {
             Stmt::Struct(_struct_stmt) => {
                 // Nothing to do at runtime
             }
+            Stmt::Impl(_impl_stmt) => {
+                // TODO: add functions to struct type
+            }
             Stmt::Trait(_trait_stmt) => {
                 // Nothing to do at runtime
             }
