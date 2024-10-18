@@ -6,6 +6,5 @@ pub mod node;
 pub mod print_ast;
 pub mod qualified_name;
 pub mod stmt;
-pub mod types;
 
 pub trait AstData: Debug + 'static {}

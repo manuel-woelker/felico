@@ -1,6 +1,6 @@
-use crate::frontend::ast::types::Type;
 use crate::frontend::ast::AstData;
 use crate::infra::source_span::SourceSpan;
+use crate::model::types::Type;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]

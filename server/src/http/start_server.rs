@@ -11,6 +11,7 @@ use felico_compiler::frontend::compile::compile_module;
 use felico_compiler::frontend::resolve::module_manifest::BundleManifest;
 use felico_compiler::infra::result::FelicoResult;
 use felico_compiler::infra::source_file::SourceFile;
+use felico_compiler::model::workspace::Workspace;
 use http::StatusCode;
 use log::{info, warn};
 use tower_http::services::{ServeDir, ServeFile};
@@ -25,7 +26,8 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     // initialize tracing
     tracing_subscriber::fmt::init();
     info!("Starting up;");
-    let module = compile_module(SourceFile::from_path("bundles/test.felico")?)?;
+    let workspace = Workspace::new();
+    let module = compile_module(SourceFile::from_path("bundles/test.felico")?, &workspace)?;
     let bundle = BundleManifest {
         name: module.name.clone(),
         modules: vec![module],

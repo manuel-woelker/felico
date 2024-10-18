@@ -1,10 +1,10 @@
 use crate::frontend::ast::stmt::FunStmt;
-use crate::frontend::ast::types::Type;
 use crate::infra::result::FelicoResult;
 use crate::infra::shared_string::SharedString;
-use crate::interpret::core_definitions::TypeFactory;
 use crate::interpret::environment::Environment;
 use crate::interpret::interpreter::{Interpreter, StackFrame};
+use crate::model::type_factory::TypeFactory;
+use crate::model::types::Type;
 use itertools::{Itertools, Position};
 use std::cell::RefCell;
 use std::collections::HashMap;

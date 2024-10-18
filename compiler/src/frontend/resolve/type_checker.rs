@@ -1,4 +1,4 @@
-use crate::frontend::ast::types::{Type, TypeKind};
+use crate::model::types::{Type, TypeKind};
 
 pub struct TypeChecker {}
 

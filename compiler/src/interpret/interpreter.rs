@@ -5,7 +5,6 @@ use crate::frontend::ast::expr::{
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::{FunStmt, ImplStmt, Stmt, WhileStmt};
-use crate::frontend::ast::types::Type;
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_script};
@@ -14,11 +13,14 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, FelicoError, FelicoResult};
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
-use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpret::core_definitions::get_core_definitions;
 use crate::interpret::environment::Environment;
 use crate::interpret::value::{
     Callable, CallableFun, DefinedFunction, InterpreterValue, ValueFactory, ValueKind, ValueMap,
 };
+use crate::model::type_factory::TypeFactory;
+use crate::model::types::Type;
+use crate::model::workspace::Workspace;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -31,6 +33,7 @@ pub struct StackFrame {
 }
 
 pub struct Interpreter {
+    workspace: Workspace,
     source_file: SourceFile,
     type_factory: TypeFactory,
     value_factory: ValueFactory,
@@ -61,12 +64,14 @@ impl InterpreterValue {
 impl Interpreter {
     pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
         let mut environment = Environment::new();
-        let type_factory = TypeFactory::new();
+        let workspace = Workspace::new();
+        let type_factory = TypeFactory::new(&workspace);
         for core_definition in get_core_definitions(&type_factory) {
             environment.define(&core_definition.name, core_definition.value.clone());
         }
         environment.enter_new();
         Ok(Self {
+            workspace,
             source_file,
             environment,
             print_fn: Box::new(|value| {
@@ -145,7 +150,7 @@ impl Interpreter {
     }
 
     pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue> {
-        let expr = parse_expression(self.source_file.clone())?;
+        let expr = parse_expression(self.source_file.clone(), &self.workspace)?;
         self.evaluate_expr(&expr)
     }
 

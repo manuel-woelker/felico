@@ -9,7 +9,6 @@ use crate::frontend::ast::stmt::Stmt::Let;
 use crate::frontend::ast::stmt::{
     FunStmt, ImplStmt, LetStmt, Stmt, StructStmt, TraitStmt, WhileStmt,
 };
-use crate::frontend::ast::types::{StructField, Type, TypeKind};
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
 use crate::frontend::resolve::type_checker::TypeChecker;
@@ -19,8 +18,10 @@ use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
-use crate::interpret::core_definitions::{get_core_definitions, TypeFactory};
+use crate::interpret::core_definitions::get_core_definitions;
 use crate::interpret::value::{InterpreterValue, ValueKind};
+use crate::model::type_factory::TypeFactory;
+use crate::model::types::{StructField, Type, TypeKind};
 use error_stack::Report;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -983,7 +984,8 @@ mod tests {
     use crate::frontend::parse::parser::Parser;
     use crate::frontend::resolve::resolver::{resolve_variables, Resolver};
     use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use crate::interpret::core_definitions::TypeFactory;
+    use crate::model::type_factory::TypeFactory;
+    use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
 
     fn test_resolve_program(
@@ -992,7 +994,8 @@ mod tests {
         expected_ast: Expect,
         expected_manifest: Expect,
     ) {
-        let type_factory = &TypeFactory::new();
+        let workspace = Workspace::new();
+        let type_factory = &TypeFactory::new(&workspace);
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let mut program = parser.parse_script().unwrap();
         let mut resolver = Resolver::new(type_factory.clone());
@@ -1229,7 +1232,8 @@ mod tests {
            "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
-        let type_factory = &TypeFactory::new();
+        let workspace = Workspace::new();
+        let type_factory = &TypeFactory::new(&workspace);
         let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let mut ast = parser.parse_script().unwrap();
         let result = resolve_variables(&mut ast, type_factory);

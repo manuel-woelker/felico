@@ -18,7 +18,8 @@ use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
-use crate::interpret::core_definitions::TypeFactory;
+use crate::model::type_factory::TypeFactory;
+use crate::model::workspace::Workspace;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -860,8 +861,11 @@ impl Parser {
     }
 }
 
-pub fn parse_expression(code_source: SourceFile) -> FelicoResult<AstNode<Expr>> {
-    let parser = Parser::new(code_source, &TypeFactory::new())?;
+pub fn parse_expression(
+    code_source: SourceFile,
+    workspace: &Workspace,
+) -> FelicoResult<AstNode<Expr>> {
+    let parser = Parser::new(code_source, &TypeFactory::new(workspace))?;
     parser.parse_expression()
 }
 
@@ -881,7 +885,8 @@ mod tests {
     use expect_test::{expect, Expect};
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
+        let workspace = Workspace::new();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
         let expr = parser.parse_expression().unwrap();
         AstPrinter::new().print_expr(&expr).unwrap();
         let printed_ast = AstPrinter::new().print_expr(&expr).unwrap();
@@ -1104,7 +1109,8 @@ mod tests {
     );
 
     fn test_parse_script(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
+        let workspace = Workspace::new();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
         let script = parser.parse_script().unwrap();
         let printed_ast = ast_to_string(&script).unwrap();
 
@@ -1532,7 +1538,8 @@ mod tests {
     );
 
     fn test_parse_script_error(name: &str, input: &str, expected: Expect) {
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new()).unwrap();
+        let workspace = Workspace::new();
+        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
         let result = parser.parse_script();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);
