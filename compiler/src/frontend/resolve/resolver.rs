@@ -29,26 +29,26 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::Mutex;
 
-pub type SymbolMap = HashMap<SharedString, Symbol>;
+pub type SymbolMap<'a> = HashMap<SharedString, Symbol<'a>>;
 
 #[derive(Debug)]
-pub struct Symbol {
+pub struct Symbol<'a> {
     declaration_site: SourceSpan,
     is_defined: bool,
     // Type of the symbol or expression
-    ty: Type,
+    ty: Type<'a>,
     // Value of the expression
-    value: Option<InterpreterValue>,
-    symbol_map: Mutex<SymbolMap>,
+    value: Option<InterpreterValue<'a>>,
+    symbol_map: Mutex<SymbolMap<'a>>,
 }
 
-impl Symbol {
+impl<'a> Symbol<'a> {
     pub fn new(
         declaration_site: SourceSpan,
         is_defined: bool,
-        ty: Type,
-        value: Option<InterpreterValue>,
-    ) -> Symbol {
+        ty: Type<'a>,
+        value: Option<InterpreterValue<'a>>,
+    ) -> Symbol<'a> {
         Symbol {
             declaration_site,
             is_defined,
@@ -58,7 +58,7 @@ impl Symbol {
         }
     }
 
-    pub fn define_value(declaration_site: &SourceSpan, value: InterpreterValue) -> Self {
+    pub fn define_value(declaration_site: &SourceSpan, value: InterpreterValue<'a>) -> Self {
         Self::new(
             declaration_site.clone(),
             true,
@@ -67,26 +67,26 @@ impl Symbol {
         )
     }
 
-    pub fn define(declaration_site: &SourceSpan, ty: &Type) -> Self {
+    pub fn define(declaration_site: &SourceSpan, ty: &Type<'a>) -> Self {
         Self::new(declaration_site.clone(), true, ty.clone(), None)
     }
-    pub fn declare(declaration_site: &SourceSpan, ty: &Type) -> Self {
+    pub fn declare(declaration_site: &SourceSpan, ty: &Type<'a>) -> Self {
         Self::new(declaration_site.clone(), false, ty.clone(), None)
     }
 }
 
-struct CurrentFunctionInfo {
-    declared_return_type: Type,
+struct CurrentFunctionInfo<'a> {
+    declared_return_type: Type<'a>,
     return_type_declaration_site: SourceSpan,
 }
 
-pub struct LexicalScope {
-    symbols: HashMap<SharedString, Symbol>,
-    current_function: Option<CurrentFunctionInfo>,
+pub struct LexicalScope<'a> {
+    symbols: HashMap<SharedString, Symbol<'a>>,
+    current_function: Option<CurrentFunctionInfo<'a>>,
     base_name: FullName,
 }
 
-impl LexicalScope {
+impl<'a> LexicalScope<'a> {
     fn new(base_name: FullName) -> Self {
         Self {
             symbols: Default::default(),
@@ -94,23 +94,23 @@ impl LexicalScope {
             base_name,
         }
     }
-    fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol) {
+    fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol<'a>) {
         self.symbols.insert(name.into(), symbol);
     }
-    fn get(&self, name: &str) -> Option<&Symbol> {
+    fn get(&self, name: &str) -> Option<&Symbol<'a>> {
         self.symbols.get(name)
     }
-    fn get_mut(&mut self, name: &str) -> Option<&mut Symbol> {
+    fn get_mut(&mut self, name: &str) -> Option<&mut Symbol<'a>> {
         self.symbols.get_mut(name)
     }
-    fn entry<S: Into<SharedString>>(&mut self, name: S) -> Entry<SharedString, Symbol> {
+    fn entry<S: Into<SharedString>>(&mut self, name: S) -> Entry<SharedString, Symbol<'a>> {
         self.symbols.entry(name.into())
     }
 }
 
-pub struct Resolver {
-    scopes: Vec<LexicalScope>,
-    type_factory: TypeFactory,
+pub struct Resolver<'a> {
+    scopes: Vec<LexicalScope<'a>>,
+    type_factory: TypeFactory<'a>,
     type_checker: TypeChecker,
     diagnostics: Vec<InterpreterDiagnostic>,
     module_name: FullName,
@@ -119,15 +119,15 @@ pub struct Resolver {
 // Ast information extract during resolution to make separate borrows
 struct CommonAstInfo<'a> {
     location: &'a SourceSpan,
-    ty: &'a mut Type,
+    ty: &'a mut Type<'a>,
 }
 impl<'a> CommonAstInfo<'a> {
-    fn new(location: &'a SourceSpan, ty: &'a mut Type) -> Self {
+    fn new(location: &'a SourceSpan, ty: &'a mut Type<'a>) -> Self {
         Self { location, ty }
     }
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
     pub fn new(type_factory: TypeFactory) -> Self {
         let mut global_scope: LexicalScope = LexicalScope::new(FullName::from("__global"));
         let location = SourceSpan {
@@ -327,7 +327,7 @@ impl Resolver {
             self.resolve_expr(&mut field.data.type_expression)?;
             field.ty = self.resolve_type(&field.data.type_expression)?;
             let name = SharedString::from(field.data.name.lexeme());
-            fields.insert(name.clone(), StructField::new(&field.data.name, &field.ty));
+            fields.insert(name.clone(), StructField::new(&field.data.name, field.ty));
         }
         let ty =
             type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
@@ -610,7 +610,7 @@ impl Resolver {
         Ok(())
     }
 
-    fn get_struct_field<'a>(
+    fn get_struct_field(
         &mut self,
         ty: &'a Type,
         field_name: &str,

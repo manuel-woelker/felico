@@ -4,14 +4,13 @@ use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
-use std::rc::Rc;
 
-#[derive(Clone)]
-pub struct Type {
-    inner: Rc<TypeInner>,
+#[derive(Copy, Clone)]
+pub struct Type<'a> {
+    pub(crate) inner: &'a TypeInner<'a>,
 }
 
-impl Type {
+impl<'a> Type<'a> {
     pub fn is_unknown(&self) -> bool {
         matches!(self.inner.kind, TypeKind::Unknown)
     }
@@ -27,19 +26,19 @@ impl Type {
     }
 }
 
-impl Debug for Type {
+impl<'a> Debug for Type<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "❬{}❭", self.inner.name)
     }
 }
 
-impl Display for Type {
+impl<'a> Display for Type<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "❬{}❭", self.inner.name)
     }
 }
-
-impl Type {
+/*
+impl <'a> Type {
     pub fn new<S: Into<FullName>>(name: S, kind: TypeKind, declaration_site: SourceSpan) -> Self {
         Self {
             inner: Rc::new(TypeInner {
@@ -86,23 +85,25 @@ impl Type {
     }
 }
 
-impl PartialEq<Self> for Type {
+
+ */
+impl<'a> PartialEq<Self> for Type<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.kind == other.inner.kind
     }
 }
 
-impl Eq for Type {}
+impl<'a> Eq for Type<'a> {}
 
 #[derive(Debug)]
-pub struct TypeInner {
-    name: FullName,
-    declaration_site: SourceSpan,
-    kind: TypeKind,
+pub struct TypeInner<'a> {
+    pub name: FullName,
+    pub declaration_site: SourceSpan,
+    pub kind: TypeKind<'a>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum TypeKind {
+pub enum TypeKind<'a> {
     Any,   // Top Type, should only be used for debug_print()
     Never, // Bottom Type, the type of return expressions and return type of divergent functions
     Unknown,
@@ -110,25 +111,25 @@ pub enum TypeKind {
     Primitive(PrimitiveType),
     Type,
     Namespace,
-    Function(FunctionType),
-    Struct(StructType),
+    Function(FunctionType<'a>),
+    Struct(StructType<'a>),
     Trait(TraitType),
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct FunctionType {
-    pub parameter_types: Vec<Type>,
-    pub return_type: Type,
+pub struct FunctionType<'a> {
+    pub parameter_types: Vec<Type<'a>>,
+    pub return_type: Type<'a>,
 }
 
 #[derive(Debug)]
-pub struct StructType {
+pub struct StructType<'a> {
     pub name: Token,
-    pub fields: HashMap<SharedString, StructField>,
+    pub fields: HashMap<SharedString, StructField<'a>>,
 }
 
-impl Eq for StructType {}
-impl PartialEq for StructType {
+impl<'a> Eq for StructType<'a> {}
+impl<'a> PartialEq for StructType<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.name.lexeme() == other.name.lexeme()
     }
@@ -147,18 +148,18 @@ impl PartialEq for TraitType {
 }
 
 #[derive(Debug)]
-pub struct StructField {
+pub struct StructField<'a> {
     pub name_token: Token,
     pub name: SharedString,
-    pub ty: Type,
+    pub ty: Type<'a>,
 }
 
-impl StructField {
-    pub fn new(name_token: &Token, ty: &Type) -> Self {
+impl<'a> StructField<'a> {
+    pub fn new(name_token: &Token, ty: Type<'a>) -> Self {
         Self {
             name: SharedString::from(name_token.lexeme()),
             name_token: name_token.clone(),
-            ty: ty.clone(),
+            ty,
         }
     }
 }

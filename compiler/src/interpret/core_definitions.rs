@@ -3,15 +3,15 @@ use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use crate::interpret::value::{InterpreterValue, ValueFactory, ValueKind};
 use crate::model::type_factory::TypeFactory;
-use crate::model::types::{Type, TypeKind};
+use crate::model::types::TypeKind;
 use itertools::Itertools;
 
-pub struct CoreDefinition {
+pub struct CoreDefinition<'a> {
     pub name: SharedString,
-    pub value: InterpreterValue,
+    pub value: InterpreterValue<'a>,
 }
 
-pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
+pub fn get_core_definitions<'a>(type_factory: &'a TypeFactory<'a>) -> Vec<CoreDefinition<'a>> {
     let mut core_definitions = Vec::new();
     let mut add_definition = |name: &str, value: InterpreterValue| {
         core_definitions.push(CoreDefinition {
@@ -26,7 +26,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
     add_definition("f64", value_factory.new_type(type_factory.f64()));
     add_definition("str", value_factory.new_type(type_factory.str()));
     add_definition("unit", value_factory.new_type(type_factory.unit()));
-    let value_factory_clone = value_factory.clone();
+    let value_factory_clone = value_factory;
     add_definition(
         "sqrt",
         value_factory.new_native_callable(
@@ -34,7 +34,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
             1,
             move |_interpreter, arguments| {
                 if let ValueKind::F64(arg) = arguments[0].val {
-                    Ok(value_factory_clone.f64(arg.sqrt()))
+                    Ok(value_factory.f64(arg.sqrt()))
                 } else {
                     bail!("Expected number as argument to sqrt")
                 }
@@ -59,7 +59,7 @@ pub fn get_core_definitions(type_factory: &TypeFactory) -> Vec<CoreDefinition> {
                 Ok(value_factory_clone.unit())
             },
             type_factory.function(
-                vec![Type::new_ephemeral("any".to_string(), TypeKind::Any)],
+                vec![type_factory.make_type("any", TypeKind::Any, SourceSpan::ephemeral())],
                 type_factory.unit(),
                 SourceSpan::ephemeral(),
             ),

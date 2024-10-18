@@ -22,17 +22,17 @@ use crate::model::type_factory::TypeFactory;
 use crate::model::workspace::Workspace;
 
 #[derive(Debug)]
-pub struct Parser {
+pub struct Parser<'a> {
     lexer: Lexer,
     current_token: Token,
     next_token: Token,
     source_file: SourceFile,
-    type_factory: TypeFactory,
+    type_factory: TypeFactory<'a>,
     module_name: FullName,
 }
 
-impl Parser {
-    pub fn new(source_file: SourceFile, type_factory: &TypeFactory) -> FelicoResult<Self> {
+impl<'a> Parser<'a> {
+    pub fn new(source_file: SourceFile, type_factory: TypeFactory<'a>) -> FelicoResult<Self> {
         let mut lexer = Lexer::new(source_file.clone()).whatever_context("oops")?;
         let current_token = lexer
             .next()
@@ -50,14 +50,14 @@ impl Parser {
             current_token,
             next_token,
             source_file,
-            type_factory: type_factory.clone(),
+            type_factory,
         })
     }
 
     pub fn new_in_memory(
         filename: &str,
         source_code: &str,
-        type_factory: &TypeFactory,
+        type_factory: TypeFactory<'a>,
     ) -> FelicoResult<Self> {
         Self::new(SourceFile::from_string(filename, source_code), type_factory)
     }
@@ -72,7 +72,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_script(mut self) -> FelicoResult<AstNode<Module>> {
+    pub fn parse_script(&mut self) -> FelicoResult<AstNode<'a, Module<'a>>> {
         let start_location = self.current_location();
 
         let module = self.parse_module()?;
@@ -112,7 +112,7 @@ impl Parser {
         )
     }
 
-    pub fn parse_module(&mut self) -> FelicoResult<AstNode<Module>> {
+    pub fn parse_module(&mut self) -> FelicoResult<AstNode<'a, Module<'a>>> {
         let start_location = self.current_location();
 
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
@@ -134,7 +134,7 @@ impl Parser {
         )
     }
 
-    fn parse_decl(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_decl(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         match self.current_token.token_type {
             TokenType::Let => {
                 let node = self.parse_let_stmt()?;
@@ -161,7 +161,7 @@ impl Parser {
         }
     }
 
-    fn parse_let_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_let_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Let, "let expected")?;
         let name = self.consume(TokenType::Identifier, "Expected identifier after let")?;
@@ -183,9 +183,9 @@ impl Parser {
         )
     }
 
-    fn parse_separated<T>(
+    fn parse_separated<T: 'a>(
         &mut self,
-        parse_fn: impl Fn(&mut Parser) -> FelicoResult<Option<T>>,
+        parse_fn: impl Fn(&mut Parser<'a>) -> FelicoResult<Option<T>>,
     ) -> FelicoResult<Vec<T>> {
         let mut result: Vec<T> = Vec::new();
         loop {
@@ -202,7 +202,7 @@ impl Parser {
         Ok(result)
     }
 
-    fn parse_struct_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_struct_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Struct, "struct expected")?;
         let name = self.consume(TokenType::Identifier, "Expected identifier after struct")?;
@@ -228,7 +228,7 @@ impl Parser {
         self.create_node(&start_location, Stmt::Struct(StructStmt { name, fields }))
     }
 
-    fn parse_trait_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_trait_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Trait, "trait expected")?;
         let name = self.consume(TokenType::Identifier, "Expected identifier after trait")?;
@@ -237,7 +237,7 @@ impl Parser {
         self.create_node(&start_location, Stmt::Trait(TraitStmt { name }))
     }
 
-    fn parse_impl_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_impl_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Impl, "impl expected")?;
         let name = self.consume(TokenType::Identifier, "Expected identifier after impl")?;
@@ -266,7 +266,7 @@ impl Parser {
         self.create_node(&start_location, Stmt::Impl(ImplStmt { name, methods }))
     }
 
-    fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_fun_stmt(&mut self, _kind: &str) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Fun, "fun expected")?;
         let name = self.consume(TokenType::Identifier, "Expected function identifier")?;
@@ -306,7 +306,10 @@ impl Parser {
         )
     }
 
-    fn create_unit_var_use(&mut self, start_location: &SourceSpan) -> FelicoResult<AstNode<Expr>> {
+    fn create_unit_var_use(
+        &mut self,
+        start_location: &SourceSpan,
+    ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         self.create_node(
             start_location,
             Expr::Variable(VarUse {
@@ -330,7 +333,7 @@ impl Parser {
         )
     }
 
-    fn parse_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         match self.current_token.token_type {
             TokenType::While => self.parse_while(),
             //            TokenType::For => self.parse_for(),
@@ -350,7 +353,7 @@ impl Parser {
         }
     }
 
-    fn parse_return(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_return(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Return, "return expected")?;
         let expression = if self.current_token.token_type != TokenType::Semicolon {
@@ -360,13 +363,13 @@ impl Parser {
         };
         self.create_node(&start_location, Expr::Return(ReturnExpr { expression }))
     }
-    fn parse_expr_stmt(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_expr_stmt(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         let expression = self.parse_expr()?;
         self.create_node(&start_location, Stmt::Expression(ExprStmt { expression }))
     }
 
-    fn parse_if(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_if(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::If, "Expected 'if'")?;
         self.consume(TokenType::LeftParen, "Expected '(' after 'if'")?;
@@ -389,7 +392,7 @@ impl Parser {
         )
     }
 
-    fn parse_while(&mut self) -> FelicoResult<AstNode<Stmt>> {
+    fn parse_while(&mut self) -> FelicoResult<AstNode<'a, Stmt<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::While, "Expected 'while'")?;
         self.consume(TokenType::LeftParen, "Expected '(' after while")?;
@@ -455,7 +458,7 @@ impl Parser {
             Ok(while_stmt)
         }
     */
-    pub fn parse_block_expr(&mut self) -> FelicoResult<AstNode<Expr>> {
+    pub fn parse_block_expr(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         self.consume(TokenType::LeftBrace, "Expected left brace ('{')")?;
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
@@ -482,17 +485,17 @@ impl Parser {
         )
     }
 
-    pub fn parse_expression(mut self) -> FelicoResult<AstNode<Expr>> {
+    pub fn parse_expression(mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let result = self.parse_expr();
         self.consume(TokenType::EOF, "Expected end of input (EOF)")?;
         result
     }
 
-    fn parse_expr(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_expr(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_assignment(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let expr = self.parse_or()?;
 
@@ -533,7 +536,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_or(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_or(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_and()?;
         while self.is_at(TokenType::Or) {
@@ -552,7 +555,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_and(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_and(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_equality()?;
         while self.is_at(TokenType::And) {
@@ -570,7 +573,7 @@ impl Parser {
         }
         Ok(expr)
     }
-    fn parse_equality(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_equality(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_comparison()?;
         while self.is_at(TokenType::BangEqual) || self.is_at(TokenType::EqualEqual) {
@@ -589,7 +592,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_comparison(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_comparison(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_term()?;
         while self.is_at(TokenType::Less)
@@ -612,7 +615,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_term(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_term(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_factor()?;
         while self.is_at(TokenType::Plus) || self.is_at(TokenType::Minus) {
@@ -631,7 +634,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_factor(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_factor(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_unary()?;
         while self.is_at(TokenType::Star) || self.is_at(TokenType::Slash) {
@@ -650,11 +653,11 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_type_expression(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_type_expression(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         self.parse_primary()
     }
 
-    fn parse_create_struct(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_create_struct(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let primary = self.parse_primary()?;
         if !self.is_at(TokenType::LeftBrace) {
@@ -690,7 +693,7 @@ impl Parser {
         )
     }
 
-    fn parse_primary(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_primary(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let result = self.create_node(
             &self.current_location(),
             Expr::Literal(match self.current_token.token_type {
@@ -750,7 +753,7 @@ impl Parser {
         result
     }
 
-    fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<QualifiedName>> {
+    fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<'a, QualifiedName>> {
         let start_location = self.current_location();
         let token = self.consume(TokenType::Identifier, "expected identifier")?;
         let mut last_location = token.location.clone();
@@ -784,7 +787,7 @@ impl Parser {
         }
     }
 
-    fn parse_unary(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_unary(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         match self.current_token.token_type {
             TokenType::Bang | TokenType::Minus => {
                 let start_location = self.current_location();
@@ -797,7 +800,7 @@ impl Parser {
         }
     }
 
-    fn parse_call(&mut self) -> FelicoResult<AstNode<Expr>> {
+    fn parse_call(&mut self) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let start_location = self.current_location();
         let mut expr = self.parse_create_struct()?;
         loop {
@@ -818,9 +821,9 @@ impl Parser {
 
     fn finish_call(
         &mut self,
-        callee: AstNode<Expr>,
+        callee: AstNode<'a, Expr<'a>>,
         start_location: SourceSpan,
-    ) -> FelicoResult<AstNode<Expr>> {
+    ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let arguments = self.parse_separated(|parser| {
             if parser.is_at(TokenType::RightParen) {
                 return Ok(None);
@@ -837,11 +840,11 @@ impl Parser {
         self.create_node(&start_location, Expr::Call(CallExpr { callee, arguments }))
     }
 
-    fn create_node<T: AstData>(
+    fn create_node<T: AstData + 'a>(
         &mut self,
         start_location: &SourceSpan,
         data: T,
-    ) -> FelicoResult<AstNode<T>> {
+    ) -> FelicoResult<AstNode<'a, T>> {
         let start = start_location;
         let end = &self.current_token.location;
         let mut location = start.clone();
@@ -861,19 +864,19 @@ impl Parser {
     }
 }
 
-pub fn parse_expression(
+pub fn parse_expression<'a>(
     code_source: SourceFile,
-    workspace: &Workspace,
-) -> FelicoResult<AstNode<Expr>> {
-    let parser = Parser::new(code_source, &TypeFactory::new(workspace))?;
+    workspace: &'a Workspace<'a>,
+) -> FelicoResult<AstNode<'a, Expr<'a>>> {
+    let parser = Parser::new(code_source, TypeFactory::new(workspace))?;
     parser.parse_expression()
 }
 
-pub fn parse_script(
+pub fn parse_script<'a>(
     code_source: SourceFile,
-    type_factory: &TypeFactory,
-) -> FelicoResult<AstNode<Module>> {
-    let parser = Parser::new(code_source, type_factory)?;
+    type_factory: TypeFactory<'a>,
+) -> FelicoResult<AstNode<'a, Module<'a>>> {
+    let mut parser = Parser::new(code_source, type_factory)?;
     parser.parse_script()
 }
 
@@ -886,7 +889,8 @@ mod tests {
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
+        let type_factory = TypeFactory::new(&workspace);
+        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let expr = parser.parse_expression().unwrap();
         AstPrinter::new().print_expr(&expr).unwrap();
         let printed_ast = AstPrinter::new().print_expr(&expr).unwrap();
@@ -1110,7 +1114,8 @@ mod tests {
 
     fn test_parse_script(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
+        let type_factory = TypeFactory::new(&workspace);
+        let mut parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let script = parser.parse_script().unwrap();
         let printed_ast = ast_to_string(&script).unwrap();
 
@@ -1539,7 +1544,8 @@ mod tests {
 
     fn test_parse_script_error(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
-        let parser = Parser::new_in_memory(name, input, &TypeFactory::new(&workspace)).unwrap();
+        let type_factory = TypeFactory::new(&workspace);
+        let mut parser = Parser::new_in_memory(name, input, type_factory).unwrap();
         let result = parser.parse_script();
         let diagnostic_string = unwrap_diagnostic_to_string(&result);
         expected.assert_eq(&diagnostic_string);

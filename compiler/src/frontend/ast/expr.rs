@@ -6,47 +6,47 @@ use crate::frontend::lex::token::Token;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
-pub enum Expr {
-    Return(ReturnExpr),
-    Unary(UnaryExpr),
-    Binary(BinaryExpr),
+pub enum Expr<'a> {
+    Return(ReturnExpr<'a>),
+    Unary(UnaryExpr<'a>),
+    Binary(BinaryExpr<'a>),
     Literal(LiteralExpr),
-    Variable(VarUse),
-    Assign(AssignExpr),
-    Call(CallExpr),
-    Get(GetExpr),
-    Set(SetExpr),
-    Block(BlockExpr),
-    If(IfExpr),
-    CreateStruct(CreateStructExpr),
+    Variable(VarUse<'a>),
+    Assign(AssignExpr<'a>),
+    Call(CallExpr<'a>),
+    Get(GetExpr<'a>),
+    Set(SetExpr<'a>),
+    Block(BlockExpr<'a>),
+    If(IfExpr<'a>),
+    CreateStruct(CreateStructExpr<'a>),
 }
 
-impl AstData for Expr {}
+impl<'a> AstData for Expr<'a> {}
 
 #[derive(Debug, Clone)]
-pub struct VarUse {
-    pub name: AstNode<QualifiedName>,
+pub struct VarUse<'a> {
+    pub name: AstNode<'a, QualifiedName>,
     pub distance: i32,
 }
 
 #[derive(Debug, Clone)]
-pub struct BinaryExpr {
+pub struct BinaryExpr<'a> {
     pub operator: Token,
-    pub left: AstNode<Expr>,
-    pub right: AstNode<Expr>,
+    pub left: AstNode<'a, Expr<'a>>,
+    pub right: AstNode<'a, Expr<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct AssignExpr {
-    pub destination: AstNode<QualifiedName>,
-    pub value: AstNode<Expr>,
+pub struct AssignExpr<'a> {
+    pub destination: AstNode<'a, QualifiedName>,
+    pub value: AstNode<'a, Expr<'a>>,
     pub distance: i32,
 }
 
 #[derive(Debug, Clone)]
-pub struct UnaryExpr {
+pub struct UnaryExpr<'a> {
     pub operator: Token,
-    pub right: AstNode<Expr>,
+    pub right: AstNode<'a, Expr<'a>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,55 +59,55 @@ pub enum LiteralExpr {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallExpr {
-    pub callee: AstNode<Expr>,
-    pub arguments: Vec<AstNode<Expr>>,
+pub struct CallExpr<'a> {
+    pub callee: AstNode<'a, Expr<'a>>,
+    pub arguments: Vec<AstNode<'a, Expr<'a>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct GetExpr {
-    pub object: AstNode<Expr>,
+pub struct GetExpr<'a> {
+    pub object: AstNode<'a, Expr<'a>>,
     pub name: Token,
 }
 
 #[derive(Debug, Clone)]
-pub struct SetExpr {
-    pub object: AstNode<Expr>,
+pub struct SetExpr<'a> {
+    pub object: AstNode<'a, Expr<'a>>,
     pub name: Token,
-    pub value: AstNode<Expr>,
+    pub value: AstNode<'a, Expr<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TupleExpr {
-    pub components: Vec<AstNode<Expr>>,
+pub struct TupleExpr<'a> {
+    pub components: Vec<AstNode<'a, Expr<'a>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockExpr {
-    pub stmts: Vec<AstNode<Stmt>>,
-    pub result_expression: AstNode<Expr>,
+pub struct BlockExpr<'a> {
+    pub stmts: Vec<AstNode<'a, Stmt<'a>>>,
+    pub result_expression: AstNode<'a, Expr<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct IfExpr {
-    pub condition: AstNode<Expr>,
-    pub then_expr: AstNode<Expr>,
-    pub else_expr: Option<AstNode<Expr>>,
+pub struct IfExpr<'a> {
+    pub condition: AstNode<'a, Expr<'a>>,
+    pub then_expr: AstNode<'a, Expr<'a>>,
+    pub else_expr: Option<AstNode<'a, Expr<'a>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ReturnExpr {
-    pub expression: AstNode<Expr>,
+pub struct ReturnExpr<'a> {
+    pub expression: AstNode<'a, Expr<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateStructExpr {
-    pub type_expression: AstNode<Expr>,
-    pub field_initializers: Vec<CreateStructInitializer>,
+pub struct CreateStructExpr<'a> {
+    pub type_expression: AstNode<'a, Expr<'a>>,
+    pub field_initializers: Vec<CreateStructInitializer<'a>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateStructInitializer {
+pub struct CreateStructInitializer<'a> {
     pub field_name: Token,
-    pub expression: AstNode<Expr>,
+    pub expression: AstNode<'a, Expr<'a>>,
 }

@@ -1,30 +1,33 @@
 use crate::frontend::lex::token::{Token, TokenType};
+use crate::infra::full_name::FullName;
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
-use crate::model::types::{PrimitiveType, StructField, StructType, TraitType, Type, TypeKind};
+use crate::model::types::{
+    FunctionType, PrimitiveType, StructField, StructType, TraitType, Type, TypeInner, TypeKind,
+};
 use crate::model::workspace::Workspace;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct TypeFactory {
-    inner: Rc<TypeFactoryInner>,
+pub struct TypeFactory<'a> {
+    inner: Rc<TypeFactoryInner<'a>>,
 }
 
 macro_rules! factory_fns {
         ($($id:ident),+) => {
     #[derive(Debug)]
-struct TypeFactoryInner {
-            workspace: Workspace,
+struct TypeFactoryInner<'a> {
+            workspace: Workspace<'a>,
             $(
-            $id: Type,
+            $id: Type<'a>,
             )+
 }
 
 
-    impl TypeFactory {
+    impl <'a> TypeFactory<'a>  {
             $(
-            pub fn $id(&self) -> Type {
+            pub fn $id(&self) -> Type<'a> {
                 self.inner.$id.clone()
             }
             )+
@@ -34,14 +37,24 @@ struct TypeFactoryInner {
 }
 
 factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
+//factory_fns!(bool);
 
-impl TypeFactory {
-    pub fn new(workspace: &Workspace) -> Self {
+impl<'a> TypeFactory<'a> {
+    pub fn new(workspace: &'a Workspace<'a>) -> TypeFactory<'a> {
+        let make_type = |name: &str, kind: TypeKind<'a>| -> Type<'a> {
+            Type {
+                inner: workspace.alloc(TypeInner {
+                    name: name.into(),
+                    kind,
+                    declaration_site: SourceSpan::ephemeral(),
+                }),
+            }
+        };
         Self {
             inner: Rc::new(TypeFactoryInner {
                 workspace: workspace.clone(),
-                bool: Type::primitive("bool", PrimitiveType::Bool),
-                unit: Type::new_ephemeral(
+                bool: make_type("bool", TypeKind::Primitive(PrimitiveType::Bool)),
+                unit: make_type(
                     "Unit",
                     TypeKind::Struct(StructType {
                         name: Token {
@@ -52,21 +65,36 @@ impl TypeFactory {
                         fields: Default::default(),
                     }),
                 ),
-                f64: Type::primitive("f64", PrimitiveType::F64),
-                i64: Type::primitive("i64", PrimitiveType::I64),
-                str: Type::primitive("str", PrimitiveType::Str),
-                ty: Type::ty(),
-                unknown: Type::new_ephemeral("unknown", TypeKind::Unknown),
-                never: Type::new_ephemeral("never", TypeKind::Never),
-                unresolved: Type::new_ephemeral("unresolved", TypeKind::Unresolved),
+                f64: make_type("f64", TypeKind::Primitive(PrimitiveType::F64)),
+                i64: make_type("i64", TypeKind::Primitive(PrimitiveType::I64)),
+                str: make_type("str", TypeKind::Primitive(PrimitiveType::Str)),
+                ty: make_type("Type", TypeKind::Type),
+                unknown: make_type("unknown", TypeKind::Unknown),
+                never: make_type("never", TypeKind::Never),
+                unresolved: make_type("unresolved", TypeKind::Unresolved),
+            }),
+        }
+    }
+
+    pub fn make_type<S: Into<FullName>>(
+        &'a self,
+        name: S,
+        kind: TypeKind<'a>,
+        declaration_site: SourceSpan,
+    ) -> Type<'a> {
+        Type {
+            inner: self.inner.workspace.alloc(TypeInner {
+                name: name.into(),
+                kind,
+                declaration_site,
             }),
         }
     }
 
     pub fn function(
-        &self,
-        parameter_types: Vec<Type>,
-        return_type: Type,
+        &'a self,
+        parameter_types: Vec<Type<'a>>,
+        return_type: Type<'a>,
         declaration_site: SourceSpan,
     ) -> Type {
         let name = "Fn(".to_string()
@@ -77,16 +105,23 @@ impl TypeFactory {
                 .join(", ")
             + ") -> "
             + &return_type.to_string();
-        Type::function(&name, parameter_types, return_type, declaration_site)
+        self.make_type(
+            &name,
+            TypeKind::Function(FunctionType {
+                parameter_types,
+                return_type,
+            }),
+            declaration_site,
+        )
     }
 
     pub fn make_struct(
-        &self,
+        &'a self,
         name: &Token,
-        fields: HashMap<SharedString, StructField>,
+        fields: HashMap<SharedString, StructField<'a>>,
         declaration_site: SourceSpan,
-    ) -> Type {
-        Type::new(
+    ) -> Type<'a> {
+        self.make_type(
             name.lexeme(),
             TypeKind::Struct(StructType {
                 name: name.clone(),
@@ -102,14 +137,22 @@ impl TypeFactory {
         //        symbol_map: HashMap<SharedString, InterpreterValue>,
         declaration_site: SourceSpan,
     ) -> Type {
-        Type::new(name.lexeme(), TypeKind::Namespace, declaration_site)
+        self.make_type(name.lexeme(), TypeKind::Namespace, declaration_site)
     }
 
     pub fn make_trait(&self, name: &Token, declaration_site: SourceSpan) -> Type {
-        Type::new(
+        self.make_type(
             name.lexeme(),
             TypeKind::Trait(TraitType { name: name.clone() }),
             declaration_site,
         )
+    }
+
+    pub fn make_ephemeral<S: Into<SharedString>>(
+        &'a self,
+        name: S,
+        kind: TypeKind<'a>,
+    ) -> Type<'a> {
+        self.make_type(name, kind, SourceSpan::ephemeral())
     }
 }

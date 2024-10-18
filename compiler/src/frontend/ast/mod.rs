@@ -7,4 +7,4 @@ pub mod print_ast;
 pub mod qualified_name;
 pub mod stmt;
 
-pub trait AstData: Debug + 'static {}
+pub trait AstData: Debug {}

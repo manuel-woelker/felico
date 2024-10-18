@@ -7,17 +7,17 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-pub struct EnvironmentInner {
-    values: HashMap<String, InterpreterValue>,
-    parent: Option<Environment>,
+pub struct EnvironmentInner<'a> {
+    values: HashMap<String, InterpreterValue<'a>>,
+    parent: Option<Environment<'a>>,
 }
 
 #[derive(Clone)]
-pub struct Environment {
-    inner: Rc<Mutex<EnvironmentInner>>,
+pub struct Environment<'a> {
+    inner: Rc<Mutex<EnvironmentInner<'a>>>,
 }
 
-impl Debug for Environment {
+impl<'a> Debug for Environment<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -26,13 +26,13 @@ impl Debug for Environment {
         )
     }
 }
-impl Default for Environment {
+impl<'a> Default for Environment<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Environment {
+impl<'a> Environment<'a> {
     pub fn new() -> Self {
         Self {
             inner: Rc::new(Mutex::new(EnvironmentInner {

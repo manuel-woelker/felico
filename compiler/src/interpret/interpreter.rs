@@ -32,12 +32,12 @@ pub struct StackFrame {
     pub call_source_span: SourceSpan,
 }
 
-pub struct Interpreter {
-    workspace: Workspace,
+pub struct Interpreter<'a> {
+    workspace: Workspace<'a>,
     source_file: SourceFile,
-    type_factory: TypeFactory,
-    value_factory: ValueFactory,
-    environment: Environment,
+    type_factory: TypeFactory<'a>,
+    value_factory: ValueFactory<'a>,
+    environment: Environment<'a>,
     print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
@@ -52,16 +52,16 @@ macro_rules! check_early_return {
     };
 }
 
-impl InterpreterValue {
+impl<'a> InterpreterValue<'a> {
     fn should_return_early(&self) -> bool {
         matches!(self.val, ValueKind::Return(_) | ValueKind::Panic(_))
     }
-    fn val(value: InterpreterValue) -> Self {
+    fn val(value: InterpreterValue<'a>) -> Self {
         value
     }
 }
 
-impl Interpreter {
+impl<'a> Interpreter<'a> {
     pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
         let mut environment = Environment::new();
         let workspace = Workspace::new();
@@ -105,7 +105,7 @@ impl Interpreter {
         self.value_factory.unit()
     }
 
-    fn ret(&self, value: InterpreterValue) -> InterpreterValue {
+    fn ret(&self, value: InterpreterValue<'a>) -> InterpreterValue {
         InterpreterValue {
             val: ValueKind::Return(Box::new(value)),
             ty: self.type_factory.never(),
@@ -149,12 +149,12 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue> {
+    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue<'a>> {
         let expr = parse_expression(self.source_file.clone(), &self.workspace)?;
         self.evaluate_expr(&expr)
     }
 
-    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue> {
+    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue<'a>> {
         Ok(InterpreterValue::val(match expr.data.deref() {
             Expr::Literal(literal_expr) => self.evaluate_literal_expr(literal_expr)?,
             Expr::Unary(unary) => self.evaluate_unary_expr(expr, unary)?,

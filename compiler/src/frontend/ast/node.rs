@@ -4,14 +4,14 @@ use crate::model::types::Type;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
-pub struct AstNode<T: AstData> {
+pub struct AstNode<'a, T: AstData> {
     pub data: Box<T>,
-    pub ty: Type,
+    pub ty: Type<'a>,
     pub location: SourceSpan,
 }
 
-impl<T: AstData> AstNode<T> {
-    pub fn new(data: T, location: SourceSpan, ty: Type) -> Self {
+impl<'a, T: AstData> AstNode<'a, T> {
+    pub fn new(data: T, location: SourceSpan, ty: Type<'a>) -> Self {
         Self {
             data: Box::new(data),
             location,

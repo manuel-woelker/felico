@@ -10,7 +10,7 @@ pub struct QualifiedName {
 
 impl AstData for QualifiedName {}
 
-impl Display for AstNode<QualifiedName> {
+impl<'a> Display for AstNode<'a, QualifiedName> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
         for part in &self.data.parts {

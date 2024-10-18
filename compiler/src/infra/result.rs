@@ -15,13 +15,13 @@ pub enum FelicoError {
 
     #[error("{message}")]
     Message { message: String },
-
-    #[error("Execution panicked: {panic}")]
-    Panic {
-        panic: Panic,
-        //        call_stack: Vec<Location>,
-    },
-
+    /*
+        #[error("Execution panicked: {panic}")]
+        Panic {
+            panic: Panic,
+            //        call_stack: Vec<Location>,
+        },
+    */
     #[error("{inner}")]
     Generic {
         inner: Box<dyn std::error::Error + Sync + Send + 'static>,
@@ -127,7 +127,8 @@ macro_rules! bail {
         return Err(crate::infra::result::failed(message));
     }};
 }
-use crate::interpret::value::Panic;
+//use crate::interpret::value::Panic;
+
 pub(crate) use bail;
 
 #[cfg(test)]
