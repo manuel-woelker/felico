@@ -26,13 +26,52 @@ use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
+use std::sync::Mutex;
+
+pub type SymbolMap = HashMap<SharedString, Symbol>;
 
 #[derive(Debug)]
 pub struct Symbol {
     declaration_site: SourceSpan,
     is_defined: bool,
+    // Type of the symbol or expression
     ty: Type,
+    // Value of the expression
     value: Option<InterpreterValue>,
+    symbol_map: Mutex<SymbolMap>,
+}
+
+impl Symbol {
+    pub fn new(
+        declaration_site: SourceSpan,
+        is_defined: bool,
+        ty: Type,
+        value: Option<InterpreterValue>,
+    ) -> Symbol {
+        Symbol {
+            declaration_site,
+            is_defined,
+            ty,
+            value,
+            symbol_map: Mutex::new(SymbolMap::new()),
+        }
+    }
+
+    pub fn define_value(declaration_site: &SourceSpan, value: InterpreterValue) -> Self {
+        Self::new(
+            declaration_site.clone(),
+            true,
+            value.ty.clone(),
+            Some(value),
+        )
+    }
+
+    pub fn define(declaration_site: &SourceSpan, ty: &Type) -> Self {
+        Self::new(declaration_site.clone(), true, ty.clone(), None)
+    }
+    pub fn declare(declaration_site: &SourceSpan, ty: &Type) -> Self {
+        Self::new(declaration_site.clone(), false, ty.clone(), None)
+    }
 }
 
 struct CurrentFunctionInfo {
@@ -98,12 +137,7 @@ impl Resolver {
         for core_definition in get_core_definitions(&type_factory) {
             global_scope.insert(
                 core_definition.name.to_string(),
-                Symbol {
-                    declaration_site: location.clone(),
-                    is_defined: true,
-                    ty: core_definition.value.ty.clone(),
-                    value: Some(core_definition.value.clone()),
-                },
+                Symbol::define_value(&location, core_definition.value.clone()),
             );
         }
         Resolver {
@@ -260,12 +294,7 @@ impl Resolver {
         );
         self.add_symbol_to_scope(
             name.to_string(),
-            Symbol {
-                declaration_site: fun_stmt.name.location.clone(),
-                is_defined: true,
-                ty: function_type.clone(),
-                value: None,
-            },
+            Symbol::define(&fun_stmt.name.location, &function_type),
         )?;
         *ast_info.ty = function_type;
         let mut function_scope = LexicalScope::new(self.current_scope().base_name.clone());
@@ -275,15 +304,10 @@ impl Resolver {
         });
         self.scopes.push(function_scope);
         for parameter in &fun_stmt.parameters {
-            let ty = self.resolve_type(&parameter.type_expression)?.clone();
+            let ty = &self.resolve_type(&parameter.type_expression)?;
             self.add_symbol_to_scope(
                 parameter.name.lexeme().to_string(),
-                Symbol {
-                    declaration_site: parameter.name.location.clone(),
-                    is_defined: true,
-                    ty,
-                    value: None,
-                },
+                Symbol::define(&parameter.name.location, ty),
             )?;
         }
         self.resolve_expr(&mut fun_stmt.body)?;
@@ -306,18 +330,16 @@ impl Resolver {
         }
         let ty =
             type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
-        *ast_info.ty = ty.clone();
+        *ast_info.ty = self.type_factory.ty();
         self.add_symbol_to_scope(
             struct_stmt.name.lexeme().into(),
-            Symbol {
-                declaration_site: struct_stmt.name.location.clone(),
-                is_defined: true,
-                ty: ast_info.ty.clone(),
-                value: Some(InterpreterValue {
-                    val: ValueKind::Type(ty),
-                    ty: self.type_factory.ty(),
-                }),
-            },
+            Symbol::define_value(
+                &struct_stmt.name.location,
+                InterpreterValue {
+                    val: ValueKind::Type(ty.clone()),
+                    ty,
+                },
+            ),
         )?;
         Ok(())
     }
@@ -327,26 +349,8 @@ impl Resolver {
         impl_stmt: &mut ImplStmt,
         ast_info: &mut CommonAstInfo,
     ) -> FelicoResult<()> {
-        let Some((_distance, symbol)) = self.get_definition_distance_and_symbol(&impl_stmt.name)
-        else {
-            bail!(
-                "Could not find symbol entry for {}",
-                impl_stmt.name.lexeme()
-            );
-        };
-        let Some(value) = &symbol.value else {
-            bail!("No value for symbol entry for {}", impl_stmt.name.lexeme());
-        };
-        let ValueKind::Type(ty) = &value.val else {
-            bail!(
-                "Not a type for symbol entry for {}",
-                impl_stmt.name.lexeme()
-            );
-        };
-        let ty = ty.clone();
         let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
         self.scopes.push(new_scope);
-
         for method in &mut impl_stmt.methods {
             self.resolve_fun_stmt(
                 &mut method.data,
@@ -355,17 +359,32 @@ impl Resolver {
                     ty: &mut method.ty,
                 },
             )?;
-            ty.methods().lock().unwrap().insert(
-                SharedString::from(method.data.name.lexeme()),
-                Symbol {
-                    declaration_site: method.location.clone(),
-                    is_defined: true,
-                    ty: method.ty.clone(),
-                    value: None,
-                },
-            );
         }
         self.scopes.pop();
+        let Some((_distance, symbol)) = self.get_definition_distance_and_symbol(&impl_stmt.name)
+        else {
+            bail!(
+                "Could not find symbol entry for {}",
+                impl_stmt.name.lexeme()
+            );
+        };
+        /*        let Some(value) = &symbol.value else {
+            bail!("No value for symbol entry for {}", impl_stmt.name.lexeme());
+        };
+        let ValueKind::Type(ty) = &value.val else {
+            bail!(
+                "Not a type for symbol entry for {}",
+                impl_stmt.name.lexeme()
+            );
+        };
+        let ty = ty.clone();*/
+
+        for method in &mut impl_stmt.methods {
+            symbol.symbol_map.lock().unwrap().insert(
+                SharedString::from(method.data.name.lexeme()),
+                Symbol::define(&method.location, &method.ty),
+            );
+        }
         *ast_info.ty = self.type_factory.unit();
         /*        self.add_symbol_to_scope(
             impl_stmt.name.lexeme().into(),
@@ -390,12 +409,7 @@ impl Resolver {
         *ast_info.ty = type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location.clone());
         self.add_symbol_to_scope(
             trait_stmt.name.lexeme().into(),
-            Symbol {
-                declaration_site: trait_stmt.name.location.clone(),
-                is_defined: true,
-                ty: ast_info.ty.clone(),
-                value: None,
-            },
+            Symbol::define(&trait_stmt.name.location, &ast_info.ty),
         )?;
         Ok(())
     }
@@ -408,12 +422,7 @@ impl Resolver {
         let name = let_stmt.name.lexeme();
         self.add_symbol_to_scope(
             name.to_string(),
-            Symbol {
-                declaration_site: let_stmt.name.location.clone(),
-                is_defined: false,
-                ty: self.type_factory.unknown(),
-                value: None,
-            },
+            Symbol::declare(&let_stmt.name.location, &self.type_factory.unknown()),
         )?;
         self.resolve_expr(&mut let_stmt.expression)?;
         let expression_type = &let_stmt.expression.ty;
@@ -691,6 +700,7 @@ impl Resolver {
     ) -> FelicoResult<()> {
         let type_expression = &mut create_struct_expr.type_expression;
         self.resolve_expr(type_expression)?;
+        // TODO: should return a type constructor, not the type itself
         let TypeKind::Struct(struct_type) = type_expression.ty.kind() else {
             self.diagnose(InterpreterDiagnostic::new(
                 &type_expression.location,
@@ -820,13 +830,7 @@ impl Resolver {
             var_use.distance = distance;
             let mut ty = symbol.ty.clone();
             for part in parts.iter().skip(1) {
-                let Some(value) = symbol.value.clone() else {
-                    bail!("No value found for name {}", var_use.name);
-                };
-                let ValueKind::Type(val_ty) = &value.val else {
-                    bail!("No type found for name {}", var_use.name);
-                };
-                let methods = val_ty.methods().lock().unwrap();
+                let methods = symbol.symbol_map.lock().unwrap();
                 let Some(sym) = methods.get(part.lexeme()) else {
                     bail!("No symbol found for name {}", var_use.name);
                 };
@@ -883,13 +887,6 @@ impl Resolver {
         Ok(())
     }
 
-    fn current_scope(&mut self) -> &mut LexicalScope {
-        self.scopes
-            .iter_mut()
-            .last()
-            .expect("Scope Stack should not be empty")
-    }
-
     fn get_definition_distance_and_symbol(&self, token: &Token) -> Option<(i32, &Symbol)> {
         let name = token.lexeme();
         let mut distance = -1;
@@ -904,6 +901,13 @@ impl Resolver {
             }
         }
         None
+    }
+
+    fn current_scope(&mut self) -> &mut LexicalScope {
+        self.scopes
+            .iter_mut()
+            .last()
+            .expect("Scope Stack should not be empty")
     }
 
     fn add_symbol_to_scope(&mut self, name: String, symbol: Symbol) -> FelicoResult<()> {
@@ -1165,7 +1169,7 @@ mod tests {
                Module
                └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
                    ├── Return type: Read 'unit'
-                   ├── Struct 'Foo': ❬Foo❭
+                   ├── Struct 'Foo': ❬Type❭
                    │   ├── Field bar: ❬bool❭
                    │   │   └── Read 'bool': ❬Type❭
                    │   └── Field baz: ❬f64❭
@@ -1181,7 +1185,7 @@ mod tests {
                Module
                └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
                    ├── Return type: Read 'unit'
-                   ├── Struct 'Empty': ❬Empty❭
+                   ├── Struct 'Empty': ❬Type❭
                    └── Unit: ❬Unit❭
            "#]],expect![[r#"
                Module
@@ -1201,7 +1205,7 @@ mod tests {
                Module
                └── Declare fun 'main()': ❬Fn() -> ❬Unit❭❭
                    ├── Return type: Read 'unit'
-                   ├── Struct 'Something': ❬Something❭
+                   ├── Struct 'Something': ❬Type❭
                    │   └── Field val: ❬f64❭
                    │       └── Read 'f64': ❬Type❭
                    ├── Impl 'Something': ❬Unit❭

@@ -1375,7 +1375,7 @@ mod tests {
                    Module
                    └── Declare fun 'main()'     [17+47]
                        ├── Return type: Read 'unit'     [17+47]
-                       ├── Trait 'Panic'     [17+47]
+                       ├── Trait 'Panic'
                        └── Unit     [17+47]
                "#]];
                script_struct_simple: "

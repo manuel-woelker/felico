@@ -1,19 +1,15 @@
 use crate::frontend::lex::token::Token;
-use crate::frontend::resolve::resolver::Symbol;
 use crate::infra::full_name::FullName;
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use std::sync::Mutex;
 
 #[derive(Clone)]
 pub struct Type {
     inner: Rc<TypeInner>,
 }
-
-pub type SymbolMap = HashMap<SharedString, Symbol>;
 
 impl Type {
     pub fn is_unknown(&self) -> bool {
@@ -28,9 +24,6 @@ impl Type {
 
     pub fn declaration_site(&self) -> &SourceSpan {
         &self.inner.declaration_site
-    }
-    pub fn methods(&self) -> &Mutex<SymbolMap> {
-        &self.inner.methods
     }
 }
 
@@ -53,7 +46,6 @@ impl Type {
                 name: name.into(),
                 kind,
                 declaration_site,
-                methods: Mutex::new(SymbolMap::new()),
             }),
         }
     }
@@ -107,7 +99,6 @@ pub struct TypeInner {
     name: FullName,
     declaration_site: SourceSpan,
     kind: TypeKind,
-    methods: Mutex<SymbolMap>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
