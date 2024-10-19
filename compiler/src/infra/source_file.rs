@@ -3,28 +3,28 @@ use miette::{MietteError, MietteSpanContents, SourceCode, SourceSpan, SpanConten
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct SourceFileInner<'a> {
-    pub filename: WorkspaceString<'a>,
-    pub source_code: WorkspaceString<'a>,
+pub struct SourceFileInner<'ws> {
+    pub filename: WorkspaceString<'ws>,
+    pub source_code: WorkspaceString<'ws>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceFile<'a> {
-    pub inner: &'a SourceFileInner<'a>,
+pub struct SourceFile<'ws> {
+    pub inner: &'ws SourceFileInner<'ws>,
 }
 
-impl<'a> SourceFile<'a> {
-    pub fn filename(&self) -> &'a str {
-        &self.inner.filename
+impl<'ws> SourceFile<'ws> {
+    pub fn filename(&self) -> &'ws str {
+        self.inner.filename
     }
-    pub fn source_code(&self) -> &'a str {
-        &self.inner.source_code
+    pub fn source_code(&self) -> &'ws str {
+        self.inner.source_code
     }
 }
 
-impl<'a> Copy for SourceFile<'a> {}
+impl<'ws> Copy for SourceFile<'ws> {}
 
-impl<'workspace> SourceCode for SourceFile<'workspace> {
+impl<'ws> SourceCode for SourceFile<'ws> {
     fn read_span<'a>(
         &'a self,
         span: &SourceSpan,

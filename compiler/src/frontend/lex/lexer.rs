@@ -45,6 +45,8 @@ impl<'a> Lexer<'a> {
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
             },
+            lexeme: &self.source_file.source_code()
+                [self.start_offset as usize..self.current_offset as usize],
             value: None,
         };
         self.start_offset = self.current_offset;

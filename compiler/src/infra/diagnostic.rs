@@ -1,4 +1,3 @@
-use crate::infra::result::{unwrap_error_result_to_string, FelicoResult};
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use miette::{
@@ -137,16 +136,18 @@ impl<'workspace> Diagnostic for InterpreterDiagnostic<'workspace> {
         Some(Box::new(self.labels.clone().into_iter()))
     }
 }
+
 #[cfg(test)]
-pub fn assert_diagnostic<T>(result: &FelicoResult<T>, expected: expect_test::Expect) {
-    expected.assert_eq(&unwrap_error_result_to_string(result));
+pub fn expect_error<T>(
+    result: &crate::infra::result::FelicoResult<T>,
+    expected: expect_test::Expect,
+) {
+    expected.assert_eq(&crate::infra::result::unwrap_error_result_to_string(result));
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::infra::diagnostic::{
-        assert_diagnostic, diagnostic_to_string, InterpreterDiagnostic,
-    };
+    use crate::infra::diagnostic::{diagnostic_to_string, expect_error, InterpreterDiagnostic};
     use crate::infra::result::{FelicoError, FelicoReport};
     use crate::infra::source_file::{SourceFile, SourceFileInner};
     use crate::infra::source_span::SourceSpan;
@@ -197,7 +198,7 @@ mod tests {
             );
         }
 
-        assert_diagnostic::<()>(
+        expect_error::<()>(
             &Err(FelicoReport::from(diagnostic)),
             expect![[r#"
                 code::foo::bar
@@ -224,14 +225,14 @@ mod tests {
         let error = FelicoError::from(std::io::Error::from(ErrorKind::AddrNotAvailable));
         let other_report = Report::from(error);
         report.extend_one(other_report);
-        assert_diagnostic::<()>(
+        expect_error::<()>(
             &Err(FelicoReport::new(report)),
             expect![[r#"
                 × foo
                    ╭─[<ephemeral file>:1:1]
                    ╰────
 
-                Io { cause: Kind(AddrNotAvailable) }
+                IO Error: address not available
 
             "#]],
         );

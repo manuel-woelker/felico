@@ -1,5 +1,6 @@
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
+use crate::model::workspace::WorkspaceString;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -67,6 +68,7 @@ impl Display for TokenType {
 pub struct Token<'ws> {
     pub token_type: TokenType,
     pub location: SourceSpan<'ws>,
+    pub lexeme: WorkspaceString<'ws>,
     pub value: Option<SharedString>,
 }
 
@@ -75,9 +77,7 @@ impl<'ws> Token<'ws> {
         if let Some(value) = &self.value {
             value
         } else {
-            let location = &self.location;
-            &self.location.source_file.source_code()
-                [location.start_byte as usize..location.end_byte as usize]
+            self.lexeme
         }
     }
 

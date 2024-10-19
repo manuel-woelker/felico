@@ -61,6 +61,7 @@ impl<'a> TypeFactory<'a> {
                             token_type: TokenType::Identifier,
                             location: SourceSpan::ephemeral(),
                             value: Some(SharedString::from("Unit")),
+                            lexeme: "Unit",
                         },
                         fields: Default::default(),
                     }),
