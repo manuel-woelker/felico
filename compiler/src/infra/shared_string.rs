@@ -1,7 +1,7 @@
-use arcstr::ArcStr;
+use crate::model::workspace::WorkspaceString;
 
-pub type SharedString = ArcStr;
-pub type Name = SharedString;
+pub type SharedString<'a> = WorkspaceString<'a>;
+pub type Name<'a> = SharedString<'a>;
 
 #[cfg(test)]
 mod tests {
@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let s = SharedString::from("foo");
-        let s2 = s.clone();
+        let s2 = s;
         assert_eq!("foo", format!("{}", s2));
         assert_eq!(s, s2);
     }
@@ -39,7 +39,7 @@ mod tests {
             input
         }
         let s = SharedString::from("foo");
-        let s2 = f(&s);
+        let s2 = f(s);
         assert_eq!("foo", format!("{}", s2));
         assert_eq!(s, s2);
     }

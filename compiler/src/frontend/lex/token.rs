@@ -1,4 +1,3 @@
-use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use crate::model::workspace::WorkspaceString;
 use std::fmt::{Debug, Display, Formatter};
@@ -68,17 +67,12 @@ impl Display for TokenType {
 pub struct Token<'ws> {
     pub token_type: TokenType,
     pub location: SourceSpan<'ws>,
-    pub lexeme: WorkspaceString<'ws>,
-    pub value: Option<SharedString>,
+    pub value: WorkspaceString<'ws>,
 }
 
 impl<'ws> Token<'ws> {
-    pub fn lexeme(&self) -> &str {
-        if let Some(value) = &self.value {
-            value
-        } else {
-            self.lexeme
-        }
+    pub fn lexeme(&self) -> &'ws str {
+        self.value
     }
 
     pub fn is_comparison_operator(&self) -> bool {

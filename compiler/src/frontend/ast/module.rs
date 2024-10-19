@@ -6,7 +6,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct Module<'ws> {
-    pub name: FullName,
+    pub name: FullName<'ws>,
     pub stmts: Vec<AstNode<'ws, Stmt<'ws>>>,
 }
 

@@ -15,7 +15,6 @@ use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::full_name::FullName;
 use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
-use crate::infra::shared_string::SharedString;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use crate::model::type_factory::TypeFactory;
@@ -28,11 +27,11 @@ pub struct Parser<'ws> {
     next_token: Token<'ws>,
     source_file: SourceFile<'ws>,
     type_factory: TypeFactory<'ws>,
-    module_name: FullName,
+    module_name: FullName<'ws>,
 }
 
 impl<'ws> Parser<'ws> {
-    pub fn new(source_file: SourceFile<'ws>, type_factory: TypeFactory<'ws>) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile<'ws>, workspace: Workspace<'ws>) -> FelicoResult<Self> {
         let mut lexer = Lexer::new(source_file).whatever_context("oops")?;
         let current_token = lexer
             .next()
@@ -45,12 +44,12 @@ impl<'ws> Parser<'ws> {
             .unwrap_or(file_path);
         let module_name = file_name.split_once(".").map(|a| a.0).unwrap_or(file_name);
         Ok(Parser {
-            module_name: module_name.into(),
+            module_name: workspace.make_full_name(module_name),
             lexer,
             current_token,
             next_token,
             source_file,
-            type_factory,
+            type_factory: workspace.type_factory(),
         })
     }
     /*
@@ -95,8 +94,7 @@ impl<'ws> Parser<'ws> {
                 name: Token {
                     token_type: TokenType::Identifier,
                     location: start_location.clone(),
-                    value: Some(SharedString::from("main")),
-                    lexeme: "main",
+                    value: "main",
                 },
                 parameters: vec![],
                 return_type,
@@ -323,8 +321,7 @@ impl<'ws> Parser<'ws> {
                                 start_byte: start_location.start_byte,
                                 end_byte: start_location.end_byte,
                             },
-                            value: Some(SharedString::from("unit")),
-                            lexeme: "unit",
+                            value: "unit",
                         }],
                     },
                     SourceSpan::ephemeral(),
@@ -868,17 +865,17 @@ impl<'ws> Parser<'ws> {
 
 pub fn parse_expression<'ws>(
     code_source: SourceFile<'ws>,
-    workspace: &'ws Workspace,
+    workspace: Workspace<'ws>,
 ) -> FelicoResult<AstNode<'ws, Expr<'ws>>> {
-    let parser = Parser::new(code_source, TypeFactory::new(workspace))?;
+    let parser = Parser::new(code_source, workspace)?;
     parser.parse_expression()
 }
 
 pub fn parse_script<'ws>(
     code_source: SourceFile<'ws>,
-    type_factory: TypeFactory<'ws>,
+    workspace: Workspace<'ws>,
 ) -> FelicoResult<AstNode<'ws, Module<'ws>>> {
-    let mut parser = Parser::new(code_source, type_factory)?;
+    let mut parser = Parser::new(code_source, workspace)?;
     parser.parse_script()
 }
 
@@ -886,14 +883,15 @@ pub fn parse_script<'ws>(
 mod tests {
     use super::*;
     use crate::frontend::ast::print_ast::{ast_to_string, AstPrinter};
+    use crate::infra::arena::Arena;
     use crate::infra::result::unwrap_error_result_to_string;
     use expect_test::{expect, Expect};
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
-        let workspace = Workspace::new();
-        let type_factory = TypeFactory::new(&workspace);
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let source_file = workspace.source_file_from_string(name, input);
-        let parser = Parser::new(source_file, type_factory).unwrap();
+        let parser = Parser::new(source_file, workspace).unwrap();
         let expr = parser.parse_expression().unwrap();
         AstPrinter::new().print_expr(&expr).unwrap();
         let printed_ast = AstPrinter::new().print_expr(&expr).unwrap();
@@ -1116,10 +1114,10 @@ mod tests {
     );
 
     fn test_parse_script(name: &str, input: &str, expected: Expect) {
-        let workspace = Workspace::new();
-        let type_factory = TypeFactory::new(&workspace);
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let source_file = workspace.source_file_from_string(name, input);
-        let mut parser = Parser::new(source_file, type_factory).unwrap();
+        let mut parser = Parser::new(source_file, workspace).unwrap();
         let script = parser.parse_script().unwrap();
         let printed_ast = ast_to_string(&script).unwrap();
 
@@ -1547,10 +1545,10 @@ mod tests {
     );
 
     fn test_parse_script_error(name: &str, input: &str, expected: Expect) {
-        let workspace = Workspace::new();
-        let type_factory = TypeFactory::new(&workspace);
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let source_file = workspace.source_file_from_string(name, input);
-        let mut parser = Parser::new(source_file, type_factory).unwrap();
+        let mut parser = Parser::new(source_file, workspace).unwrap();
         let result = parser.parse_script();
         let diagnostic_string = unwrap_error_result_to_string(&result);
         expected.assert_eq(&diagnostic_string);

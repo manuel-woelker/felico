@@ -1,47 +1,59 @@
+use crate::infra::arena::Arena;
+use crate::infra::full_name::FullName;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
-use bumpalo::Bump;
-use internment::Arena;
+use crate::model::type_factory::TypeFactory;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct Workspace {
-    inner: Rc<WorkspaceInner>,
+pub struct Workspace<'ws> {
+    inner: &'ws WorkspaceInner<'ws>,
 }
 
-impl Debug for Workspace {
+impl<'ws> Copy for Workspace<'ws> {}
+
+impl<'ws> Debug for Workspace<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Workspace")
     }
 }
 
-struct WorkspaceInner {
-    bump: Bump,
-    string_arena: Arena<str>,
+pub struct WorkspaceInner<'ws> {
+    pub arena: &'ws Arena,
+    pub type_factory: TypeFactory<'ws>,
 }
 
 pub type WorkspaceString<'ws> = &'ws str;
 
-impl Workspace {
-    pub fn new() -> Self {
+impl<'ws> Workspace<'ws> {
+    pub fn new(arena: &'ws Arena) -> Self {
+        let type_factory = TypeFactory::new(arena);
+        let inner = WorkspaceInner {
+            arena,
+            type_factory,
+        };
         Self {
-            inner: Rc::new(WorkspaceInner {
-                bump: Bump::new(),
-                string_arena: Arena::new(),
-            }),
+            inner: arena.alloc(inner),
         }
     }
 
+    pub fn type_factory(&self) -> TypeFactory<'ws> {
+        self.inner.type_factory
+    }
+
     pub fn alloc<T>(&self, val: T) -> &mut T {
-        self.inner.bump.alloc(val)
+        self.inner.arena.alloc(val)
     }
 
-    pub fn intern(&self, string: &str) -> WorkspaceString<'_> {
-        self.inner.string_arena.intern(string).into_ref()
+    pub fn alloc_str(&self, string: &str) -> WorkspaceString<'ws> {
+        self.inner.arena.alloc_str(string)
     }
 
-    pub fn alloc_str(&self, string: &str) -> WorkspaceString<'_> {
-        self.inner.bump.alloc_str(string)
+    pub fn intern(&self, string: &str) -> WorkspaceString<'ws> {
+        self.inner.arena.intern(string)
+    }
+
+    pub fn make_full_name(&self, string: &str) -> FullName<'ws> {
+        self.inner.arena.make_full_name(string)
     }
 
     pub fn source_file_from_string<F: AsRef<str>, S: AsRef<str>>(
@@ -61,6 +73,7 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+    use crate::infra::arena::Arena;
     use crate::model::workspace::{Workspace, WorkspaceString};
 
     pub struct Module {
@@ -73,7 +86,8 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        let workspace = Workspace::new();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let module_bar = workspace.alloc(create_module()) as &Module;
         let module_bar2 = module_bar;
         let module_foo = workspace.alloc(create_module()) as &Module;
@@ -83,7 +97,8 @@ mod tests {
 
     #[test]
     fn test_intern() {
-        let workspace = Workspace::new();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let string_foo = workspace.intern("foo");
         let string_foo2 = workspace.intern("foo");
         assert_eq!(string_foo, string_foo2);
@@ -92,7 +107,8 @@ mod tests {
 
     #[test]
     fn test_alloc_str() {
-        let workspace = Workspace::new();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let string_foo = workspace.alloc_str("foo");
         let string_foo2 = string_foo;
         assert_eq!(string_foo, string_foo2);
@@ -100,7 +116,7 @@ mod tests {
     }
 
     struct Tester<'ws> {
-        pub workspace: &'ws Workspace,
+        pub workspace: &'ws Workspace<'ws>,
         pub strings: Vec<&'ws str>,
     }
 
@@ -115,7 +131,8 @@ mod tests {
 
     #[test]
     fn test_workspace() {
-        let workspace = Workspace::new();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let mut tester = Tester {
             workspace: &workspace,
             strings: vec![],

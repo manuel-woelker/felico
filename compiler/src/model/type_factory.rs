@@ -1,11 +1,10 @@
 use crate::frontend::lex::token::{Token, TokenType};
-use crate::infra::full_name::FullName;
+use crate::infra::arena::Arena;
 use crate::infra::shared_string::SharedString;
 use crate::infra::source_span::SourceSpan;
 use crate::model::types::{
     FunctionType, PrimitiveType, StructField, StructType, TraitType, Type, TypeInner, TypeKind,
 };
-use crate::model::workspace::Workspace;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -13,11 +12,13 @@ pub struct TypeFactory<'ws> {
     inner: &'ws TypeFactoryInner<'ws>,
 }
 
+impl<'ws> Copy for TypeFactory<'ws> {}
+
 macro_rules! factory_fns {
         ($($id:ident),+) => {
     #[derive(Debug)]
 struct TypeFactoryInner<'ws> {
-            workspace: Workspace,
+            arena: &'ws Arena,
             $(
             $id: Type<'ws>,
             )+
@@ -39,11 +40,11 @@ factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
 //factory_fns!(bool);
 
 impl<'ws> TypeFactory<'ws> {
-    pub fn new(workspace: &'ws Workspace) -> TypeFactory<'ws> {
+    pub fn new(arena: &'ws Arena) -> TypeFactory<'ws> {
         let make_type = |name: &str, kind: TypeKind<'ws>| -> Type<'ws> {
             Type {
-                inner: workspace.alloc(TypeInner {
-                    name: name.into(),
+                inner: arena.alloc(TypeInner {
+                    name: arena.make_full_name(name),
                     kind,
                     declaration_site: SourceSpan::ephemeral(),
                 }),
@@ -51,8 +52,8 @@ impl<'ws> TypeFactory<'ws> {
         };
 
         Self {
-            inner: workspace.alloc(TypeFactoryInner {
-                workspace: workspace.clone(),
+            inner: arena.alloc(TypeFactoryInner {
+                arena,
                 bool: make_type("bool", TypeKind::Primitive(PrimitiveType::Bool)),
                 unit: make_type(
                     "Unit",
@@ -60,8 +61,7 @@ impl<'ws> TypeFactory<'ws> {
                         name: Token {
                             token_type: TokenType::Identifier,
                             location: SourceSpan::ephemeral(),
-                            value: Some(SharedString::from("Unit")),
-                            lexeme: "Unit",
+                            value: "Unit",
                         },
                         fields: Default::default(),
                     }),
@@ -77,15 +77,16 @@ impl<'ws> TypeFactory<'ws> {
         }
     }
 
-    pub fn make_type<S: Into<FullName>>(
+    pub fn make_type<S: AsRef<str>>(
         &'ws self,
         name: S,
         kind: TypeKind<'ws>,
         declaration_site: SourceSpan<'ws>,
     ) -> Type<'ws> {
+        let ws_name = self.inner.arena.make_full_name(name.as_ref());
         Type {
-            inner: self.inner.workspace.alloc(TypeInner {
-                name: name.into(),
+            inner: self.inner.arena.alloc(TypeInner {
+                name: ws_name,
                 kind,
                 declaration_site,
             }),
@@ -119,7 +120,7 @@ impl<'ws> TypeFactory<'ws> {
     pub fn make_struct(
         &'ws self,
         name: &Token<'ws>,
-        fields: HashMap<SharedString, StructField<'ws>>,
+        fields: HashMap<SharedString<'ws>, StructField<'ws>>,
         declaration_site: SourceSpan<'ws>,
     ) -> Type<'ws> {
         self.make_type(
@@ -149,11 +150,7 @@ impl<'ws> TypeFactory<'ws> {
         )
     }
 
-    pub fn make_ephemeral<S: Into<SharedString>>(
-        &'ws self,
-        name: S,
-        kind: TypeKind<'ws>,
-    ) -> Type<'ws> {
+    pub fn make_ephemeral<S: AsRef<str>>(&'ws self, name: S, kind: TypeKind<'ws>) -> Type<'ws> {
         self.make_type(name, kind, SourceSpan::ephemeral())
     }
 }

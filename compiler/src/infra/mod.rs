@@ -1,3 +1,4 @@
+pub mod arena;
 pub mod diagnostic;
 pub mod full_name;
 pub mod result;

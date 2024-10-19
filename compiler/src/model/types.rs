@@ -97,7 +97,7 @@ impl<'ws> Eq for Type<'ws> {}
 
 #[derive(Debug)]
 pub struct TypeInner<'ws> {
-    pub name: FullName,
+    pub name: FullName<'ws>,
     pub declaration_site: SourceSpan<'ws>,
     pub kind: TypeKind<'ws>,
 }
@@ -125,7 +125,7 @@ pub struct FunctionType<'ws> {
 #[derive(Debug)]
 pub struct StructType<'ws> {
     pub name: Token<'ws>,
-    pub fields: HashMap<SharedString, StructField<'ws>>,
+    pub fields: HashMap<SharedString<'ws>, StructField<'ws>>,
 }
 
 impl<'ws> Eq for StructType<'ws> {}
@@ -150,7 +150,7 @@ impl<'ws> PartialEq for TraitType<'ws> {
 #[derive(Debug)]
 pub struct StructField<'ws> {
     pub name_token: Token<'ws>,
-    pub name: SharedString,
+    pub name: SharedString<'ws>,
     pub ty: Type<'ws>,
 }
 

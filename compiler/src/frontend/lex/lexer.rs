@@ -45,9 +45,8 @@ impl<'ws> Lexer<'ws> {
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
             },
-            lexeme: &self.source_file.source_code()
+            value: &self.source_file.source_code()
                 [self.start_offset as usize..self.current_offset as usize],
-            value: None,
         };
         self.start_offset = self.current_offset;
         self.lexeme_collector.clear();
@@ -283,6 +282,7 @@ fn is_alpha_numeric(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::arena::Arena;
     use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
     /*
@@ -297,7 +297,8 @@ mod tests {
         }
     */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
-        let workspace = Workspace::new();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
         let s = Lexer::new(workspace.source_file_from_string(name, input)).unwrap();
         let result = s.collect::<Vec<_>>();
         let result_tokens = result
