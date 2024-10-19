@@ -7,11 +7,10 @@ use crate::model::types::{
 };
 use crate::model::workspace::Workspace;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct TypeFactory<'ws> {
-    inner: Rc<TypeFactoryInner<'ws>>,
+    inner: &'ws TypeFactoryInner<'ws>,
 }
 
 macro_rules! factory_fns {
@@ -50,8 +49,9 @@ impl<'ws> TypeFactory<'ws> {
                 }),
             }
         };
+
         Self {
-            inner: Rc::new(TypeFactoryInner {
+            inner: workspace.alloc(TypeFactoryInner {
                 workspace: workspace.clone(),
                 bool: make_type("bool", TypeKind::Primitive(PrimitiveType::Bool)),
                 unit: make_type(
