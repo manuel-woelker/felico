@@ -56,6 +56,10 @@ impl<'ws> Workspace<'ws> {
         self.inner.arena.make_full_name(string)
     }
 
+    pub fn make_child_name(&self, parent: FullName<'ws>, name: &str) -> FullName<'ws> {
+        self.inner.arena.make_child_name(parent, name)
+    }
+
     pub fn source_file_from_string<F: AsRef<str>, S: AsRef<str>>(
         &self,
         filename: F,

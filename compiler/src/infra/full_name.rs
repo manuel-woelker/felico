@@ -6,6 +6,8 @@ pub struct FullName<'ws> {
     pub(crate) inner: &'ws FullNameInner<'ws>,
 }
 
+impl<'ws> Copy for FullName<'ws> {}
+
 pub struct FullNameInner<'ws> {
     pub name_part: Name<'ws>,
     pub parent: Option<FullName<'ws>>,
@@ -49,33 +51,15 @@ impl<'ws> From<&FullName<'ws>> for String {
 }
 
 impl<'ws> FullName<'ws> {
-    /*    pub fn new(name_part: Name<'ws>, parent: Option<FullName<'ws>>) -> Self {
-        if name_part.is_empty() {
-            panic!("name part is empty");
-        }
-        Self {
-            inner: &FullNameInner { name_part, parent }),
-        }
-    }*/
-
     pub fn short_name(&self) -> &str {
         self.inner.name_part
     }
-    /*
-    pub fn child<S: Into<Name>>(&self, name: S) -> Self {
-        Self::new(name.into(), Some(self.clone()))
-    }*/
 }
-/*
-impl<S: Into<Name>> From<S> for FullName {
-    fn from(name: S) -> Self {
-        Self::new(name.into(), None)
-    }
-}
-*/
+
 #[cfg(test)]
 mod tests {
-    /*
+    use crate::infra::arena::Arena;
+    use crate::infra::full_name::FullName;
 
     fn assert_name(name: &FullName, expected: &str) {
         assert_eq!(format!("{}", name), expected);
@@ -85,20 +69,20 @@ mod tests {
     }
     #[test]
     fn display_simple_name() {
-        let name: FullName = "foo".into();
+        let arena = Arena::new();
+        let name: FullName = arena.make_full_name("foo");
         assert_name(&name, "foo");
-    }*/
-    /*
-        #[test]
-        fn display_complex_name() {
-            let root: FullName = "foo".into();
-            let child = root.child("bar");
-            assert_name(&child, "foo::bar");
+    }
+    #[test]
+    fn display_complex_name() {
+        let arena = Arena::new();
+        let root: FullName = arena.make_full_name("foo");
+        let child = arena.make_child_name(root, "bar");
+        assert_name(&child, "foo::bar");
 
-            let grand_child = child.child("baz");
-            assert_name(&grand_child, "foo::bar::baz");
-        }
-    */
+        let grand_child = arena.make_child_name(child, "baz");
+        assert_name(&grand_child, "foo::bar::baz");
+    }
     #[test]
     fn equals() {
         /*

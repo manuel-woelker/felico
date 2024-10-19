@@ -44,11 +44,19 @@ impl Arena {
         self.inner.bump.alloc_str(string)
     }
 
-    pub fn make_full_name(&self, string: &str) -> FullName<'_> {
-        let interned_string = self.intern(string);
+    pub fn make_full_name(&self, name: &str) -> FullName<'_> {
+        let interned_name = self.intern(name);
         let inner = self.alloc(FullNameInner {
-            name_part: interned_string,
+            name_part: interned_name,
             parent: None,
+        });
+        FullName { inner }
+    }
+    pub fn make_child_name<'ws>(&'ws self, parent: FullName<'ws>, name: &str) -> FullName<'ws> {
+        let interned_name = self.intern(name);
+        let inner = self.alloc(FullNameInner {
+            name_part: interned_name,
+            parent: Some(parent),
         });
         FullName { inner }
     }

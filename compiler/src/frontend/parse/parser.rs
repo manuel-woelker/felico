@@ -101,7 +101,7 @@ impl<'ws> Parser<'ws> {
                 body,
             }),
         )?;
-        let name = self.module_name.clone();
+        let name = self.module_name;
         self.create_node(
             &start_location,
             Module {
@@ -127,7 +127,7 @@ impl<'ws> Parser<'ws> {
         self.create_node(
             &start_location,
             Module {
-                name: self.module_name.clone(),
+                name: self.module_name,
                 stmts,
             },
         )
