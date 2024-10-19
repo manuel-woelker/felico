@@ -866,7 +866,7 @@ impl<'a> Parser<'a> {
 
 pub fn parse_expression<'a>(
     code_source: SourceFile,
-    workspace: &'a Workspace<'a>,
+    workspace: &'a Workspace,
 ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
     let parser = Parser::new(code_source, TypeFactory::new(workspace))?;
     parser.parse_expression()

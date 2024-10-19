@@ -18,7 +18,7 @@ macro_rules! factory_fns {
         ($($id:ident),+) => {
     #[derive(Debug)]
 struct TypeFactoryInner<'a> {
-            workspace: Workspace<'a>,
+            workspace: Workspace,
             $(
             $id: Type<'a>,
             )+
@@ -40,7 +40,7 @@ factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
 //factory_fns!(bool);
 
 impl<'a> TypeFactory<'a> {
-    pub fn new(workspace: &'a Workspace<'a>) -> TypeFactory<'a> {
+    pub fn new(workspace: &'a Workspace) -> TypeFactory<'a> {
         let make_type = |name: &str, kind: TypeKind<'a>| -> Type<'a> {
             Type {
                 inner: workspace.alloc(TypeInner {

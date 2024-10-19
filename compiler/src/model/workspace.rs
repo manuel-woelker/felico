@@ -1,16 +1,14 @@
 use bumpalo::Bump;
 use internment::Arena;
 use std::fmt::{Debug, Formatter};
-use std::marker::PhantomData;
 use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct Workspace<'a> {
+pub struct Workspace {
     inner: Rc<WorkspaceInner>,
-    marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Debug for Workspace<'a> {
+impl Debug for Workspace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Workspace")
     }
@@ -23,14 +21,13 @@ struct WorkspaceInner {
 
 pub type WorkspaceString<'a> = &'a str;
 
-impl<'a> Workspace<'a> {
+impl Workspace {
     pub fn new() -> Self {
         Self {
             inner: Rc::new(WorkspaceInner {
                 bump: Bump::new(),
                 string_arena: Arena::new(),
             }),
-            marker: PhantomData,
         }
     }
 
