@@ -80,7 +80,7 @@ impl<'a> TypeFactory<'a> {
         &'a self,
         name: S,
         kind: TypeKind<'a>,
-        declaration_site: SourceSpan,
+        declaration_site: SourceSpan<'a>,
     ) -> Type<'a> {
         Type {
             inner: self.inner.workspace.alloc(TypeInner {
@@ -95,7 +95,7 @@ impl<'a> TypeFactory<'a> {
         &'a self,
         parameter_types: Vec<Type<'a>>,
         return_type: Type<'a>,
-        declaration_site: SourceSpan,
+        declaration_site: SourceSpan<'a>,
     ) -> Type {
         let name = "Fn(".to_string()
             + &parameter_types
@@ -117,9 +117,9 @@ impl<'a> TypeFactory<'a> {
 
     pub fn make_struct(
         &'a self,
-        name: &Token,
+        name: &Token<'a>,
         fields: HashMap<SharedString, StructField<'a>>,
-        declaration_site: SourceSpan,
+        declaration_site: SourceSpan<'a>,
     ) -> Type<'a> {
         self.make_type(
             name.lexeme(),
@@ -133,14 +133,14 @@ impl<'a> TypeFactory<'a> {
 
     pub fn make_namespace(
         &self,
-        name: &Token,
+        name: &Token<'a>,
         //        symbol_map: HashMap<SharedString, InterpreterValue>,
-        declaration_site: SourceSpan,
+        declaration_site: SourceSpan<'a>,
     ) -> Type {
         self.make_type(name.lexeme(), TypeKind::Namespace, declaration_site)
     }
 
-    pub fn make_trait(&self, name: &Token, declaration_site: SourceSpan) -> Type {
+    pub fn make_trait(&self, name: &Token<'a>, declaration_site: SourceSpan<'a>) -> Type {
         self.make_type(
             name.lexeme(),
             TypeKind::Trait(TraitType { name: name.clone() }),

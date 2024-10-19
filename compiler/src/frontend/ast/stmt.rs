@@ -5,38 +5,38 @@ use crate::frontend::lex::token::Token;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
-pub enum Stmt<'a> {
-    Expression(ExprStmt<'a>),
-    Let(LetStmt<'a>),
-    Struct(StructStmt<'a>),
-    Trait(TraitStmt),
-    Impl(ImplStmt<'a>),
-    Fun(FunStmt<'a>),
-    While(WhileStmt<'a>),
+pub enum Stmt<'ws> {
+    Expression(ExprStmt<'ws>),
+    Let(LetStmt<'ws>),
+    Struct(StructStmt<'ws>),
+    Trait(TraitStmt<'ws>),
+    Impl(ImplStmt<'ws>),
+    Fun(FunStmt<'ws>),
+    While(WhileStmt<'ws>),
 }
 
-impl<'a> AstData for Stmt<'a> {}
+impl<'ws> AstData for Stmt<'ws> {}
 
 #[derive(Debug, Clone)]
-pub struct ExprStmt<'a> {
-    pub expression: AstNode<'a, Expr<'a>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct LetStmt<'a> {
-    pub name: Token,
-    pub expression: AstNode<'a, Expr<'a>>,
-    pub type_expression: Option<AstNode<'a, Expr<'a>>>,
+pub struct ExprStmt<'ws> {
+    pub expression: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct FunParameter<'a> {
-    pub name: Token,
-    pub type_expression: AstNode<'a, Expr<'a>>,
+pub struct LetStmt<'ws> {
+    pub name: Token<'ws>,
+    pub expression: AstNode<'ws, Expr<'ws>>,
+    pub type_expression: Option<AstNode<'ws, Expr<'ws>>>,
 }
 
-impl<'a> FunParameter<'a> {
-    pub fn new(name: Token, type_expression: AstNode<'a, Expr<'a>>) -> Self {
+#[derive(Debug, Clone)]
+pub struct FunParameter<'ws> {
+    pub name: Token<'ws>,
+    pub type_expression: AstNode<'ws, Expr<'ws>>,
+}
+
+impl<'ws> FunParameter<'ws> {
+    pub fn new(name: Token<'ws>, type_expression: AstNode<'ws, Expr<'ws>>) -> Self {
         Self {
             name,
             type_expression,
@@ -45,42 +45,42 @@ impl<'a> FunParameter<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct FunStmt<'a> {
-    pub name: Token,
-    pub parameters: Vec<FunParameter<'a>>,
-    pub return_type: AstNode<'a, Expr<'a>>,
-    pub body: AstNode<'a, Expr<'a>>,
+pub struct FunStmt<'ws> {
+    pub name: Token<'ws>,
+    pub parameters: Vec<FunParameter<'ws>>,
+    pub return_type: AstNode<'ws, Expr<'ws>>,
+    pub body: AstNode<'ws, Expr<'ws>>,
 }
 
-impl<'a> AstData for FunStmt<'a> {}
+impl<'ws> AstData for FunStmt<'ws> {}
 
 #[derive(Debug, Clone)]
-pub struct WhileStmt<'a> {
-    pub condition: AstNode<'a, Expr<'a>>,
-    pub body_stmt: AstNode<'a, Stmt<'a>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ImplStmt<'a> {
-    pub name: Token,
-    pub methods: Vec<AstNode<'a, FunStmt<'a>>>,
+pub struct WhileStmt<'ws> {
+    pub condition: AstNode<'ws, Expr<'ws>>,
+    pub body_stmt: AstNode<'ws, Stmt<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct StructStmt<'a> {
-    pub name: Token,
-    pub fields: Vec<AstNode<'a, StructStmtField<'a>>>,
+pub struct ImplStmt<'ws> {
+    pub name: Token<'ws>,
+    pub methods: Vec<AstNode<'ws, FunStmt<'ws>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TraitStmt {
-    pub name: Token,
+pub struct StructStmt<'ws> {
+    pub name: Token<'ws>,
+    pub fields: Vec<AstNode<'ws, StructStmtField<'ws>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct StructStmtField<'a> {
-    pub name: Token,
-    pub type_expression: AstNode<'a, Expr<'a>>,
+pub struct TraitStmt<'ws> {
+    pub name: Token<'ws>,
 }
 
-impl<'a> AstData for StructStmtField<'a> {}
+#[derive(Debug, Clone)]
+pub struct StructStmtField<'ws> {
+    pub name: Token<'ws>,
+    pub type_expression: AstNode<'ws, Expr<'ws>>,
+}
+
+impl<'ws> AstData for StructStmtField<'ws> {}

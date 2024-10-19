@@ -6,47 +6,47 @@ use crate::frontend::lex::token::Token;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
-pub enum Expr<'a> {
-    Return(ReturnExpr<'a>),
-    Unary(UnaryExpr<'a>),
-    Binary(BinaryExpr<'a>),
+pub enum Expr<'ws> {
+    Return(ReturnExpr<'ws>),
+    Unary(UnaryExpr<'ws>),
+    Binary(BinaryExpr<'ws>),
     Literal(LiteralExpr),
-    Variable(VarUse<'a>),
-    Assign(AssignExpr<'a>),
-    Call(CallExpr<'a>),
-    Get(GetExpr<'a>),
-    Set(SetExpr<'a>),
-    Block(BlockExpr<'a>),
-    If(IfExpr<'a>),
-    CreateStruct(CreateStructExpr<'a>),
+    Variable(VarUse<'ws>),
+    Assign(AssignExpr<'ws>),
+    Call(CallExpr<'ws>),
+    Get(GetExpr<'ws>),
+    Set(SetExpr<'ws>),
+    Block(BlockExpr<'ws>),
+    If(IfExpr<'ws>),
+    CreateStruct(CreateStructExpr<'ws>),
 }
 
-impl<'a> AstData for Expr<'a> {}
+impl<'ws> AstData for Expr<'ws> {}
 
 #[derive(Debug, Clone)]
-pub struct VarUse<'a> {
-    pub name: AstNode<'a, QualifiedName>,
+pub struct VarUse<'ws> {
+    pub name: AstNode<'ws, QualifiedName<'ws>>,
     pub distance: i32,
 }
 
 #[derive(Debug, Clone)]
-pub struct BinaryExpr<'a> {
-    pub operator: Token,
-    pub left: AstNode<'a, Expr<'a>>,
-    pub right: AstNode<'a, Expr<'a>>,
+pub struct BinaryExpr<'ws> {
+    pub operator: Token<'ws>,
+    pub left: AstNode<'ws, Expr<'ws>>,
+    pub right: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct AssignExpr<'a> {
-    pub destination: AstNode<'a, QualifiedName>,
-    pub value: AstNode<'a, Expr<'a>>,
+pub struct AssignExpr<'ws> {
+    pub destination: AstNode<'ws, QualifiedName<'ws>>,
+    pub value: AstNode<'ws, Expr<'ws>>,
     pub distance: i32,
 }
 
 #[derive(Debug, Clone)]
-pub struct UnaryExpr<'a> {
-    pub operator: Token,
-    pub right: AstNode<'a, Expr<'a>>,
+pub struct UnaryExpr<'ws> {
+    pub operator: Token<'ws>,
+    pub right: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,55 +59,55 @@ pub enum LiteralExpr {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallExpr<'a> {
-    pub callee: AstNode<'a, Expr<'a>>,
-    pub arguments: Vec<AstNode<'a, Expr<'a>>>,
+pub struct CallExpr<'ws> {
+    pub callee: AstNode<'ws, Expr<'ws>>,
+    pub arguments: Vec<AstNode<'ws, Expr<'ws>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct GetExpr<'a> {
-    pub object: AstNode<'a, Expr<'a>>,
-    pub name: Token,
+pub struct GetExpr<'ws> {
+    pub object: AstNode<'ws, Expr<'ws>>,
+    pub name: Token<'ws>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SetExpr<'a> {
-    pub object: AstNode<'a, Expr<'a>>,
-    pub name: Token,
-    pub value: AstNode<'a, Expr<'a>>,
+pub struct SetExpr<'ws> {
+    pub object: AstNode<'ws, Expr<'ws>>,
+    pub name: Token<'ws>,
+    pub value: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TupleExpr<'a> {
-    pub components: Vec<AstNode<'a, Expr<'a>>>,
+pub struct TupleExpr<'ws> {
+    pub components: Vec<AstNode<'ws, Expr<'ws>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockExpr<'a> {
-    pub stmts: Vec<AstNode<'a, Stmt<'a>>>,
-    pub result_expression: AstNode<'a, Expr<'a>>,
+pub struct BlockExpr<'ws> {
+    pub stmts: Vec<AstNode<'ws, Stmt<'ws>>>,
+    pub result_expression: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct IfExpr<'a> {
-    pub condition: AstNode<'a, Expr<'a>>,
-    pub then_expr: AstNode<'a, Expr<'a>>,
-    pub else_expr: Option<AstNode<'a, Expr<'a>>>,
+pub struct IfExpr<'ws> {
+    pub condition: AstNode<'ws, Expr<'ws>>,
+    pub then_expr: AstNode<'ws, Expr<'ws>>,
+    pub else_expr: Option<AstNode<'ws, Expr<'ws>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ReturnExpr<'a> {
-    pub expression: AstNode<'a, Expr<'a>>,
+pub struct ReturnExpr<'ws> {
+    pub expression: AstNode<'ws, Expr<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateStructExpr<'a> {
-    pub type_expression: AstNode<'a, Expr<'a>>,
-    pub field_initializers: Vec<CreateStructInitializer<'a>>,
+pub struct CreateStructExpr<'ws> {
+    pub type_expression: AstNode<'ws, Expr<'ws>>,
+    pub field_initializers: Vec<CreateStructInitializer<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateStructInitializer<'a> {
-    pub field_name: Token,
-    pub expression: AstNode<'a, Expr<'a>>,
+pub struct CreateStructInitializer<'ws> {
+    pub field_name: Token<'ws>,
+    pub expression: AstNode<'ws, Expr<'ws>>,
 }

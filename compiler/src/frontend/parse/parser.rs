@@ -23,16 +23,16 @@ use crate::model::workspace::Workspace;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
-    lexer: Lexer,
-    current_token: Token,
-    next_token: Token,
-    source_file: SourceFile,
+    lexer: Lexer<'a>,
+    current_token: Token<'a>,
+    next_token: Token<'a>,
+    source_file: SourceFile<'a>,
     type_factory: TypeFactory<'a>,
     module_name: FullName,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source_file: SourceFile, type_factory: TypeFactory<'a>) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile<'a>, type_factory: TypeFactory<'a>) -> FelicoResult<Self> {
         let mut lexer = Lexer::new(source_file.clone()).whatever_context("oops")?;
         let current_token = lexer
             .next()
@@ -53,15 +53,15 @@ impl<'a> Parser<'a> {
             type_factory,
         })
     }
-
-    pub fn new_in_memory(
-        filename: &str,
-        source_code: &str,
-        type_factory: TypeFactory<'a>,
-    ) -> FelicoResult<Self> {
-        Self::new(SourceFile::from_string(filename, source_code), type_factory)
-    }
-
+    /*
+        pub fn new_in_memory(
+            filename: &str,
+            source_code: &str,
+            type_factory: TypeFactory<'a>,
+        ) -> FelicoResult<Self> {
+            Self::new(SourceFile::from_string(filename, source_code), type_factory)
+        }
+    */
     pub fn advance(&mut self) {
         std::mem::swap(&mut self.current_token, &mut self.next_token);
         if let Some(token) = self.lexer.next() {
@@ -308,7 +308,7 @@ impl<'a> Parser<'a> {
 
     fn create_unit_var_use(
         &mut self,
-        start_location: &SourceSpan,
+        start_location: &SourceSpan<'a>,
     ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         self.create_node(
             start_location,
@@ -753,7 +753,7 @@ impl<'a> Parser<'a> {
         result
     }
 
-    fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<'a, QualifiedName>> {
+    fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<'a, QualifiedName<'a>>> {
         let start_location = self.current_location();
         let token = self.consume(TokenType::Identifier, "expected identifier")?;
         let mut last_location = token.location.clone();
@@ -773,7 +773,7 @@ impl<'a> Parser<'a> {
     }
 
     #[track_caller]
-    fn consume(&mut self, expected_token_type: TokenType, msg: &str) -> FelicoResult<Token> {
+    fn consume(&mut self, expected_token_type: TokenType, msg: &str) -> FelicoResult<Token<'a>> {
         if self.is_at(expected_token_type) {
             let token = self.current_token.clone();
             self.advance();
@@ -822,7 +822,7 @@ impl<'a> Parser<'a> {
     fn finish_call(
         &mut self,
         callee: AstNode<'a, Expr<'a>>,
-        start_location: SourceSpan,
+        start_location: SourceSpan<'a>,
     ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
         let arguments = self.parse_separated(|parser| {
             if parser.is_at(TokenType::RightParen) {
@@ -842,7 +842,7 @@ impl<'a> Parser<'a> {
 
     fn create_node<T: AstData + 'a>(
         &mut self,
-        start_location: &SourceSpan,
+        start_location: &SourceSpan<'a>,
         data: T,
     ) -> FelicoResult<AstNode<'a, T>> {
         let start = start_location;
@@ -854,7 +854,7 @@ impl<'a> Parser<'a> {
         Ok(AstNode::new(data, location, self.type_factory.unknown()))
     }
 
-    fn current_location(&self) -> SourceSpan {
+    fn current_location(&self) -> SourceSpan<'a> {
         self.current_token.location.clone()
     }
 
@@ -865,7 +865,7 @@ impl<'a> Parser<'a> {
 }
 
 pub fn parse_expression<'a>(
-    code_source: SourceFile,
+    code_source: SourceFile<'a>,
     workspace: &'a Workspace,
 ) -> FelicoResult<AstNode<'a, Expr<'a>>> {
     let parser = Parser::new(code_source, TypeFactory::new(workspace))?;
@@ -873,7 +873,7 @@ pub fn parse_expression<'a>(
 }
 
 pub fn parse_script<'a>(
-    code_source: SourceFile,
+    code_source: SourceFile<'a>,
     type_factory: TypeFactory<'a>,
 ) -> FelicoResult<AstNode<'a, Module<'a>>> {
     let mut parser = Parser::new(code_source, type_factory)?;
@@ -884,13 +884,14 @@ pub fn parse_script<'a>(
 mod tests {
     use super::*;
     use crate::frontend::ast::print_ast::{ast_to_string, AstPrinter};
-    use crate::infra::diagnostic::unwrap_diagnostic_to_string;
+    use crate::infra::result::unwrap_error_result_to_string;
     use expect_test::{expect, Expect};
 
     fn test_parse_expression(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
         let type_factory = TypeFactory::new(&workspace);
-        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let source_file = workspace.source_file_from_string(name, input);
+        let parser = Parser::new(source_file, type_factory).unwrap();
         let expr = parser.parse_expression().unwrap();
         AstPrinter::new().print_expr(&expr).unwrap();
         let printed_ast = AstPrinter::new().print_expr(&expr).unwrap();
@@ -1115,7 +1116,8 @@ mod tests {
     fn test_parse_script(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
         let type_factory = TypeFactory::new(&workspace);
-        let mut parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let source_file = workspace.source_file_from_string(name, input);
+        let mut parser = Parser::new(source_file, type_factory).unwrap();
         let script = parser.parse_script().unwrap();
         let printed_ast = ast_to_string(&script).unwrap();
 
@@ -1545,9 +1547,10 @@ mod tests {
     fn test_parse_script_error(name: &str, input: &str, expected: Expect) {
         let workspace = Workspace::new();
         let type_factory = TypeFactory::new(&workspace);
-        let mut parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let source_file = workspace.source_file_from_string(name, input);
+        let mut parser = Parser::new(source_file, type_factory).unwrap();
         let result = parser.parse_script();
-        let diagnostic_string = unwrap_diagnostic_to_string(&result);
+        let diagnostic_string = unwrap_error_result_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }
 

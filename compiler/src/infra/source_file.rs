@@ -1,64 +1,30 @@
-use crate::infra::result::FelicoResult;
+use crate::model::workspace::WorkspaceString;
 use miette::{MietteError, MietteSpanContents, SourceCode, SourceSpan, SpanContents};
 use std::fmt::Debug;
-use std::fs::File;
-use std::io::Read;
-use std::ops::Deref;
-use std::path::Path;
-use std::sync::Arc;
 
 #[derive(Debug)]
-pub struct SourceFileInner {
-    filename: String,
-    source_code: String,
-}
-
-impl SourceFileInner {
-    pub fn filename(&self) -> &str {
-        &self.filename
-    }
-    pub fn source_code(&self) -> &str {
-        &self.source_code
-    }
+pub struct SourceFileInner<'a> {
+    pub filename: WorkspaceString<'a>,
+    pub source_code: WorkspaceString<'a>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceFile {
-    inner: Arc<SourceFileInner>,
+pub struct SourceFile<'a> {
+    pub inner: &'a SourceFileInner<'a>,
 }
 
-impl SourceFile {
-    pub fn from_path<T: AsRef<Path>>(path: T) -> FelicoResult<Self> {
-        let filename = path
-            .as_ref()
-            .as_os_str()
-            .to_owned()
-            .into_string()
-            .map_err(|_| format!("Failed to convert filename {:?}", path.as_ref()))?;
-        let mut source_code = String::new();
-        File::open(path)?.read_to_string(&mut source_code)?;
-        Ok(Self::from_string(filename, source_code))
+impl<'a> SourceFile<'a> {
+    pub fn filename(&self) -> &'a str {
+        &self.inner.filename
     }
-
-    pub fn from_string<F: Into<String>, S: Into<String>>(filename: F, source_code: S) -> Self {
-        Self {
-            inner: Arc::new(SourceFileInner {
-                filename: filename.into(),
-                source_code: source_code.into(),
-            }),
-        }
+    pub fn source_code(&self) -> &'a str {
+        &self.inner.source_code
     }
 }
 
-impl Deref for SourceFile {
-    type Target = SourceFileInner;
+impl<'a> Copy for SourceFile<'a> {}
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl SourceCode for SourceFile {
+impl<'workspace> SourceCode for SourceFile<'workspace> {
     fn read_span<'a>(
         &'a self,
         span: &SourceSpan,
@@ -66,10 +32,11 @@ impl SourceCode for SourceFile {
         context_lines_after: usize,
     ) -> Result<Box<dyn SpanContents<'a> + 'a>, MietteError> {
         let inner_contents =
-            self.source_code
+            self.inner
+                .source_code
                 .read_span(span, context_lines_before, context_lines_after)?;
         let contents = MietteSpanContents::new_named(
-            self.filename.clone(),
+            self.inner.filename.to_string(),
             inner_contents.data(),
             *inner_contents.span(),
             inner_contents.line(),

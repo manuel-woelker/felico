@@ -64,13 +64,13 @@ impl Display for TokenType {
 }
 
 #[derive(Clone)]
-pub struct Token {
+pub struct Token<'ws> {
     pub token_type: TokenType,
-    pub location: SourceSpan,
+    pub location: SourceSpan<'ws>,
     pub value: Option<SharedString>,
 }
 
-impl Token {
+impl<'ws> Token<'ws> {
     pub fn lexeme(&self) -> &str {
         if let Some(value) = &self.value {
             value
@@ -94,7 +94,7 @@ impl Token {
     }
 }
 
-impl Display for Token {
+impl<'ws> Display for Token<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.token_type {
             TokenType::EOF => f.write_str("End of file"),
@@ -105,7 +105,7 @@ impl Display for Token {
     }
 }
 
-impl Debug for Token {
+impl<'ws> Debug for Token<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.token_type {
             TokenType::EOF => f.write_str("End of file"),

@@ -1,3 +1,4 @@
+use crate::infra::source_file::{SourceFile, SourceFileInner};
 use bumpalo::Bump;
 use internment::Arena;
 use std::fmt::{Debug, Formatter};
@@ -38,11 +39,29 @@ impl Workspace {
     pub fn intern(&self, string: &str) -> WorkspaceString<'_> {
         self.inner.string_arena.intern(string).into_ref()
     }
+
+    pub fn alloc_str(&self, string: &str) -> WorkspaceString<'_> {
+        self.inner.bump.alloc_str(string)
+    }
+
+    pub fn source_file_from_string<F: AsRef<str>, S: AsRef<str>>(
+        &self,
+        filename: F,
+        source_code: S,
+    ) -> SourceFile<'_> {
+        let ws_filename = self.alloc_str(filename.as_ref());
+        let ws_source_code = self.alloc_str(source_code.as_ref());
+        let inner = self.alloc(SourceFileInner {
+            filename: ws_filename,
+            source_code: ws_source_code,
+        });
+        SourceFile { inner }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::model::workspace::Workspace;
+    use crate::model::workspace::{Workspace, WorkspaceString};
 
     pub struct Module {
         _id: usize,
@@ -69,5 +88,42 @@ mod tests {
         let string_foo2 = workspace.intern("foo");
         assert_eq!(string_foo, string_foo2);
         assert_eq!(string_foo as *const _, string_foo2 as *const _);
+    }
+
+    #[test]
+    fn test_alloc_str() {
+        let workspace = Workspace::new();
+        let string_foo = workspace.alloc_str("foo");
+        let string_foo2 = string_foo;
+        assert_eq!(string_foo, string_foo2);
+        assert_eq!(string_foo as *const _, string_foo2 as *const _);
+    }
+
+    struct Tester<'a> {
+        pub workspace: &'a Workspace,
+        pub strings: Vec<&'a str>,
+    }
+
+    impl<'a> Tester<'a> {
+        // Note to self: this "&mut self" reference must NOT have a 'a lifetime, since this causes the borrow to live too long
+        pub fn add_string(&mut self) -> WorkspaceString<'a> {
+            let string = self.workspace.alloc_str("xyz");
+            self.strings.push(string);
+            string
+        }
+    }
+
+    #[test]
+    fn test_workspace() {
+        let workspace = Workspace::new();
+        let mut tester = Tester {
+            workspace: &workspace,
+            strings: vec![],
+        };
+        let string_foo = tester.workspace.alloc_str("foo");
+        let string_xyz = tester.add_string();
+        tester.strings.push(string_foo);
+        assert_eq!(string_foo, tester.strings[1]);
+        assert_eq!(string_xyz, tester.strings[0]);
     }
 }

@@ -1,47 +1,17 @@
 use phf::phf_map;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::str::Chars;
 
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::{ByteOffset, SourceSpan};
-use ouroboros::self_referencing;
-
-#[self_referencing]
-struct OwningCharIter {
-    source_file: SourceFile,
-    #[borrows(source_file)]
-    #[covariant]
-    chars: Chars<'this>,
-}
-
-impl OwningCharIter {
-    fn from_source_file(source_file: &SourceFile) -> Self {
-        OwningCharIterBuilder {
-            source_file: source_file.clone(),
-            chars_builder: |s| s.source_code().chars(),
-        }
-        .build()
-    }
-
-    #[inline]
-    fn next(&mut self) -> Option<char> {
-        self.with_chars_mut(|chars| chars.next())
-    }
-}
-
-impl Debug for OwningCharIter {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
-}
 
 #[derive(Debug)]
-pub struct Lexer {
+pub struct Lexer<'a> {
     chars_left: i64,
-    char_iter: OwningCharIter,
-    source_file: SourceFile,
+    char_iter: Chars<'a>,
+    source_file: SourceFile<'a>,
     current_offset: ByteOffset,
     start_offset: ByteOffset,
     lexeme_collector: Vec<char>,
@@ -66,8 +36,8 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "impl" => TokenType::Impl,
 };
 
-impl Lexer {
-    pub(crate) fn emit_token(&mut self, token_type: TokenType) -> Token {
+impl<'a> Lexer<'a> {
+    pub fn emit_token(&mut self, token_type: TokenType) -> Token<'a> {
         let token = Token {
             token_type,
             location: SourceSpan {
@@ -110,7 +80,7 @@ impl Lexer {
         true
     }
 
-    pub(crate) fn lex_string(&mut self) -> Token {
+    pub(crate) fn lex_string(&mut self) -> Token<'a> {
         while self.next_char != '"' && !self.is_at_end() {
             self.advance();
         }
@@ -120,7 +90,7 @@ impl Lexer {
         self.emit_token(TokenType::String)
     }
 
-    pub(crate) fn lex_number(&mut self) -> Token {
+    pub(crate) fn lex_number(&mut self) -> Token<'a> {
         while is_digit(self.next_char) {
             self.advance();
         }
@@ -135,7 +105,7 @@ impl Lexer {
         self.emit_token(TokenType::Number)
     }
 
-    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token {
+    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token<'a> {
         while is_alpha_numeric(self.next_char) {
             self.advance();
         }
@@ -156,8 +126,8 @@ impl Lexer {
         self.lexeme_collector.clear();
     }
 
-    pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
-        let mut char_iter = OwningCharIter::from_source_file(&source_file);
+    pub fn new(source_file: SourceFile<'a>) -> FelicoResult<Self> {
+        let mut char_iter = source_file.source_code().chars();
         let mut next_char = '\0';
         let mut next_next_char = '\0';
         let mut chars_left = i64::MAX;
@@ -185,8 +155,8 @@ impl Lexer {
     }
 }
 
-impl Iterator for Lexer {
-    type Item = Token;
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -311,6 +281,7 @@ fn is_alpha_numeric(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
     /*
 
@@ -324,7 +295,8 @@ mod tests {
         }
     */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
-        let s = Lexer::new(SourceFile::from_string(name, input)).unwrap();
+        let workspace = Workspace::new();
+        let s = Lexer::new(workspace.source_file_from_string(name, input)).unwrap();
         let result = s.collect::<Vec<_>>();
         let result_tokens = result
             .iter()

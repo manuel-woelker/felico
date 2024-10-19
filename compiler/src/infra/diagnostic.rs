@@ -1,11 +1,10 @@
-use crate::infra::result::{FelicoError, FelicoResult};
+use crate::infra::result::{unwrap_error_result_to_string, FelicoResult};
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use miette::{
     Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ReportHandler, Severity,
     SourceCode,
 };
-use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
 pub fn diagnostic_to_string(
@@ -28,18 +27,18 @@ pub fn diagnostic_to_string(
     )
 }
 
-pub struct InterpreterDiagnostic {
+pub struct InterpreterDiagnostic<'a> {
     pub message: String,
     pub code: Option<String>,
     pub severity: Option<Severity>,
     pub help: Option<String>,
     pub labels: Vec<LabeledSpan>,
-    pub source_file: SourceFile,
+    pub source_file: SourceFile<'a>,
 }
 
-impl InterpreterDiagnostic {
+impl<'a> InterpreterDiagnostic<'a> {
     #[track_caller]
-    pub fn new(location: &SourceSpan, message: String) -> Self {
+    pub fn new(location: &SourceSpan<'a>, message: String) -> Self {
         let mut diagnostic =
             InterpreterDiagnostic::from_source_file(&location.source_file, message);
         diagnostic.add_primary_label(location);
@@ -48,9 +47,9 @@ impl InterpreterDiagnostic {
 
     #[track_caller]
     pub fn new_with(
-        location: &SourceSpan,
+        location: &SourceSpan<'a>,
         message: String,
-        mut f: impl FnMut(&mut InterpreterDiagnostic),
+        mut f: impl FnMut(&mut InterpreterDiagnostic<'a>),
     ) -> Self {
         let mut diagnostic = InterpreterDiagnostic::new(location, message);
         f(&mut diagnostic);
@@ -58,7 +57,7 @@ impl InterpreterDiagnostic {
     }
 
     #[track_caller]
-    pub fn from_source_file(source_file: &SourceFile, message: String) -> Self {
+    pub fn from_source_file(source_file: &SourceFile<'a>, message: String) -> Self {
         InterpreterDiagnostic {
             message,
             code: None,
@@ -86,17 +85,22 @@ impl InterpreterDiagnostic {
     pub fn set_help<S: Into<String>>(&mut self, help: S) {
         self.help = Some(help.into());
     }
+
+    pub fn to_pretty_string(&self) -> String {
+        diagnostic_to_string(
+            self,
+            &GraphicalReportHandler::new().with_theme(GraphicalTheme::unicode_nocolor()),
+        )
+    }
 }
 
-impl Error for InterpreterDiagnostic {}
-
-impl Display for InterpreterDiagnostic {
+impl<'a> Display for InterpreterDiagnostic<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.message)
     }
 }
 
-impl Debug for InterpreterDiagnostic {
+impl<'a> Debug for InterpreterDiagnostic<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.message)?;
         GraphicalReportHandler::new()
@@ -105,7 +109,9 @@ impl Debug for InterpreterDiagnostic {
     }
 }
 
-impl Diagnostic for InterpreterDiagnostic {
+impl<'a> std::error::Error for InterpreterDiagnostic<'a> {}
+
+impl<'workspace> Diagnostic for InterpreterDiagnostic<'workspace> {
     fn code<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         self.code
             .as_ref()
@@ -131,33 +137,9 @@ impl Diagnostic for InterpreterDiagnostic {
         Some(Box::new(self.labels.clone().into_iter()))
     }
 }
-pub fn unwrap_diagnostic_to_string<T>(result: &FelicoResult<T>) -> String {
-    let mut string = String::new();
-    if let Err(stack) = &result {
-        for frame in stack.report.frames() {
-            if let Some(error) = frame.downcast_ref::<FelicoError>() {
-                if let FelicoError::Diagnostic(diagnostic) = error {
-                    string += diagnostic_to_string(
-                        diagnostic,
-                        &GraphicalReportHandler::new()
-                            .with_theme(GraphicalTheme::unicode_nocolor()),
-                    )
-                    .trim();
-                    string += "\n\n";
-                } else {
-                    string += &format!("{:?}\n\n", error);
-                }
-            }
-        }
-    } else {
-        panic!("Expected error result, but got Ok(...) instead");
-    }
-    string
-}
-
 #[cfg(test)]
 pub fn assert_diagnostic<T>(result: &FelicoResult<T>, expected: expect_test::Expect) {
-    expected.assert_eq(&unwrap_diagnostic_to_string(result));
+    expected.assert_eq(&unwrap_error_result_to_string(result));
 }
 
 #[cfg(test)]
@@ -166,7 +148,7 @@ mod tests {
         assert_diagnostic, diagnostic_to_string, InterpreterDiagnostic,
     };
     use crate::infra::result::{FelicoError, FelicoReport};
-    use crate::infra::source_file::SourceFile;
+    use crate::infra::source_file::{SourceFile, SourceFileInner};
     use crate::infra::source_span::SourceSpan;
     use error_stack::Report;
     use expect_test::expect;
@@ -184,7 +166,12 @@ mod tests {
                 LabeledSpan::at(0..3, "This should be Rust"),
                 LabeledSpan::new_primary_with_span(Some("Yay!".to_string()), 4..9),
             ],
-            source_file: SourceFile::from_string("foo.txt", "foo rocks!"),
+            source_file: SourceFile {
+                inner: &SourceFileInner {
+                    filename: "foo.txt",
+                    source_code: "foo rocks!",
+                },
+            },
         };
 
         let mut graphical_report_handler = GraphicalReportHandler::new();

@@ -1,20 +1,26 @@
-use crate::infra::source_file::SourceFile;
+use crate::infra::source_file::{SourceFile, SourceFileInner};
 use std::fmt::{Debug, Formatter};
 
 pub type ByteOffset = i32;
 
 #[derive(Clone)]
-pub struct SourceSpan {
-    pub source_file: SourceFile,
+pub struct SourceSpan<'ws> {
+    pub source_file: SourceFile<'ws>,
     pub start_byte: ByteOffset,
     pub end_byte: ByteOffset,
 }
 const EPHEMERAL_FILE: &str = "<ephemeral file>";
+const EPHEMERAL_SOURCE_FILE_INNER: SourceFileInner = SourceFileInner {
+    filename: EPHEMERAL_FILE,
+    source_code: "",
+};
 
-impl SourceSpan {
-    pub fn ephemeral() -> SourceSpan {
+impl<'ws> SourceSpan<'ws> {
+    pub fn ephemeral() -> SourceSpan<'ws> {
         SourceSpan {
-            source_file: SourceFile::from_string(EPHEMERAL_FILE, ""),
+            source_file: SourceFile {
+                inner: &EPHEMERAL_SOURCE_FILE_INNER,
+            },
             start_byte: 0,
             end_byte: 0,
         }
@@ -44,7 +50,7 @@ impl SourceSpan {
     }
 }
 
-impl Debug for SourceSpan {
+impl<'ws> Debug for SourceSpan<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

@@ -4,13 +4,13 @@ use crate::frontend::lex::token::Token;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
-pub struct QualifiedName {
-    pub parts: Vec<Token>,
+pub struct QualifiedName<'ws> {
+    pub parts: Vec<Token<'ws>>,
 }
 
-impl AstData for QualifiedName {}
+impl<'ws> AstData for QualifiedName<'ws> {}
 
-impl<'a> Display for AstNode<'a, QualifiedName> {
+impl<'ws> Display for AstNode<'ws, QualifiedName<'ws>> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
         for part in &self.data.parts {

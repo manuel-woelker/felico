@@ -1,4 +1,3 @@
-use crate::infra::diagnostic::InterpreterDiagnostic;
 use error_stack::Report;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -10,8 +9,8 @@ pub enum FelicoError {
         cause: std::io::Error,
     },
 
-    #[error("{0:#?}")]
-    Diagnostic(#[from] InterpreterDiagnostic),
+    #[error("{message}")]
+    Diagnostic { message: String },
 
     #[error("{message}")]
     Message { message: String },
@@ -82,6 +81,15 @@ impl<'a> From<&'a str> for FelicoError {
     }
 }
 
+impl<'a> From<InterpreterDiagnostic<'a>> for FelicoError {
+    #[track_caller]
+    fn from(diagnostic: InterpreterDiagnostic<'a>) -> Self {
+        FelicoError::Diagnostic {
+            message: diagnostic.to_pretty_string(),
+        }
+    }
+}
+
 pub trait FelicoResultExt<T, E>: Sized {
     #[track_caller]
     fn whatever_context(self, message: &str) -> FelicoResult<T>;
@@ -120,6 +128,21 @@ pub fn failed<T: Into<String>>(message: T) -> FelicoReport {
     .into()
 }
 
+pub fn unwrap_error_result_to_string<T>(result: &FelicoResult<T>) -> String {
+    let mut string = String::new();
+    if let Err(stack) = &result {
+        for frame in stack.report.frames() {
+            if let Some(error) = frame.downcast_ref::<FelicoError>() {
+                string += format!("{}", error).trim();
+                string += "\n\n";
+            }
+        }
+    } else {
+        panic!("Expected error result, but got Ok(...) instead");
+    }
+    string
+}
+
 #[allow(unused)]
 macro_rules! bail {
     ($($t:tt)*) => {{
@@ -129,6 +152,7 @@ macro_rules! bail {
 }
 //use crate::interpret::value::Panic;
 
+use crate::infra::diagnostic::InterpreterDiagnostic;
 pub(crate) use bail;
 
 #[cfg(test)]

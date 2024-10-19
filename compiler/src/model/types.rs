@@ -98,7 +98,7 @@ impl<'a> Eq for Type<'a> {}
 #[derive(Debug)]
 pub struct TypeInner<'a> {
     pub name: FullName,
-    pub declaration_site: SourceSpan,
+    pub declaration_site: SourceSpan<'a>,
     pub kind: TypeKind<'a>,
 }
 
@@ -113,7 +113,7 @@ pub enum TypeKind<'a> {
     Namespace,
     Function(FunctionType<'a>),
     Struct(StructType<'a>),
-    Trait(TraitType),
+    Trait(TraitType<'a>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -124,7 +124,7 @@ pub struct FunctionType<'a> {
 
 #[derive(Debug)]
 pub struct StructType<'a> {
-    pub name: Token,
+    pub name: Token<'a>,
     pub fields: HashMap<SharedString, StructField<'a>>,
 }
 
@@ -136,12 +136,12 @@ impl<'a> PartialEq for StructType<'a> {
 }
 
 #[derive(Debug)]
-pub struct TraitType {
-    pub name: Token,
+pub struct TraitType<'a> {
+    pub name: Token<'a>,
 }
 
-impl Eq for TraitType {}
-impl PartialEq for TraitType {
+impl<'a> Eq for TraitType<'a> {}
+impl<'a> PartialEq for TraitType<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.name.lexeme() == other.name.lexeme()
     }
@@ -149,13 +149,13 @@ impl PartialEq for TraitType {
 
 #[derive(Debug)]
 pub struct StructField<'a> {
-    pub name_token: Token,
+    pub name_token: Token<'a>,
     pub name: SharedString,
     pub ty: Type<'a>,
 }
 
 impl<'a> StructField<'a> {
-    pub fn new(name_token: &Token, ty: Type<'a>) -> Self {
+    pub fn new(name_token: &Token<'a>, ty: Type<'a>) -> Self {
         Self {
             name: SharedString::from(name_token.lexeme()),
             name_token: name_token.clone(),
