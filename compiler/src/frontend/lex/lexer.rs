@@ -8,10 +8,10 @@ use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::{ByteOffset, SourceSpan};
 
 #[derive(Debug)]
-pub struct Lexer<'a> {
+pub struct Lexer<'ws> {
     chars_left: i64,
-    char_iter: Chars<'a>,
-    source_file: SourceFile<'a>,
+    char_iter: Chars<'ws>,
+    source_file: SourceFile<'ws>,
     current_offset: ByteOffset,
     start_offset: ByteOffset,
     lexeme_collector: Vec<char>,
@@ -36,8 +36,8 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "impl" => TokenType::Impl,
 };
 
-impl<'a> Lexer<'a> {
-    pub fn emit_token(&mut self, token_type: TokenType) -> Token<'a> {
+impl<'ws> Lexer<'ws> {
+    pub fn emit_token(&mut self, token_type: TokenType) -> Token<'ws> {
         let token = Token {
             token_type,
             location: SourceSpan {
@@ -82,7 +82,7 @@ impl<'a> Lexer<'a> {
         true
     }
 
-    pub(crate) fn lex_string(&mut self) -> Token<'a> {
+    pub(crate) fn lex_string(&mut self) -> Token<'ws> {
         while self.next_char != '"' && !self.is_at_end() {
             self.advance();
         }
@@ -92,7 +92,7 @@ impl<'a> Lexer<'a> {
         self.emit_token(TokenType::String)
     }
 
-    pub(crate) fn lex_number(&mut self) -> Token<'a> {
+    pub(crate) fn lex_number(&mut self) -> Token<'ws> {
         while is_digit(self.next_char) {
             self.advance();
         }
@@ -107,7 +107,7 @@ impl<'a> Lexer<'a> {
         self.emit_token(TokenType::Number)
     }
 
-    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token<'a> {
+    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token<'ws> {
         while is_alpha_numeric(self.next_char) {
             self.advance();
         }
@@ -128,7 +128,7 @@ impl<'a> Lexer<'a> {
         self.lexeme_collector.clear();
     }
 
-    pub fn new(source_file: SourceFile<'a>) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile<'ws>) -> FelicoResult<Self> {
         let mut char_iter = source_file.source_code().chars();
         let mut next_char = '\0';
         let mut next_next_char = '\0';
@@ -157,8 +157,8 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+impl<'ws> Iterator for Lexer<'ws> {
+    type Item = Token<'ws>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {

@@ -20,7 +20,7 @@ struct WorkspaceInner {
     string_arena: Arena<str>,
 }
 
-pub type WorkspaceString<'a> = &'a str;
+pub type WorkspaceString<'ws> = &'ws str;
 
 impl Workspace {
     pub fn new() -> Self {
@@ -99,14 +99,14 @@ mod tests {
         assert_eq!(string_foo as *const _, string_foo2 as *const _);
     }
 
-    struct Tester<'a> {
-        pub workspace: &'a Workspace,
-        pub strings: Vec<&'a str>,
+    struct Tester<'ws> {
+        pub workspace: &'ws Workspace,
+        pub strings: Vec<&'ws str>,
     }
 
-    impl<'a> Tester<'a> {
-        // Note to self: this "&mut self" reference must NOT have a 'a lifetime, since this causes the borrow to live too long
-        pub fn add_string(&mut self) -> WorkspaceString<'a> {
+    impl<'ws> Tester<'ws> {
+        // Note to self: this "&mut self" reference must NOT have a 'ws lifetime, since this causes the borrow to live too long
+        pub fn add_string(&mut self) -> WorkspaceString<'ws> {
             let string = self.workspace.alloc_str("xyz");
             self.strings.push(string);
             string

@@ -10,24 +10,24 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct TypeFactory<'a> {
-    inner: Rc<TypeFactoryInner<'a>>,
+pub struct TypeFactory<'ws> {
+    inner: Rc<TypeFactoryInner<'ws>>,
 }
 
 macro_rules! factory_fns {
         ($($id:ident),+) => {
     #[derive(Debug)]
-struct TypeFactoryInner<'a> {
+struct TypeFactoryInner<'ws> {
             workspace: Workspace,
             $(
-            $id: Type<'a>,
+            $id: Type<'ws>,
             )+
 }
 
 
-    impl <'a> TypeFactory<'a>  {
+    impl <'ws> TypeFactory<'ws>  {
             $(
-            pub fn $id(&self) -> Type<'a> {
+            pub fn $id(&self) -> Type<'ws> {
                 self.inner.$id.clone()
             }
             )+
@@ -39,9 +39,9 @@ struct TypeFactoryInner<'a> {
 factory_fns!(bool, unit, i64, f64, ty, str, unknown, unresolved, never);
 //factory_fns!(bool);
 
-impl<'a> TypeFactory<'a> {
-    pub fn new(workspace: &'a Workspace) -> TypeFactory<'a> {
-        let make_type = |name: &str, kind: TypeKind<'a>| -> Type<'a> {
+impl<'ws> TypeFactory<'ws> {
+    pub fn new(workspace: &'ws Workspace) -> TypeFactory<'ws> {
+        let make_type = |name: &str, kind: TypeKind<'ws>| -> Type<'ws> {
             Type {
                 inner: workspace.alloc(TypeInner {
                     name: name.into(),
@@ -78,11 +78,11 @@ impl<'a> TypeFactory<'a> {
     }
 
     pub fn make_type<S: Into<FullName>>(
-        &'a self,
+        &'ws self,
         name: S,
-        kind: TypeKind<'a>,
-        declaration_site: SourceSpan<'a>,
-    ) -> Type<'a> {
+        kind: TypeKind<'ws>,
+        declaration_site: SourceSpan<'ws>,
+    ) -> Type<'ws> {
         Type {
             inner: self.inner.workspace.alloc(TypeInner {
                 name: name.into(),
@@ -93,10 +93,10 @@ impl<'a> TypeFactory<'a> {
     }
 
     pub fn function(
-        &'a self,
-        parameter_types: Vec<Type<'a>>,
-        return_type: Type<'a>,
-        declaration_site: SourceSpan<'a>,
+        &'ws self,
+        parameter_types: Vec<Type<'ws>>,
+        return_type: Type<'ws>,
+        declaration_site: SourceSpan<'ws>,
     ) -> Type {
         let name = "Fn(".to_string()
             + &parameter_types
@@ -117,11 +117,11 @@ impl<'a> TypeFactory<'a> {
     }
 
     pub fn make_struct(
-        &'a self,
-        name: &Token<'a>,
-        fields: HashMap<SharedString, StructField<'a>>,
-        declaration_site: SourceSpan<'a>,
-    ) -> Type<'a> {
+        &'ws self,
+        name: &Token<'ws>,
+        fields: HashMap<SharedString, StructField<'ws>>,
+        declaration_site: SourceSpan<'ws>,
+    ) -> Type<'ws> {
         self.make_type(
             name.lexeme(),
             TypeKind::Struct(StructType {
@@ -134,14 +134,14 @@ impl<'a> TypeFactory<'a> {
 
     pub fn make_namespace(
         &self,
-        name: &Token<'a>,
+        name: &Token<'ws>,
         //        symbol_map: HashMap<SharedString, InterpreterValue>,
-        declaration_site: SourceSpan<'a>,
+        declaration_site: SourceSpan<'ws>,
     ) -> Type {
         self.make_type(name.lexeme(), TypeKind::Namespace, declaration_site)
     }
 
-    pub fn make_trait(&self, name: &Token<'a>, declaration_site: SourceSpan<'a>) -> Type {
+    pub fn make_trait(&self, name: &Token<'ws>, declaration_site: SourceSpan<'ws>) -> Type {
         self.make_type(
             name.lexeme(),
             TypeKind::Trait(TraitType { name: name.clone() }),
@@ -150,10 +150,10 @@ impl<'a> TypeFactory<'a> {
     }
 
     pub fn make_ephemeral<S: Into<SharedString>>(
-        &'a self,
+        &'ws self,
         name: S,
-        kind: TypeKind<'a>,
-    ) -> Type<'a> {
+        kind: TypeKind<'ws>,
+    ) -> Type<'ws> {
         self.make_type(name, kind, SourceSpan::ephemeral())
     }
 }

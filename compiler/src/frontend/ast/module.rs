@@ -5,9 +5,9 @@ use crate::infra::full_name::FullName;
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct Module<'a> {
+pub struct Module<'ws> {
     pub name: FullName,
-    pub stmts: Vec<AstNode<'a, Stmt<'a>>>,
+    pub stmts: Vec<AstNode<'ws, Stmt<'ws>>>,
 }
 
-impl<'a> AstData for Module<'a> {}
+impl<'ws> AstData for Module<'ws> {}

@@ -26,18 +26,18 @@ pub fn diagnostic_to_string(
     )
 }
 
-pub struct InterpreterDiagnostic<'a> {
+pub struct InterpreterDiagnostic<'ws> {
     pub message: String,
     pub code: Option<String>,
     pub severity: Option<Severity>,
     pub help: Option<String>,
     pub labels: Vec<LabeledSpan>,
-    pub source_file: SourceFile<'a>,
+    pub source_file: SourceFile<'ws>,
 }
 
-impl<'a> InterpreterDiagnostic<'a> {
+impl<'ws> InterpreterDiagnostic<'ws> {
     #[track_caller]
-    pub fn new(location: &SourceSpan<'a>, message: String) -> Self {
+    pub fn new(location: &SourceSpan<'ws>, message: String) -> Self {
         let mut diagnostic =
             InterpreterDiagnostic::from_source_file(&location.source_file, message);
         diagnostic.add_primary_label(location);
@@ -46,9 +46,9 @@ impl<'a> InterpreterDiagnostic<'a> {
 
     #[track_caller]
     pub fn new_with(
-        location: &SourceSpan<'a>,
+        location: &SourceSpan<'ws>,
         message: String,
-        mut f: impl FnMut(&mut InterpreterDiagnostic<'a>),
+        mut f: impl FnMut(&mut InterpreterDiagnostic<'ws>),
     ) -> Self {
         let mut diagnostic = InterpreterDiagnostic::new(location, message);
         f(&mut diagnostic);
@@ -56,7 +56,7 @@ impl<'a> InterpreterDiagnostic<'a> {
     }
 
     #[track_caller]
-    pub fn from_source_file(source_file: &SourceFile<'a>, message: String) -> Self {
+    pub fn from_source_file(source_file: &SourceFile<'ws>, message: String) -> Self {
         InterpreterDiagnostic {
             message,
             code: None,
@@ -93,13 +93,13 @@ impl<'a> InterpreterDiagnostic<'a> {
     }
 }
 
-impl<'a> Display for InterpreterDiagnostic<'a> {
+impl<'ws> Display for InterpreterDiagnostic<'ws> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.message)
     }
 }
 
-impl<'a> Debug for InterpreterDiagnostic<'a> {
+impl<'ws> Debug for InterpreterDiagnostic<'ws> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.message)?;
         GraphicalReportHandler::new()
@@ -108,9 +108,9 @@ impl<'a> Debug for InterpreterDiagnostic<'a> {
     }
 }
 
-impl<'a> std::error::Error for InterpreterDiagnostic<'a> {}
+impl<'ws> std::error::Error for InterpreterDiagnostic<'ws> {}
 
-impl<'workspace> Diagnostic for InterpreterDiagnostic<'workspace> {
+impl<'ws> Diagnostic for InterpreterDiagnostic<'ws> {
     fn code<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         self.code
             .as_ref()

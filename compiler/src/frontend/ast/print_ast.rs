@@ -66,13 +66,13 @@ pub fn ast_to_string(ast: &AstNode<Module>) -> FelicoResult<String> {
     AstPrinter::new().print(ast)
 }
 
-struct AstPrinterWorker<'a> {
-    write: BufWriter<&'a mut dyn Write>,
+struct AstPrinterWorker<'write> {
+    write: BufWriter<&'write mut dyn Write>,
     print_locations: bool,
     print_types: bool,
 }
 
-impl<'a> AstPrinterWorker<'a> {
+impl<'write> AstPrinterWorker<'write> {
     fn print_expr(&mut self, ast: &AstNode<Expr>) -> FelicoResult<()> {
         let tree = self.expr_to_tree(ast);
         write!(self.write, "{}", tree)?;

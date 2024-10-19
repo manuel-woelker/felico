@@ -6,12 +6,12 @@ use crate::model::type_factory::TypeFactory;
 use crate::model::types::TypeKind;
 use itertools::Itertools;
 
-pub struct CoreDefinition<'a> {
+pub struct CoreDefinition<'ws> {
     pub name: SharedString,
-    pub value: InterpreterValue<'a>,
+    pub value: InterpreterValue<'ws>,
 }
 
-pub fn get_core_definitions<'a>(type_factory: &'a TypeFactory<'a>) -> Vec<CoreDefinition<'a>> {
+pub fn get_core_definitions<'ws>(type_factory: &'ws TypeFactory<'ws>) -> Vec<CoreDefinition<'ws>> {
     let mut core_definitions = Vec::new();
     let mut add_definition = |name: &str, value: InterpreterValue| {
         core_definitions.push(CoreDefinition {
