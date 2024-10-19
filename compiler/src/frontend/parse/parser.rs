@@ -33,7 +33,7 @@ pub struct Parser<'ws> {
 
 impl<'ws> Parser<'ws> {
     pub fn new(source_file: SourceFile<'ws>, type_factory: TypeFactory<'ws>) -> FelicoResult<Self> {
-        let mut lexer = Lexer::new(source_file.clone()).whatever_context("oops")?;
+        let mut lexer = Lexer::new(source_file).whatever_context("oops")?;
         let current_token = lexer
             .next()
             .ok_or_else(|| failed("Expected at least one token"))?;
@@ -319,7 +319,7 @@ impl<'ws> Parser<'ws> {
                         parts: vec![Token {
                             token_type: TokenType::Identifier,
                             location: SourceSpan {
-                                source_file: self.source_file.clone(),
+                                source_file: self.source_file,
                                 start_byte: start_location.start_byte,
                                 end_byte: start_location.end_byte,
                             },

@@ -41,7 +41,7 @@ impl<'ws> Lexer<'ws> {
         let token = Token {
             token_type,
             location: SourceSpan {
-                source_file: self.source_file.clone(),
+                source_file: self.source_file,
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
             },

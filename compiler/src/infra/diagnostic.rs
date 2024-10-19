@@ -38,8 +38,7 @@ pub struct InterpreterDiagnostic<'ws> {
 impl<'ws> InterpreterDiagnostic<'ws> {
     #[track_caller]
     pub fn new(location: &SourceSpan<'ws>, message: String) -> Self {
-        let mut diagnostic =
-            InterpreterDiagnostic::from_source_file(&location.source_file, message);
+        let mut diagnostic = InterpreterDiagnostic::from_source_file(location.source_file, message);
         diagnostic.add_primary_label(location);
         diagnostic
     }
@@ -56,14 +55,14 @@ impl<'ws> InterpreterDiagnostic<'ws> {
     }
 
     #[track_caller]
-    pub fn from_source_file(source_file: &SourceFile<'ws>, message: String) -> Self {
+    pub fn from_source_file(source_file: SourceFile<'ws>, message: String) -> Self {
         InterpreterDiagnostic {
             message,
             code: None,
             severity: None,
             help: None,
             labels: Vec::new(),
-            source_file: source_file.clone(),
+            source_file,
         }
     }
 
