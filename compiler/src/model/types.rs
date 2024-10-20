@@ -37,56 +37,7 @@ impl<'ws> Display for Type<'ws> {
         write!(f, "❬{}❭", self.inner.name)
     }
 }
-/*
-impl <'ws> Type {
-    pub fn new<S: Into<FullName>>(name: S, kind: TypeKind, declaration_site: SourceSpan) -> Self {
-        Self {
-            inner: Rc::new(TypeInner {
-                name: name.into(),
-                kind,
-                declaration_site,
-            }),
-        }
-    }
 
-    pub fn new_ephemeral<S: Into<SharedString>>(name: S, kind: TypeKind) -> Self {
-        Self::new(name, kind, SourceSpan::ephemeral())
-    }
-
-    pub fn primitive(name: &str, primitive_type: PrimitiveType) -> Self {
-        Self::new_ephemeral(name, TypeKind::Primitive(primitive_type))
-    }
-
-    pub fn function(
-        name: &str,
-        parameter_types: Vec<Type>,
-        return_type: Type,
-        declaration_site: SourceSpan,
-    ) -> Self {
-        Self::new(
-            name,
-            TypeKind::Function(FunctionType {
-                parameter_types,
-                return_type,
-            }),
-            declaration_site,
-        )
-    }
-
-    pub fn ty() -> Self {
-        Self::new_ephemeral("Type", TypeKind::Type)
-    }
-
-    pub fn name(&self) -> &FullName {
-        &self.inner.name
-    }
-    pub fn short_name(&self) -> &str {
-        self.inner.name.short_name()
-    }
-}
-
-
- */
 impl<'ws> PartialEq<Self> for Type<'ws> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.kind == other.inner.kind

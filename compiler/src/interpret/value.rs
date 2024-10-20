@@ -249,15 +249,6 @@ impl Display for Panic {
         for frame in self.stack.iter().rev() {
             f.write_str("\n    ")?;
             f.write_str(frame)?;
-            /*            let source_span = &frame.call_source_span;
-            write!(
-                f,
-                "\n\t[{}:{}:{}] {}",
-                source_span.source_file.filename(),
-                source_span.get_line_number(),
-                source_span.get_column_number(),
-                source_span.get_source_code(),
-            )?;*/
         }
         Ok(())
     }

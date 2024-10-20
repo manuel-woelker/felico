@@ -52,15 +52,7 @@ impl<'ws> Parser<'ws> {
             type_factory: workspace.type_factory(),
         })
     }
-    /*
-        pub fn new_in_memory(
-            filename: &str,
-            source_code: &str,
-            type_factory: TypeFactory<'ws>,
-        ) -> FelicoResult<Self> {
-            Self::new(SourceFile::from_string(filename, source_code), type_factory)
-        }
-    */
+
     pub fn advance(&mut self) {
         std::mem::swap(&mut self.current_token, &mut self.next_token);
         if let Some(token) = self.lexer.next() {

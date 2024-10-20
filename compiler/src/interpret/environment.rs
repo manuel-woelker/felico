@@ -87,9 +87,6 @@ impl<'ws> Environment<'ws> {
         let option = borrowed.values.get(name);
         if let Some(value) = option {
             let mut result = value.clone();
-            /*            if parts.len() <= 1 {
-                return Ok(value);
-            }*/
             for part in parts.iter().skip(1) {
                 let ValueKind::SymbolMap(ref symbol_map) = result.val else {
                     bail!(

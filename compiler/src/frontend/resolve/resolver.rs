@@ -367,16 +367,6 @@ impl<'ws> Resolver<'ws> {
                 impl_stmt.name.lexeme()
             );
         };
-        /*        let Some(value) = &symbol.value else {
-            bail!("No value for symbol entry for {}", impl_stmt.name.lexeme());
-        };
-        let ValueKind::Type(ty) = &value.val else {
-            bail!(
-                "Not a type for symbol entry for {}",
-                impl_stmt.name.lexeme()
-            );
-        };
-        let ty = ty.clone();*/
 
         for method in &mut impl_stmt.methods {
             symbol.symbol_map.lock().unwrap().insert(
@@ -385,17 +375,6 @@ impl<'ws> Resolver<'ws> {
             );
         }
         *ast_info.ty = self.type_factory.unit();
-        /*        self.add_symbol_to_scope(
-            impl_stmt.name.lexeme().into(),
-            Symbol {
-                declaration_site: impl_stmt.name.location.clone(),
-                is_defined: true,
-                ty: ast_info.ty.clone(),
-                value: None, /*Some(InterpreterValue {
-
-                             })*/
-            },
-        )?;*/
         Ok(())
     }
 
