@@ -275,21 +275,10 @@ mod tests {
     use crate::infra::arena::Arena;
     use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
-    /*
 
-    TODO: test non-utf8
-        #[test]
-        fn lex_non_utf8() {
-            let result = Lexer::new(SourceFileHandle::from_string("foo", || Box::new(Cursor::new(b"\xc3\x28")))));
-            let err = result.err().expect("Should error");
-            let expected = expect!["Could not read file 'foo': Could not read to string: stream did not contain valid UTF-8"];
-            expected.assert_eq(&err.to_string());
-        }
-    */
     fn test_lexing(name: &str, input: &str, expected: Expect) {
         let arena = Arena::new();
         let workspace = Workspace::new(&arena);
-        //        let s = Lexer::new(workspace.source_file_from_string(name, input), workspace).unwrap();
         let result = lex_tokens(workspace.source_file_from_string(name, input), workspace).unwrap();
         let result_tokens = result
             .iter()
