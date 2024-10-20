@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 felico-compiler = { path = "../compiler" }
-axum = "0.7.7"
+axum = { version = "0.7.7", features = ["macros"] }
+axum-macros = "0.4.2"
 http = "1.1.0"
 serde = { version = "1.0.210", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["rt-multi-thread"] }
@@ -15,6 +16,7 @@ log = "0.4.22"
 tracing = "0.1.40"
 hyper = "1.4.1"
 http-body-util = "0.1.2"
+owning_ref = "0.4.1"
 
 [[bin]]
 name = "felico-server"

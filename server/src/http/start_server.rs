@@ -1,8 +1,6 @@
 use crate::infra::error::{test_error, ServerError};
 use crate::middleware::logging_middleware::error_logging_middleware;
-use crate::model::bundle::{
-    BundleDescription, BundleIndex, BundleInfo, FunctionDescription, ModuleDescription,
-};
+use crate::model::bundle::{BundleDescription, BundleIndex, BundleInfo};
 use crate::model::model_facade::ModelFacade;
 use axum::extract::{Path, State};
 use axum::routing::get;
@@ -26,8 +24,8 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     // initialize tracing
     tracing_subscriber::fmt::init();
     info!("Starting up;");
-    let arena = Box::leak(Box::new(Arena::new()));
-    let workspace = Workspace::new(arena);
+    let arena = Arena::new();
+    let workspace = Workspace::new(&arena);
     let module = compile_module(
         workspace.source_file_from_path("bundles/test.felico")?,
         workspace,
@@ -64,75 +62,30 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     Ok(())
 }
 
-async fn get_bundle<'ws>(
-    Path((bundle_name, bundle_version)): Path<(String, String)>,
-    State(model_facade): State<ModelFacade<'ws>>,
+async fn get_bundle(
+    Path((bundle_name, _bundle_version)): Path<(String, String)>,
+    State(model_facade): State<ModelFacade>,
 ) -> Result<Json<BundleDescription>, ServerError> {
-    //    Err("foo".into())
     let found = model_facade
         .bundles()
         .iter()
-        .find(|bundle| bundle.name == *bundle_name);
+        .find(|bundle| bundle.info.name == *bundle_name);
     let Some(bundle) = found else {
         return Err("Bundle not found".into());
     };
-    Ok(Json(BundleDescription {
-        info: BundleInfo {
-            name: bundle_name,
-            version: bundle_version,
-            /*
-            functions: vec![FunctionDescription {
-                name: "debug_print".to_string(),
-                signature: "fun debug_print(item: any)".to_string(),
-            }],*/
-        },
-        modules: bundle
-            .modules
-            .iter()
-            .map(|module| ModuleDescription {
-                name: module.name.to_string(),
-                functions: module
-                    .module_entries
-                    .values()
-                    .map(|entry| FunctionDescription {
-                        name: entry.name.to_string(),
-                        signature: entry.type_signature.clone(),
-                    })
-                    .collect(),
-            })
-            .collect(),
-        /*        functions: vec![FunctionDescription {
-            name: "debug_print".to_string(),
-            signature: "fun debug_print(item: any)".to_string(),
-        }],*/
-    }))
+    Ok(Json(bundle.clone()))
 }
 
-async fn get_bundles<'ws>(
-    State(model_facade): State<ModelFacade<'ws>>,
-) -> (StatusCode, Json<BundleIndex>) {
+async fn get_bundles(State(model_facade): State<ModelFacade>) -> (StatusCode, Json<BundleIndex>) {
     let bundle_index = BundleIndex {
         bundles: model_facade
             .bundles()
             .iter()
             .map(|module| BundleInfo {
-                name: module.name.to_string(),
-                version: "0.0.1".to_string(),
+                name: module.info.name.to_string(),
+                version: module.info.version.to_string(),
             })
             .collect::<Vec<_>>(),
     };
-    /*    let bundle_index = BundleIndex {
-        bundles: vec![
-            BundleInfo {
-                name: "std".to_string(),
-                version: "0.0.2".to_string(),
-            },
-            BundleInfo {
-                name: "test".to_string(),
-                version: "0.0.1".to_string(),
-            },
-        ],
-    };*/
-
     (StatusCode::CREATED, Json(bundle_index))
 }
