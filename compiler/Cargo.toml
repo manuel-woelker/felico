@@ -6,24 +6,18 @@ edition = "2021"
 [dependencies]
 thiserror = "1.0.64"
 error-stack = "0.5.0"
-arcstr = "1.2.0"
 miette = { version = "7.2.0", features = ["fancy"] }
-utf8-chars = "3.0.4"
 phf = { version = "0.11.2", features = ["macros"] }
-ouroboros = "0.18.4"
 termtree = "0.5.1"
-once_cell = "1.20.1"
 itertools = "0.13.0"
 bumpalo = "3.16.0"
 internment = { version = "0.8.6", features = ["arena"] }
-owning_ref = "0.4.1"
 log = "0.4.22"
 unscanny = "0.1.0"
 
 [dev-dependencies]
 expect-test = "1.5.0"
-yaml-rust = "0.4.5"
-libtest-mimic = "0.7.3"
+libtest-mimic = "0.8.1"
 pretty_assertions = "1.4.1"
 located_yaml = "0.2.1"
 
