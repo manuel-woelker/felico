@@ -48,6 +48,9 @@ impl Arena {
     }
 
     pub fn make_full_name(&self, name: &str) -> FullName<'_> {
+        if name.is_empty() {
+            panic!("name cannot be empty");
+        }
         let interned_name = self.intern(name);
         let inner = self.alloc(FullNameInner {
             name_part: interned_name,

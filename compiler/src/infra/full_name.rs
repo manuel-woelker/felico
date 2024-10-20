@@ -60,6 +60,7 @@ impl<'ws> FullName<'ws> {
 mod tests {
     use crate::infra::arena::Arena;
     use crate::infra::full_name::FullName;
+    use crate::infra::test_util::catch_unwind_silent;
 
     fn assert_name(name: &FullName, expected: &str) {
         assert_eq!(format!("{}", name), expected);
@@ -85,7 +86,6 @@ mod tests {
     }
     #[test]
     fn equals() {
-        /*
         fn assert_eq(a: &FullName, b: &FullName) {
             assert_eq!(a, b);
             assert_eq!(b, a);
@@ -94,45 +94,46 @@ mod tests {
             assert_ne!(a, b);
             assert_ne!(b, a);
         }
+        let arena = Arena::new();
 
-        let root: FullName = "foo".into();
-        let root2: FullName = "foo".into();
+        let root: FullName = arena.make_full_name("foo");
+        let root2: FullName = arena.make_full_name("foo");
         assert_eq(&root, &root);
         assert_eq(&root, &root2);
         assert_eq(&root2, &root);
-        let child = root.child("bar");
-        let child2 = root2.child("bar");
-        let child3 = root.child("bar");
+        let child = arena.make_child_name(root, "bar");
+        let child2 = arena.make_child_name(root2, "bar");
+        let child3 = arena.make_child_name(root, "bar");
 
         assert_eq(&child, &child);
         assert_eq(&child, &child2);
         assert_eq(&child, &child3);
 
-        let grand_child = child.child("baz");
-        let grand_child2 = child2.child("baz");
+        let grand_child = arena.make_child_name(child, "baz");
+        let grand_child2 = arena.make_child_name(child2, "baz");
         assert_eq(&grand_child, &grand_child2);
 
         assert_ne(&root, &child);
         assert_ne(&root, &grand_child);
         assert_ne(&child, &grand_child);
 
-        let other_root: FullName = "other".into();
+        let other_root: FullName = arena.make_full_name("other");
         assert_ne(&root, &other_root);
 
-        let other_child = other_root.child("bar");
-        let other_child2 = root.child("other");
+        let other_child = arena.make_child_name(other_root, "bar");
+        let other_child2 = arena.make_child_name(root, "other");
 
         assert_ne(&other_child, &child);
         assert_ne(&other_child2, &child);
-        assert_ne(&other_child, &other_child2);*/
+        assert_ne(&other_child, &other_child2);
     }
-    /*
     #[test]
     fn assert_not_empty() {
         let err = catch_unwind_silent(|| {
-            let _name = FullName::from("");
+            let arena = Arena::new();
+            let _name = arena.make_full_name("");
         })
         .unwrap_err();
-        assert_eq!(*err.downcast::<&str>().unwrap(), "name part is empty");
-    }*/
+        assert_eq!(*err.downcast::<&str>().unwrap(), "name cannot be empty");
+    }
 }
