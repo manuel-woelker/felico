@@ -58,11 +58,11 @@ impl<'ws> TypeFactory<'ws> {
                 unit: make_type(
                     "Unit",
                     TypeKind::Struct(StructType {
-                        name: Token {
-                            token_type: TokenType::Identifier,
-                            location: SourceSpan::ephemeral(),
-                            value: "Unit",
-                        },
+                        name: arena.make_token(
+                            TokenType::Identifier,
+                            SourceSpan::ephemeral(),
+                            "Unit",
+                        ),
                         fields: Default::default(),
                     }),
                 ),
@@ -126,7 +126,7 @@ impl<'ws> TypeFactory<'ws> {
         self.make_type(
             name.lexeme(),
             TypeKind::Struct(StructType {
-                name: name.clone(),
+                name: *name,
                 fields,
             }),
             declaration_site,
@@ -145,7 +145,7 @@ impl<'ws> TypeFactory<'ws> {
     pub fn make_trait(&self, name: &Token<'ws>, declaration_site: SourceSpan<'ws>) -> Type<'ws> {
         self.make_type(
             name.lexeme(),
-            TypeKind::Trait(TraitType { name: name.clone() }),
+            TypeKind::Trait(TraitType { name: *name }),
             declaration_site,
         )
     }

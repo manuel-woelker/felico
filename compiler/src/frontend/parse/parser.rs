@@ -22,6 +22,7 @@ use crate::model::workspace::Workspace;
 
 #[derive(Debug)]
 pub struct Parser<'ws> {
+    workspace: Workspace<'ws>,
     lexer: Lexer<'ws>,
     current_token: Token<'ws>,
     next_token: Token<'ws>,
@@ -32,11 +33,11 @@ pub struct Parser<'ws> {
 
 impl<'ws> Parser<'ws> {
     pub fn new(source_file: SourceFile<'ws>, workspace: Workspace<'ws>) -> FelicoResult<Self> {
-        let mut lexer = Lexer::new(source_file).whatever_context("oops")?;
+        let mut lexer = Lexer::new(source_file, workspace).whatever_context("oops")?;
         let current_token = lexer
             .next()
             .ok_or_else(|| failed("Expected at least one token"))?;
-        let next_token = lexer.next().unwrap_or(current_token.clone());
+        let next_token = lexer.next().unwrap_or(current_token);
         let file_path = source_file.filename();
         let file_name = file_path
             .rsplit_once("/")
@@ -44,6 +45,7 @@ impl<'ws> Parser<'ws> {
             .unwrap_or(file_path);
         let module_name = file_name.split_once(".").map(|a| a.0).unwrap_or(file_name);
         Ok(Parser {
+            workspace,
             module_name: workspace.make_full_name(module_name),
             lexer,
             current_token,
@@ -59,7 +61,7 @@ impl<'ws> Parser<'ws> {
             self.next_token = token;
         } else {
             // EOF
-            self.next_token = self.current_token.clone();
+            self.next_token = self.current_token;
         }
     }
 
@@ -83,11 +85,11 @@ impl<'ws> Parser<'ws> {
         let main_stmt = self.create_node(
             &start_location,
             Stmt::Fun(FunStmt {
-                name: Token {
-                    token_type: TokenType::Identifier,
-                    location: start_location.clone(),
-                    value: "main",
-                },
+                name: self.workspace.make_token(
+                    TokenType::Identifier,
+                    start_location.clone(),
+                    "main",
+                ),
                 parameters: vec![],
                 return_type,
                 body,
@@ -107,7 +109,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
 
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
-        while self.current_token.token_type != TokenType::EOF {
+        while self.current_token.token_type() != TokenType::EOF {
             if self.is_at(TokenType::Semicolon) {
                 self.advance();
                 continue;
@@ -126,7 +128,7 @@ impl<'ws> Parser<'ws> {
     }
 
     fn parse_decl(&mut self) -> FelicoResult<AstNode<'ws, Stmt<'ws>>> {
-        match self.current_token.token_type {
+        match self.current_token.token_type() {
             TokenType::Let => {
                 let node = self.parse_let_stmt()?;
                 self.consume(TokenType::Semicolon, "Expected statement terminator (';')")?;
@@ -306,15 +308,15 @@ impl<'ws> Parser<'ws> {
             Expr::Variable(VarUse {
                 name: AstNode::new(
                     QualifiedName {
-                        parts: vec![Token {
-                            token_type: TokenType::Identifier,
-                            location: SourceSpan {
+                        parts: vec![self.workspace.make_token(
+                            TokenType::Identifier,
+                            SourceSpan {
                                 source_file: self.source_file,
                                 start_byte: start_location.start_byte,
                                 end_byte: start_location.end_byte,
                             },
-                            value: "unit",
-                        }],
+                            "unit",
+                        )],
                     },
                     SourceSpan::ephemeral(),
                     self.type_factory.unknown(),
@@ -325,7 +327,7 @@ impl<'ws> Parser<'ws> {
     }
 
     fn parse_stmt(&mut self) -> FelicoResult<AstNode<'ws, Stmt<'ws>>> {
-        match self.current_token.token_type {
+        match self.current_token.token_type() {
             TokenType::While => self.parse_while(),
             //            TokenType::For => self.parse_for(),
             _ => {
@@ -347,7 +349,7 @@ impl<'ws> Parser<'ws> {
     fn parse_return(&mut self) -> FelicoResult<AstNode<'ws, Expr<'ws>>> {
         let start_location = self.current_location();
         self.consume(TokenType::Return, "return expected")?;
-        let expression = if self.current_token.token_type != TokenType::Semicolon {
+        let expression = if self.current_token.token_type() != TokenType::Semicolon {
             self.parse_expr()?
         } else {
             self.create_node(&start_location, Expr::Literal(LiteralExpr::Unit))?
@@ -454,7 +456,7 @@ impl<'ws> Parser<'ws> {
         self.consume(TokenType::LeftBrace, "Expected left brace ('{')")?;
         let mut stmts: Vec<AstNode<Stmt>> = vec![];
 
-        while self.current_token.token_type != TokenType::RightBrace {
+        while self.current_token.token_type() != TokenType::RightBrace {
             if self.is_at(TokenType::Semicolon) {
                 self.advance();
                 continue;
@@ -531,7 +533,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
         let mut expr = self.parse_and()?;
         while self.is_at(TokenType::Or) {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_and()?;
             expr = self.create_node(
@@ -550,7 +552,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
         let mut expr = self.parse_equality()?;
         while self.is_at(TokenType::And) {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_equality()?;
             expr = self.create_node(
@@ -568,7 +570,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
         let mut expr = self.parse_comparison()?;
         while self.is_at(TokenType::BangEqual) || self.is_at(TokenType::EqualEqual) {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_comparison()?;
             expr = self.create_node(
@@ -591,7 +593,7 @@ impl<'ws> Parser<'ws> {
             || self.is_at(TokenType::Greater)
             || self.is_at(TokenType::GreaterEqual)
         {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_term()?;
             expr = self.create_node(
@@ -610,7 +612,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
         let mut expr = self.parse_factor()?;
         while self.is_at(TokenType::Plus) || self.is_at(TokenType::Minus) {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_factor()?;
             expr = self.create_node(
@@ -629,7 +631,7 @@ impl<'ws> Parser<'ws> {
         let start_location = self.current_location();
         let mut expr = self.parse_unary()?;
         while self.is_at(TokenType::Star) || self.is_at(TokenType::Slash) {
-            let operator = self.current_token.clone();
+            let operator = self.current_token;
             self.advance();
             let right = self.parse_unary()?;
             expr = self.create_node(
@@ -687,7 +689,7 @@ impl<'ws> Parser<'ws> {
     fn parse_primary(&mut self) -> FelicoResult<AstNode<'ws, Expr<'ws>>> {
         let result = self.create_node(
             &self.current_location(),
-            Expr::Literal(match self.current_token.token_type {
+            Expr::Literal(match self.current_token.token_type() {
                 TokenType::Number => {
                     let number: f64 = self.current_token.lexeme().parse().map_err(|e| {
                         format!(
@@ -730,10 +732,10 @@ impl<'ws> Parser<'ws> {
                 TokenType::Return => return self.parse_return(),
                 _ => {
                     return Err(InterpreterDiagnostic::new(
-                        &self.current_token.location,
+                        self.current_token.location(),
                         format!(
                             "Unexpected token '{}' in expression",
-                            self.current_token.token_type
+                            self.current_token.token_type()
                         ),
                     )
                     .into());
@@ -747,7 +749,7 @@ impl<'ws> Parser<'ws> {
     fn parse_qualified_name(&mut self) -> FelicoResult<AstNode<'ws, QualifiedName<'ws>>> {
         let start_location = self.current_location();
         let token = self.consume(TokenType::Identifier, "expected identifier")?;
-        let mut last_location = token.location.clone();
+        let mut last_location = token.location().clone();
         let mut parts = vec![token];
         while self.is_at(TokenType::ColonColon) {
             self.advance();
@@ -755,7 +757,7 @@ impl<'ws> Parser<'ws> {
                 TokenType::Identifier,
                 "expected identifier after '::' in qualified name",
             )?;
-            last_location = token.location.clone();
+            last_location = token.location().clone();
             parts.push(token);
         }
         let mut result = self.create_node(&start_location, QualifiedName { parts })?;
@@ -766,7 +768,7 @@ impl<'ws> Parser<'ws> {
     #[track_caller]
     fn consume(&mut self, expected_token_type: TokenType, msg: &str) -> FelicoResult<Token<'ws>> {
         if self.is_at(expected_token_type) {
-            let token = self.current_token.clone();
+            let token = self.current_token;
             self.advance();
             Ok(token)
         } else {
@@ -779,10 +781,10 @@ impl<'ws> Parser<'ws> {
     }
 
     fn parse_unary(&mut self) -> FelicoResult<AstNode<'ws, Expr<'ws>>> {
-        match self.current_token.token_type {
+        match self.current_token.token_type() {
             TokenType::Bang | TokenType::Minus => {
                 let start_location = self.current_location();
-                let operator = self.current_token.clone();
+                let operator = self.current_token;
                 self.advance();
                 let right = self.parse_unary()?;
                 self.create_node(&start_location, Expr::Unary(UnaryExpr { operator, right }))
@@ -837,7 +839,7 @@ impl<'ws> Parser<'ws> {
         data: T,
     ) -> FelicoResult<AstNode<'ws, T>> {
         let start = start_location;
-        let end = &self.current_token.location;
+        let end = self.current_token.location();
         let mut location = start.clone();
         if start.start_byte != end.end_byte {
             location.end_byte = end.end_byte;
@@ -846,12 +848,12 @@ impl<'ws> Parser<'ws> {
     }
 
     fn current_location(&self) -> SourceSpan<'ws> {
-        self.current_token.location.clone()
+        self.current_token.location().clone()
     }
 
     #[inline]
     fn is_at(&self, token_type: TokenType) -> bool {
-        self.current_token.token_type == token_type
+        self.current_token.token_type() == token_type
     }
 }
 

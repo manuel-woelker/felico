@@ -289,11 +289,14 @@ impl<'ws> Resolver<'ws> {
             .iter()
             .map(|parameter| self.resolve_type(&parameter.type_expression))
             .collect::<FelicoResult<Vec<_>>>()?;
-        let function_type =
-            type_factory.function(parameter_types, return_type, fun_stmt.name.location.clone());
+        let function_type = type_factory.function(
+            parameter_types,
+            return_type,
+            fun_stmt.name.location().clone(),
+        );
         self.add_symbol_to_scope(
             name,
-            Symbol::define(&fun_stmt.name.location, &function_type),
+            Symbol::define(fun_stmt.name.location(), &function_type),
         )?;
         *ast_info.ty = function_type;
         let mut function_scope = LexicalScope::new(self.current_scope().base_name);
@@ -306,7 +309,7 @@ impl<'ws> Resolver<'ws> {
             let ty = &self.resolve_type(&parameter.type_expression)?;
             self.add_symbol_to_scope(
                 parameter.name.lexeme(),
-                Symbol::define(&parameter.name.location, ty),
+                Symbol::define(parameter.name.location(), ty),
             )?;
         }
         self.resolve_expr(&mut fun_stmt.body)?;
@@ -327,13 +330,16 @@ impl<'ws> Resolver<'ws> {
             let name = SharedString::from(field.data.name.lexeme());
             fields.insert(name, StructField::new(&field.data.name, field.ty));
         }
-        let ty =
-            type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
+        let ty = type_factory.make_struct(
+            &struct_stmt.name,
+            fields,
+            struct_stmt.name.location().clone(),
+        );
         *ast_info.ty = self.type_factory.ty();
         self.add_symbol_to_scope(
             struct_stmt.name.lexeme(),
             Symbol::define_value(
-                &struct_stmt.name.location,
+                struct_stmt.name.location(),
                 InterpreterValue {
                     val: ValueKind::Type(ty),
                     ty,
@@ -384,10 +390,11 @@ impl<'ws> Resolver<'ws> {
         ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let type_factory = self.type_factory;
-        *ast_info.ty = type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location.clone());
+        *ast_info.ty =
+            type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location().clone());
         self.add_symbol_to_scope(
             trait_stmt.name.lexeme(),
-            Symbol::define(&trait_stmt.name.location, ast_info.ty),
+            Symbol::define(trait_stmt.name.location(), ast_info.ty),
         )?;
         Ok(())
     }
@@ -400,7 +407,7 @@ impl<'ws> Resolver<'ws> {
         let name = let_stmt.name.lexeme();
         self.add_symbol_to_scope(
             name,
-            Symbol::declare(&let_stmt.name.location, &self.type_factory.unknown()),
+            Symbol::declare(let_stmt.name.location(), &self.type_factory.unknown()),
         )?;
         self.resolve_expr(&mut let_stmt.expression)?;
         let expression_type = &let_stmt.expression.ty;
@@ -507,14 +514,14 @@ impl<'ws> Resolver<'ws> {
                             Expr::Variable(VarUse {
                                 name: AstNode::new(
                                     QualifiedName {
-                                        parts: vec![get_expr.name.clone()],
+                                        parts: vec![get_expr.name],
                                     },
-                                    get_expr.name.location.clone(),
+                                    get_expr.name.location().clone(),
                                     symbol.ty,
                                 ),
                                 distance,
                             }),
-                            get_expr.name.location.clone(),
+                            get_expr.name.location().clone(),
                             symbol.ty,
                         );
                         let first_argument = get_expr.object.clone();
@@ -708,7 +715,7 @@ impl<'ws> Resolver<'ws> {
                 .get(field_initializer.field_name.lexeme())
             else {
                 diagnose(
-                    &field_initializer.field_name.location,
+                    field_initializer.field_name.location(),
                     format!(
                         "Struct {} does not have a field named '{}'",
                         type_expression.ty,
@@ -722,7 +729,7 @@ impl<'ws> Resolver<'ws> {
                 .is_assignable_to(&field_initializer.expression.ty, &field.ty)
             {
                 diagnose(
-                    &field_initializer.field_name.location,
+                    field_initializer.field_name.location(),
                     format!(
                         "Cannot coerce field initializer value of type {} to field '{}' type {} in construction of struct {}",
                         field_initializer.expression.ty, field_initializer.field_name.lexeme(), field.ty, type_expression.ty
@@ -731,10 +738,10 @@ impl<'ws> Resolver<'ws> {
             }
             if let Some(previous) = seen_fields.insert(
                 field_initializer.field_name.lexeme(),
-                field_initializer.field_name.location.clone(),
+                field_initializer.field_name.location().clone(),
             ) {
                 let mut diagnostic = InterpreterDiagnostic::new(
-                    &field_initializer.field_name.location,
+                    field_initializer.field_name.location(),
                     format!(
                         "Field {} is already initialized",
                         field_initializer.field_name

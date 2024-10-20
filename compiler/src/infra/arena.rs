@@ -1,4 +1,6 @@
+use crate::frontend::lex::token::{Token, TokenInner, TokenType};
 use crate::infra::full_name::{FullName, FullNameInner};
+use crate::infra::source_span::SourceSpan;
 use crate::model::workspace::WorkspaceString;
 use bumpalo::Bump;
 use internment::Arena as InternmentArena;
@@ -60,6 +62,21 @@ impl Arena {
             parent: Some(parent),
         });
         FullName { inner }
+    }
+
+    pub(crate) fn make_token<'ws>(
+        &'ws self,
+        token_type: TokenType,
+        location: SourceSpan<'ws>,
+        value: &'ws str,
+    ) -> Token<'ws> {
+        Token {
+            inner: self.alloc(TokenInner {
+                token_type,
+                location,
+                value,
+            }),
+        }
     }
 
     pub fn log_memory_usage(&self) {

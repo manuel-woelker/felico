@@ -1,7 +1,9 @@
+use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::arena::Arena;
 use crate::infra::full_name::FullName;
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
+use crate::infra::source_span::SourceSpan;
 use crate::interpret::value::ValueFactory;
 use crate::model::type_factory::TypeFactory;
 use std::fmt::{Debug, Formatter};
@@ -93,6 +95,15 @@ impl<'ws> Workspace<'ws> {
         let file = std::fs::File::open(actual_path)?;
         let source = std::io::read_to_string(file)?;
         Ok(self.source_file_from_string(filename, source))
+    }
+
+    pub(crate) fn make_token(
+        &self,
+        token_type: TokenType,
+        location: SourceSpan<'ws>,
+        value: &'ws str,
+    ) -> Token<'ws> {
+        self.inner.arena.make_token(token_type, location, value)
     }
 }
 

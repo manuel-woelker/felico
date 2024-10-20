@@ -6,9 +6,11 @@ use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::{ByteOffset, SourceSpan};
+use crate::model::workspace::Workspace;
 
 #[derive(Debug)]
 pub struct Lexer<'ws> {
+    workspace: Workspace<'ws>,
     chars_left: i64,
     char_iter: Chars<'ws>,
     source_file: SourceFile<'ws>,
@@ -38,19 +40,22 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
 
 impl<'ws> Lexer<'ws> {
     pub fn emit_token(&mut self, token_type: TokenType) -> Token<'ws> {
-        let token = Token {
+        let token = self.workspace.make_token(
             token_type,
-            location: SourceSpan {
+            SourceSpan {
                 source_file: self.source_file,
                 start_byte: self.start_offset,
                 end_byte: self.current_offset,
             },
-            value: &self.source_file.source_code()
-                [self.start_offset as usize..self.current_offset as usize],
-        };
+            self.current_lexeme(),
+        );
         self.start_offset = self.current_offset;
         self.lexeme_collector.clear();
         token
+    }
+
+    fn current_lexeme(&self) -> &'ws str {
+        &self.source_file.source_code()[self.start_offset as usize..self.current_offset as usize]
     }
 
     pub(crate) fn advance(&mut self) -> char {
@@ -106,16 +111,14 @@ impl<'ws> Lexer<'ws> {
         self.emit_token(TokenType::Number)
     }
 
-    pub(crate) fn lex_identifier_or_keyword(&mut self) -> Token<'ws> {
+    fn lex_identifier_or_keyword(&mut self) -> Token<'ws> {
         while is_alpha_numeric(self.next_char) {
             self.advance();
         }
-        let mut token = self.emit_token(TokenType::Identifier);
-        if let Some(token_type) = KEYWORDS.get(token.lexeme()) {
-            // Keyword
-            token.token_type = *token_type;
-        }
-        token
+        let token_type = KEYWORDS
+            .get(self.current_lexeme())
+            .unwrap_or(&TokenType::Identifier);
+        self.emit_token(*token_type)
     }
 
     fn is_at_end(&self) -> bool {
@@ -127,7 +130,7 @@ impl<'ws> Lexer<'ws> {
         self.lexeme_collector.clear();
     }
 
-    pub fn new(source_file: SourceFile<'ws>) -> FelicoResult<Self> {
+    pub fn new(source_file: SourceFile<'ws>, workspace: Workspace<'ws>) -> FelicoResult<Self> {
         let mut char_iter = source_file.source_code().chars();
         let mut next_char = '\0';
         let mut next_next_char = '\0';
@@ -143,6 +146,7 @@ impl<'ws> Lexer<'ws> {
             chars_left = 0;
         }
         Ok(Self {
+            workspace,
             char_iter,
             source_file,
             current_offset: 0,
@@ -299,17 +303,17 @@ mod tests {
     fn test_lexing(name: &str, input: &str, expected: Expect) {
         let arena = Arena::new();
         let workspace = Workspace::new(&arena);
-        let s = Lexer::new(workspace.source_file_from_string(name, input)).unwrap();
+        let s = Lexer::new(workspace.source_file_from_string(name, input), workspace).unwrap();
         let result = s.collect::<Vec<_>>();
         let result_tokens = result
             .iter()
             .map(|token| {
                 format!(
                     "{:<10} '{}' {}+{}",
-                    token.token_type,
+                    token.token_type(),
                     token.lexeme(),
-                    token.location.start_byte,
-                    token.location.end_byte - token.location.start_byte
+                    token.location().start_byte,
+                    token.location().end_byte - token.location().start_byte
                 )
             })
             .fold(String::new(), |a, b| a + &b + "\n");

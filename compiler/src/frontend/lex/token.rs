@@ -63,8 +63,12 @@ impl Display for TokenType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Token<'ws> {
+    pub inner: &'ws TokenInner<'ws>,
+}
+
+pub struct TokenInner<'ws> {
     pub token_type: TokenType,
     pub location: SourceSpan<'ws>,
     pub value: WorkspaceString<'ws>,
@@ -72,12 +76,12 @@ pub struct Token<'ws> {
 
 impl<'ws> Token<'ws> {
     pub fn lexeme(&self) -> &'ws str {
-        self.value
+        self.inner.value
     }
 
     pub fn is_comparison_operator(&self) -> bool {
         matches!(
-            self.token_type,
+            self.inner.token_type,
             TokenType::Greater
                 | TokenType::GreaterEqual
                 | TokenType::Equal
@@ -86,14 +90,22 @@ impl<'ws> Token<'ws> {
                 | TokenType::LessEqual
         )
     }
+
+    pub fn token_type(&self) -> TokenType {
+        self.inner.token_type
+    }
+
+    pub fn location(&self) -> &SourceSpan<'ws> {
+        &self.inner.location
+    }
 }
 
 impl<'ws> Display for Token<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self.token_type {
+        match &self.inner.token_type {
             TokenType::EOF => f.write_str("End of file"),
             _other => {
-                write!(f, "'{}' ({})", self.lexeme(), self.token_type)
+                write!(f, "'{}' ({})", self.lexeme(), self.inner.token_type)
             }
         }
     }
@@ -101,10 +113,10 @@ impl<'ws> Display for Token<'ws> {
 
 impl<'ws> Debug for Token<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self.token_type {
+        match &self.inner.token_type {
             TokenType::EOF => f.write_str("End of file"),
             _other => {
-                write!(f, "'{}' ({})", self.lexeme(), self.token_type)
+                write!(f, "'{}' ({})", self.lexeme(), self.inner.token_type)
             }
         }
     }

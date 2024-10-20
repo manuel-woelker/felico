@@ -109,7 +109,7 @@ impl<'ws> StructField<'ws> {
     pub fn new(name_token: &Token<'ws>, ty: Type<'ws>) -> Self {
         Self {
             name: SharedString::from(name_token.lexeme()),
-            name_token: name_token.clone(),
+            name_token: *name_token,
             ty,
         }
     }

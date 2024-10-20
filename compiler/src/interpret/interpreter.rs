@@ -194,7 +194,7 @@ impl<'ws> Interpreter<'ws> {
             if call.arguments.len() != callable.arity {
                 return self.create_diagnostic_with(expr, format!("Wrong number of arguments in function call '{}' - Expected: {}, got: {} instead", callable.name, callable.arity, call.arguments.len()), |diagnostic| {
                     if let CallableFun::Defined(fun) = callable.fun.as_ref() {
-                        diagnostic.add_label(&fun.fun_stmt.name.location, format!("'{}' defined here", callable.name));
+                        diagnostic.add_label(fun.fun_stmt.name.location(), format!("'{}' defined here", callable.name));
                     }
                 });
             }
@@ -416,10 +416,10 @@ impl<'ws> Interpreter<'ws> {
         let left_value = self.evaluate_expr(&binary.left)?;
         check_early_return!(left_value);
         // Handle "and" & "or" upfront to handle short-circuiting logic
-        match binary.operator.token_type {
+        match binary.operator.token_type() {
             TokenType::Or | TokenType::And => {
                 if let ValueKind::Bool(left) = left_value.val {
-                    if binary.operator.token_type == TokenType::Or {
+                    if binary.operator.token_type() == TokenType::Or {
                         if left {
                             return Ok(InterpreterValue::val(self.value_factory.bool(true)));
                         }
@@ -437,7 +437,8 @@ impl<'ws> Interpreter<'ws> {
                             &binary.right,
                             format!(
                                 "Unsupported operand for boolean {} operation: {}",
-                                binary.operator.token_type, right_value
+                                binary.operator.token_type(),
+                                right_value
                             ),
                         ),
                     };
@@ -446,7 +447,8 @@ impl<'ws> Interpreter<'ws> {
                         &binary.left,
                         format!(
                             "Unsupported operand for boolean {} operation: {}",
-                            binary.operator.token_type, left_value
+                            binary.operator.token_type(),
+                            left_value
                         ),
                     );
                 }
@@ -456,7 +458,7 @@ impl<'ws> Interpreter<'ws> {
         let right_value = self.evaluate_expr(&binary.right)?;
         check_early_return!(right_value);
         Ok(match (left_value.val, right_value.val) {
-            (ValueKind::F64(left), ValueKind::F64(right)) => match binary.operator.token_type {
+            (ValueKind::F64(left), ValueKind::F64(right)) => match binary.operator.token_type() {
                 TokenType::Minus => self.value_factory.f64(left - right),
                 TokenType::Plus => self.value_factory.f64(left + right),
                 TokenType::Star => self.value_factory.f64(left * right),
@@ -469,7 +471,7 @@ impl<'ws> Interpreter<'ws> {
                 TokenType::LessEqual => self.value_factory.bool(left <= right),
                 _ => {
                     return Err(InterpreterDiagnostic::new(
-                        &binary.operator.location,
+                        binary.operator.location(),
                         format!(
                             "Unsupported binary operator for numbers: {}",
                             binary.operator.lexeme()
@@ -478,7 +480,7 @@ impl<'ws> Interpreter<'ws> {
                     .into());
                 }
             },
-            (ValueKind::String(left), right) => match binary.operator.token_type {
+            (ValueKind::String(left), right) => match binary.operator.token_type() {
                 TokenType::Plus => {
                     return Ok(InterpreterValue::val(
                         self.value_factory.new_string(left + &format!("{}", right)),
@@ -486,7 +488,7 @@ impl<'ws> Interpreter<'ws> {
                 }
                 _ => {
                     return Err(InterpreterDiagnostic::new(
-                        &binary.operator.location,
+                        binary.operator.location(),
                         format!(
                             "Unsupported binary operator for string: {}",
                             binary.operator.lexeme()
@@ -500,7 +502,9 @@ impl<'ws> Interpreter<'ws> {
                     expr,
                     format!(
                         "Operator {:?} not defined for values {:?} and {:?}",
-                        binary.operator.token_type, left, right
+                        binary.operator.token_type(),
+                        left,
+                        right
                     ),
                 );
             }
@@ -516,7 +520,7 @@ impl<'ws> Interpreter<'ws> {
         if sub_expression.should_return_early() {
             return Ok(sub_expression);
         }
-        Ok(match unary.operator.token_type {
+        Ok(match unary.operator.token_type() {
             TokenType::Minus => match sub_expression.val {
                 ValueKind::F64(number) => self.value_factory.f64(-number),
                 _ => {
@@ -529,7 +533,7 @@ impl<'ws> Interpreter<'ws> {
             _ => {
                 return self.create_diagnostic(
                     expr,
-                    format!("Unsupported unary operator {}", unary.operator.token_type),
+                    format!("Unsupported unary operator {}", unary.operator.token_type()),
                 );
             }
         })
