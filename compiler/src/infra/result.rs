@@ -14,13 +14,10 @@ pub enum FelicoError {
 
     #[error("{message}")]
     Message { message: String },
-    /*
-        #[error("Execution panicked: {panic}")]
-        Panic {
-            panic: Panic,
-            //        call_stack: Vec<Location>,
-        },
-    */
+
+    #[error("Execution panicked: {panic}")]
+    Panic { panic: Panic },
+
     #[error("{inner}")]
     Generic {
         inner: Box<dyn std::error::Error + Sync + Send + 'static>,
@@ -81,9 +78,9 @@ impl<'a> From<&'a str> for FelicoError {
     }
 }
 
-impl<'a> From<InterpreterDiagnostic<'a>> for FelicoError {
+impl<'ws> From<InterpreterDiagnostic<'ws>> for FelicoError {
     #[track_caller]
-    fn from(diagnostic: InterpreterDiagnostic<'a>) -> Self {
+    fn from(diagnostic: InterpreterDiagnostic<'ws>) -> Self {
         FelicoError::Diagnostic {
             message: diagnostic.to_pretty_string(),
         }
@@ -153,6 +150,7 @@ macro_rules! bail {
 //use crate::interpret::value::Panic;
 
 use crate::infra::diagnostic::InterpreterDiagnostic;
+use crate::interpret::value::Panic;
 pub(crate) use bail;
 
 #[cfg(test)]

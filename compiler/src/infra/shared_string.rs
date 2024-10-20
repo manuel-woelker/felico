@@ -1,7 +1,7 @@
 use crate::model::workspace::WorkspaceString;
 
-pub type SharedString<'a> = WorkspaceString<'a>;
-pub type Name<'a> = SharedString<'a>;
+pub type SharedString<'ws> = WorkspaceString<'ws>;
+pub type Name<'ws> = SharedString<'ws>;
 
 #[cfg(test)]
 mod tests {

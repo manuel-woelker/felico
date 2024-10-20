@@ -14,9 +14,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct InterpreterValue<'a> {
-    pub val: ValueKind<'a>,
-    pub ty: Type<'a>,
+pub struct InterpreterValue<'ws> {
+    pub val: ValueKind<'ws>,
+    pub ty: Type<'ws>,
 }
 
 #[derive(Clone)]
@@ -31,66 +31,77 @@ pub struct ValueFactoryInner<'ws> {
     type_factory: TypeFactory<'ws>,
 }
 
-impl<'a> ValueFactory<'a> {
-    pub fn new(type_factory: TypeFactory<'a>, arena: &'a Arena) -> Self {
+impl<'ws> ValueFactory<'ws> {
+    pub fn new(type_factory: TypeFactory<'ws>, arena: &'ws Arena) -> Self {
         let inner = arena.alloc(ValueFactoryInner { type_factory });
         Self { inner }
     }
 
-    pub fn f64(&self, value: f64) -> InterpreterValue<'a> {
+    pub fn f64(&self, value: f64) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::F64(value),
             ty: self.inner.type_factory.f64(),
         }
     }
 
-    pub fn i64(&self, value: i64) -> InterpreterValue<'a> {
+    pub fn i64(&self, value: i64) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::I64(value),
             ty: self.inner.type_factory.i64(),
         }
     }
 
-    pub fn bool(&self, value: bool) -> InterpreterValue<'a> {
+    pub fn bool(&self, value: bool) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::Bool(value),
             ty: self.inner.type_factory.bool(),
         }
     }
-    pub fn unit(&self) -> InterpreterValue<'a> {
+    pub fn unit(&self) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::Unit,
             ty: self.inner.type_factory.unit(),
         }
     }
-    pub fn callable(&self, callable: Callable<'a>, ty: Type<'a>) -> InterpreterValue<'a> {
+    pub fn callable(&self, callable: Callable<'ws>, ty: Type<'ws>) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::Callable(callable),
             ty,
         }
     }
 
-    pub fn new_type(&self, ty: Type<'a>) -> InterpreterValue<'a> {
+    pub fn new_type(&self, ty: Type<'ws>) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::Type(ty),
             ty: self.inner.type_factory.ty(),
         }
     }
 
-    pub fn new_string(&self, s: String) -> InterpreterValue<'a> {
+    pub fn new_string(&self, s: String) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::String(s),
             ty: self.inner.type_factory.str(),
         }
     }
 
-    pub fn panic(&self, message: String, stack: Vec<StackFrame>) -> InterpreterValue<'a> {
-        todo!("implement");
-        /*
+    pub fn panic(&self, message: String, stack: Vec<StackFrame>) -> InterpreterValue<'ws> {
+        let stack: Vec<String> = stack
+            .iter()
+            .map(|stack_frame: &StackFrame| {
+                let source_span = &stack_frame.call_source_span;
+                format!(
+                    "[{}:{}:{}] {}",
+                    source_span.source_file.filename(),
+                    source_span.get_line_number(),
+                    source_span.get_column_number(),
+                    source_span.get_source_code(),
+                )
+            })
+            .collect();
         InterpreterValue {
             val: ValueKind::Panic(Rc::new(Panic { message, stack })),
-            ty: self.type_factory.unit(),
-        }*/
+            ty: self.inner.type_factory.unit(),
+        }
     }
 
     pub fn new_native_callable(
@@ -98,12 +109,12 @@ impl<'a> ValueFactory<'a> {
         name: &str,
         arity: usize,
         fun: impl Fn(
-                &mut Interpreter<'a>,
-                Vec<InterpreterValue<'a>>,
-            ) -> FelicoResult<InterpreterValue<'a>>
-            + 'a,
-        ty: Type<'a>,
-    ) -> InterpreterValue<'a> {
+                &mut Interpreter<'ws>,
+                Vec<InterpreterValue<'ws>>,
+            ) -> FelicoResult<InterpreterValue<'ws>>
+            + 'ws,
+        ty: Type<'ws>,
+    ) -> InterpreterValue<'ws> {
         self.callable(
             Callable {
                 name: name.to_string(),
@@ -116,45 +127,45 @@ impl<'a> ValueFactory<'a> {
 
     pub fn make_struct(
         &self,
-        ty: &Type<'a>,
-        fields: HashMap<SharedString<'a>, InterpreterValue<'a>>,
-    ) -> InterpreterValue<'a> {
+        ty: Type<'ws>,
+        fields: HashMap<SharedString<'ws>, InterpreterValue<'ws>>,
+    ) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::StructInstance(StructInstance::new(fields)),
-            ty: *ty,
+            ty,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum ValueKind<'a> {
+pub enum ValueKind<'ws> {
     Unit,
-    Return(Box<InterpreterValue<'a>>),
-    Panic(&'a Panic<'a>),
-    Tuple(Vec<InterpreterValue<'a>>),
+    Return(Box<InterpreterValue<'ws>>),
+    Panic(Rc<Panic>),
+    Tuple(Vec<InterpreterValue<'ws>>),
     String(String),
     Bool(bool),
     F64(f64),
     I64(i64),
-    Callable(Callable<'a>),
-    Type(Type<'a>),
-    StructInstance(StructInstance<'a>),
-    SymbolMap(ValueMap<'a>),
+    Callable(Callable<'ws>),
+    Type(Type<'ws>),
+    StructInstance(StructInstance<'ws>),
+    SymbolMap(ValueMap<'ws>),
 }
 
-impl<'a> Display for InterpreterValue<'a> {
+impl<'ws> Display for InterpreterValue<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.val, f)
     }
 }
 
-impl<'a> Debug for InterpreterValue<'a> {
+impl<'ws> Debug for InterpreterValue<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.val, f)
     }
 }
 
-impl<'a> Display for ValueKind<'a> {
+impl<'ws> Display for ValueKind<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ValueKind::Unit => f.write_str("()"),
@@ -205,38 +216,40 @@ impl<'a> Display for ValueKind<'a> {
 }
 
 #[derive(Clone)]
-pub struct Callable<'a> {
+pub struct Callable<'ws> {
     pub name: String,
     pub arity: usize,
-    pub fun: Rc<CallableFun<'a>>,
+    pub fun: Rc<CallableFun<'ws>>,
 }
 
-pub type NativeFunction<'a> = Box<
-    dyn Fn(&'a mut Interpreter<'a>, Vec<InterpreterValue<'a>>) -> FelicoResult<InterpreterValue<'a>>
-        + 'a,
+pub type NativeFunction<'ws> = Box<
+    dyn Fn(&mut Interpreter<'ws>, Vec<InterpreterValue<'ws>>) -> FelicoResult<InterpreterValue<'ws>>
+        + 'ws,
 >;
 
-pub enum CallableFun<'a> {
-    Native(NativeFunction<'a>),
-    Defined(DefinedFunction<'a>),
+pub enum CallableFun<'ws> {
+    Native(NativeFunction<'ws>),
+    Defined(DefinedFunction<'ws>),
 }
 
-pub struct DefinedFunction<'a> {
-    pub fun_stmt: FunStmt<'a>,
-    pub closure: Environment<'a>,
+pub struct DefinedFunction<'ws> {
+    pub fun_stmt: FunStmt<'ws>,
+    pub closure: Environment<'ws>,
 }
 
-impl<'a> Debug for Callable<'a> {
+impl<'ws> Debug for Callable<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Callable '{}/{}'", self.name, self.arity)
     }
 }
 
-impl<'ws> Display for Panic<'ws> {
+impl Display for Panic {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.message, f)?;
         for frame in self.stack.iter().rev() {
-            let source_span = &frame.call_source_span;
+            f.write_str("\n    ")?;
+            f.write_str(frame)?;
+            /*            let source_span = &frame.call_source_span;
             write!(
                 f,
                 "\n\t[{}:{}:{}] {}",
@@ -244,25 +257,25 @@ impl<'ws> Display for Panic<'ws> {
                 source_span.get_line_number(),
                 source_span.get_column_number(),
                 source_span.get_source_code(),
-            )?;
+            )?;*/
         }
         Ok(())
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Panic<'a> {
+pub struct Panic {
     pub message: String,
-    pub stack: Vec<StackFrame<'a>>,
+    pub stack: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
-pub struct StructInstance<'a> {
-    pub inner: Rc<RefCell<StructInstanceInner<'a>>>,
+pub struct StructInstance<'ws> {
+    pub inner: Rc<RefCell<StructInstanceInner<'ws>>>,
 }
 
-impl<'a> StructInstance<'a> {
-    pub fn new(fields: HashMap<SharedString<'a>, InterpreterValue<'a>>) -> Self {
+impl<'ws> StructInstance<'ws> {
+    pub fn new(fields: HashMap<SharedString<'ws>, InterpreterValue<'ws>>) -> Self {
         Self {
             inner: Rc::new(RefCell::new(StructInstanceInner { fields })),
         }
@@ -270,13 +283,13 @@ impl<'a> StructInstance<'a> {
 
     pub fn set_field(
         &self,
-        field_name: SharedString<'a>,
-        value: InterpreterValue<'a>,
+        field_name: SharedString<'ws>,
+        value: InterpreterValue<'ws>,
     ) -> FelicoResult<()> {
         self.inner.borrow_mut().fields.insert(field_name, value);
         Ok(())
     }
-    pub fn get_field(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue<'a>>> {
+    pub fn get_field(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue<'ws>>> {
         let inner = self.inner.borrow();
         let Some(value) = inner.fields.get(field_name) else {
             return Ok(None);
@@ -286,16 +299,16 @@ impl<'a> StructInstance<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructInstanceInner<'a> {
-    pub fields: HashMap<SharedString<'a>, InterpreterValue<'a>>,
+pub struct StructInstanceInner<'ws> {
+    pub fields: HashMap<SharedString<'ws>, InterpreterValue<'ws>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ValueMap<'a> {
-    pub inner: Rc<RefCell<ValueMapInner<'a>>>,
+pub struct ValueMap<'ws> {
+    pub inner: Rc<RefCell<ValueMapInner<'ws>>>,
 }
 
-impl<'a> ValueMap<'a> {
+impl<'ws> ValueMap<'ws> {
     pub fn new() -> Self {
         Self {
             inner: Rc::new(RefCell::new(ValueMapInner {
@@ -306,13 +319,13 @@ impl<'a> ValueMap<'a> {
 
     pub fn set_symbol(
         &self,
-        field_name: SharedString<'a>,
-        value: InterpreterValue<'a>,
+        field_name: SharedString<'ws>,
+        value: InterpreterValue<'ws>,
     ) -> FelicoResult<()> {
         self.inner.borrow_mut().symbols.insert(field_name, value);
         Ok(())
     }
-    pub fn get_symbol(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue<'a>>> {
+    pub fn get_symbol(&self, field_name: &str) -> FelicoResult<Option<InterpreterValue<'ws>>> {
         let inner = self.inner.borrow();
         let Some(value) = inner.symbols.get(field_name) else {
             return Ok(None);
@@ -322,16 +335,16 @@ impl<'a> ValueMap<'a> {
 }
 
 #[derive(Debug)]
-pub struct ValueMapInner<'a> {
-    pub symbols: HashMap<SharedString<'a>, InterpreterValue<'a>>,
+pub struct ValueMapInner<'ws> {
+    pub symbols: HashMap<SharedString<'ws>, InterpreterValue<'ws>>,
 }
 
-pub trait Namespace<'a> {
-    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue<'a>>>;
+pub trait Namespace<'ws> {
+    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue<'ws>>>;
 }
 
-impl<'a> Namespace<'a> for ValueMap<'a> {
-    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue<'a>>> {
+impl<'ws> Namespace<'ws> for ValueMap<'ws> {
+    fn resolve(&self, name: &str) -> FelicoResult<Option<InterpreterValue<'ws>>> {
         self.get_symbol(name)
     }
 }

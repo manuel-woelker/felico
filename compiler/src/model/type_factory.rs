@@ -138,7 +138,7 @@ impl<'ws> TypeFactory<'ws> {
         name: &Token<'ws>,
         //        symbol_map: HashMap<SharedString, InterpreterValue>,
         declaration_site: SourceSpan<'ws>,
-    ) -> Type {
+    ) -> Type<'ws> {
         self.make_type(name.lexeme(), TypeKind::Namespace, declaration_site)
     }
 

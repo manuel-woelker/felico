@@ -1,4 +1,3 @@
-/*
 use crate::frontend::ast::expr::{
     AssignExpr, BinaryExpr, BlockExpr, CallExpr, CreateStructExpr, Expr, GetExpr, IfExpr,
     LiteralExpr, ReturnExpr, SetExpr, UnaryExpr, VarUse,
@@ -10,10 +9,10 @@ use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::TokenType;
 use crate::frontend::parse::parser::{parse_expression, parse_script};
 use crate::frontend::resolve::resolver::resolve_variables;
+use crate::infra::arena::Arena;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::result::{bail, FelicoError, FelicoResult};
 use crate::infra::source_file::SourceFile;
-use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::get_core_definitions;
 use crate::interpret::environment::Environment;
 use crate::interpret::value::{
@@ -22,37 +21,35 @@ use crate::interpret::value::{
 use crate::model::type_factory::TypeFactory;
 use crate::model::types::Type;
 use crate::model::workspace::Workspace;
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::rc::Rc;
 
 type PrintFn = Box<dyn Fn(&InterpreterValue)>;
- */
 use crate::interpret::stack_frame::StackFrame;
-use crate::interpret::value::InterpreterValue;
-use crate::model::workspace::Workspace;
 
-pub struct Interpreter<'a> {
-    workspace: Workspace<'a>,
-    /*    source_file: SourceFile,
-    type_factory: TypeFactory<'a>,
-    value_factory: ValueFactory<'a>,
-    environment: Environment<'a>,
+pub struct Interpreter<'ws> {
+    workspace: Workspace<'ws>,
+    source_file: SourceFile<'ws>,
+    type_factory: TypeFactory<'ws>,
+    value_factory: ValueFactory<'ws>,
+    environment: Environment<'ws>,
     print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
-    frame_stack: Vec<StackFrame>,*/
+    frame_stack: Vec<StackFrame<'ws>>,
 }
 
-impl<'a> Interpreter<'a> {
-    pub fn print(&self, value: &InterpreterValue<'a>) {
-        todo!("Call print fn");
-        //        (self.print_fn)(value);
+impl<'ws> Interpreter<'ws> {
+    pub fn print(&self, value: &InterpreterValue<'ws>) {
+        (self.print_fn)(value);
     }
 
-    pub fn get_current_call_stack(&self) -> Vec<StackFrame<'a>> {
-        todo!("Implement");
-        //self.frame_stack.clone()
+    pub fn get_current_call_stack(&self) -> Vec<StackFrame<'ws>> {
+        self.frame_stack.clone()
     }
 }
-/*
+
 macro_rules! check_early_return {
     ($expr:expr) => {
         if $expr.should_return_early() {
@@ -61,22 +58,23 @@ macro_rules! check_early_return {
     };
 }
 
-impl<'a> InterpreterValue<'a> {
+impl<'ws> InterpreterValue<'ws> {
     fn should_return_early(&self) -> bool {
         matches!(self.val, ValueKind::Return(_) | ValueKind::Panic(_))
     }
-    fn val(value: InterpreterValue<'a>) -> Self {
+    fn val(value: InterpreterValue<'ws>) -> Self {
         value
     }
 }
 
-impl<'a> Interpreter<'a> {
-    pub fn new(source_file: SourceFile) -> FelicoResult<Self> {
+impl<'ws> Interpreter<'ws> {
+    pub fn new(workspace: Workspace<'ws>, source_file: SourceFile<'ws>) -> FelicoResult<Self> {
         let mut environment = Environment::new();
-        let workspace = Workspace::new();
-        let type_factory = TypeFactory::new(&workspace);
-        for core_definition in get_core_definitions(&type_factory) {
-            environment.define(&core_definition.name, core_definition.value.clone());
+        let type_factory = workspace.type_factory();
+        for core_definition in
+            get_core_definitions(workspace.value_factory(), workspace.type_factory())
+        {
+            environment.define(core_definition.name, core_definition.value.clone());
         }
         environment.enter_new();
         Ok(Self {
@@ -88,34 +86,32 @@ impl<'a> Interpreter<'a> {
             }),
             fuel: 1000,
             available_stack: 20,
-            value_factory: ValueFactory::new(&type_factory),
+            value_factory: workspace.value_factory(),
             type_factory,
             frame_stack: Vec::new(),
         })
     }
 
-
     pub fn set_print_fn(&mut self, print_fn: PrintFn) {
         self.print_fn = print_fn;
     }
-
 
     pub fn set_fuel(&mut self, fuel: i64) {
         self.fuel = fuel;
     }
 
-    fn cont(&self) -> InterpreterValue {
+    fn cont(&self) -> InterpreterValue<'ws> {
         self.value_factory.unit()
     }
 
-    fn ret(&self, value: InterpreterValue<'a>) -> InterpreterValue {
+    fn ret(&self, value: InterpreterValue<'ws>) -> InterpreterValue<'ws> {
         InterpreterValue {
             val: ValueKind::Return(Box::new(value)),
             ty: self.type_factory.never(),
         }
     }
 
-    fn spend_fuel<T: AstData>(&mut self, stmt: &AstNode<T>) -> FelicoResult<()> {
+    fn spend_fuel<T: AstData>(&mut self, stmt: &AstNode<'ws, T>) -> FelicoResult<()> {
         self.fuel -= 1;
         if self.fuel <= 0 {
             return self.create_diagnostic(
@@ -127,12 +123,12 @@ impl<'a> Interpreter<'a> {
     }
 
     pub fn run(mut self) -> FelicoResult<()> {
-        let mut module = parse_script(self.source_file.clone(), &self.type_factory)?;
-        resolve_variables(&mut module, &self.type_factory)?;
+        let mut module = parse_script(self.source_file.clone(), self.workspace)?;
+        resolve_variables(&mut module, self.workspace)?;
         self.evaluate_main(&module)
     }
 
-    fn evaluate_main(&mut self, module: &AstNode<Module>) -> FelicoResult<()> {
+    fn evaluate_main(&mut self, module: &AstNode<'ws, Module<'ws>>) -> FelicoResult<()> {
         self.evaluate_stmts(&module.data.stmts)?;
         self.environment.enter_new();
         let main_function = self.environment.get("main")?;
@@ -145,20 +141,23 @@ impl<'a> Interpreter<'a> {
         let result = self.evaluate_expr(&main_function.fun_stmt.body)?;
         if let ValueKind::Panic(panic) = result.val {
             return Err(FelicoError::Panic {
-                panic: panic.as_ref().clone(),
+                panic: panic.deref().clone(),
             }
             .into());
         };
         Ok(())
     }
 
-    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue<'a>> {
-        let expr = parse_expression(self.source_file.clone(), &self.workspace)?;
+    pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue<'ws>> {
+        let expr = parse_expression(self.source_file.clone(), self.workspace)?;
         self.evaluate_expr(&expr)
     }
 
-    fn evaluate_expr(&mut self, expr: &AstNode<Expr>) -> FelicoResult<InterpreterValue<'a>> {
-        Ok(InterpreterValue::val(match expr.data.deref() {
+    fn evaluate_expr(
+        &mut self,
+        expr: &AstNode<'ws, Expr<'ws>>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
+        Ok(InterpreterValue::val(match &*expr.data {
             Expr::Literal(literal_expr) => self.evaluate_literal_expr(literal_expr)?,
             Expr::Unary(unary) => self.evaluate_unary_expr(expr, unary)?,
             Expr::Binary(binary) => self.evaluate_binary_expr(expr, binary)?,
@@ -178,9 +177,9 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_call_expr(
         &mut self,
-        expr: &AstNode<Expr>,
-        call: &CallExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        expr: &AstNode<'ws, Expr<'ws>>,
+        call: &CallExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         self.available_stack -= 1;
         if self.available_stack <= 0 {
             return self.create_diagnostic(expr, "Stack size exceeded.");
@@ -252,9 +251,9 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_get_expr(
         &mut self,
-        expr: &AstNode<Expr>,
-        get_expr: &GetExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        expr: &AstNode<'ws, Expr<'ws>>,
+        get_expr: &GetExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let object = self.evaluate_expr(&get_expr.object)?;
         let ValueKind::StructInstance(instance) = &object.val else {
             return self.create_diagnostic(
@@ -310,9 +309,9 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_set_expr(
         &mut self,
-        expr: &AstNode<Expr>,
-        set_expr: &SetExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        expr: &AstNode<'ws, Expr<'ws>>,
+        set_expr: &SetExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let object = self.evaluate_expr(&set_expr.object)?;
         let ValueKind::StructInstance(instance) = &object.val else {
             return self.create_diagnostic(
@@ -339,7 +338,7 @@ impl<'a> Interpreter<'a> {
         }*/
     }
 
-    fn evaluate_if_expr(&mut self, if_expr: &IfExpr) -> FelicoResult<InterpreterValue> {
+    fn evaluate_if_expr(&mut self, if_expr: &IfExpr<'ws>) -> FelicoResult<InterpreterValue<'ws>> {
         let condition = self.evaluate_expr(&if_expr.condition)?;
         check_early_return!(condition);
         match condition.val {
@@ -364,7 +363,10 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn evaluate_block_expr(&mut self, block: &BlockExpr) -> FelicoResult<InterpreterValue> {
+    fn evaluate_block_expr(
+        &mut self,
+        block: &BlockExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         self.environment.enter_new();
         let stmt_result = self.evaluate_stmts(&block.stmts[..])?;
         if stmt_result.should_return_early() {
@@ -376,13 +378,19 @@ impl<'a> Interpreter<'a> {
         Ok(result)
     }
 
-    fn evaluate_return_expr(&mut self, return_stmt: &ReturnExpr) -> FelicoResult<InterpreterValue> {
+    fn evaluate_return_expr(
+        &mut self,
+        return_stmt: &ReturnExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let return_result = self.evaluate_expr(&return_stmt.expression)?;
         check_early_return!(return_result);
         Ok(self.ret(return_result))
     }
 
-    fn evaluate_assign_expr(&mut self, assign: &AssignExpr) -> FelicoResult<InterpreterValue> {
+    fn evaluate_assign_expr(
+        &mut self,
+        assign: &AssignExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let value = self.evaluate_expr(&assign.value)?;
         check_early_return!(value);
         self.environment
@@ -390,7 +398,10 @@ impl<'a> Interpreter<'a> {
         Ok(value)
     }
 
-    fn evaluate_var_use_expr(&mut self, var_use: &VarUse) -> FelicoResult<InterpreterValue> {
+    fn evaluate_var_use_expr(
+        &mut self,
+        var_use: &VarUse<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         Ok(self
             .environment
             .get_at_distance(&var_use.name, var_use.distance)?
@@ -399,9 +410,9 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_binary_expr(
         &mut self,
-        expr: &AstNode<Expr>,
-        binary: &BinaryExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        expr: &AstNode<'ws, Expr<'ws>>,
+        binary: &BinaryExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let left_value = self.evaluate_expr(&binary.left)?;
         check_early_return!(left_value);
         // Handle "and" & "or" upfront to handle short-circuiting logic
@@ -498,9 +509,9 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_unary_expr(
         &mut self,
-        expr: &AstNode<Expr>,
-        unary: &UnaryExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        expr: &AstNode<'ws, Expr<'ws>>,
+        unary: &UnaryExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let sub_expression = self.evaluate_expr(&unary.right)?;
         if sub_expression.should_return_early() {
             return Ok(sub_expression);
@@ -527,7 +538,7 @@ impl<'a> Interpreter<'a> {
     #[track_caller]
     fn create_diagnostic<T, S: Into<String>, A: AstData>(
         &self,
-        ast_node: &AstNode<A>,
+        ast_node: &AstNode<'ws, A>,
         message: S,
     ) -> FelicoResult<T> {
         let diagnostic = InterpreterDiagnostic::new(&ast_node.location, message.into());
@@ -537,7 +548,7 @@ impl<'a> Interpreter<'a> {
     #[track_caller]
     fn create_diagnostic_with<T, S: Into<String>, A: AstData>(
         &self,
-        ast_node: &AstNode<A>,
+        ast_node: &AstNode<'ws, A>,
         message: S,
         mut f: impl FnMut(&mut InterpreterDiagnostic),
     ) -> FelicoResult<T> {
@@ -546,8 +557,11 @@ impl<'a> Interpreter<'a> {
         Err(diagnostic.into())
     }
 
-    fn evaluate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<InterpreterValue> {
-        match stmt.data.deref() {
+    fn evaluate_stmt(
+        &mut self,
+        stmt: &AstNode<'ws, Stmt<'ws>>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
+        match &*stmt.data {
             Stmt::Expression(expr) => {
                 let expr_result = self.evaluate_expr(&expr.expression)?;
                 check_early_return!(expr_result);
@@ -577,7 +591,10 @@ impl<'a> Interpreter<'a> {
         Ok(self.cont())
     }
 
-    fn evaluate_while_stmt(&mut self, while_stmt: &&WhileStmt) -> FelicoResult<InterpreterValue> {
+    fn evaluate_while_stmt(
+        &mut self,
+        while_stmt: &WhileStmt<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         loop {
             let condition = self.evaluate_expr(&while_stmt.condition)?;
             check_early_return!(condition);
@@ -606,8 +623,8 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_impl_stmt(
         &mut self,
-        stmt: &AstNode<Stmt>,
-        impl_stmt: &ImplStmt,
+        stmt: &AstNode<'ws, Stmt<'ws>>,
+        impl_stmt: &ImplStmt<'ws>,
     ) -> FelicoResult<()> {
         self.environment.enter_new();
         let symbol_map = ValueMap::new();
@@ -628,12 +645,12 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn self_evaluate_fun_stmt(&mut self, stmt: &AstNode<Stmt>, fun: &FunStmt) {
+    fn self_evaluate_fun_stmt(&mut self, stmt: &AstNode<'ws, Stmt>, fun: &FunStmt<'ws>) {
         let callable = self.create_fun_callable(fun, stmt.ty.clone());
         self.environment.define(fun.name.lexeme(), callable);
     }
 
-    fn create_fun_callable(&mut self, fun: &FunStmt, ty: Type) -> InterpreterValue {
+    fn create_fun_callable(&mut self, fun: &FunStmt<'ws>, ty: Type<'ws>) -> InterpreterValue<'ws> {
         let callable = self.value_factory.callable(
             Callable {
                 name: fun.name.lexeme().to_string(),
@@ -648,7 +665,10 @@ impl<'a> Interpreter<'a> {
         callable
     }
 
-    fn evaluate_stmts(&mut self, stmts: &[AstNode<Stmt>]) -> FelicoResult<InterpreterValue> {
+    fn evaluate_stmts(
+        &mut self,
+        stmts: &[AstNode<'ws, Stmt<'ws>>],
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         for stmt in stmts {
             let result = self.evaluate_stmt(stmt)?;
             if result.should_return_early() {
@@ -658,7 +678,10 @@ impl<'a> Interpreter<'a> {
         Ok(InterpreterValue::val(self.value_factory.unit()))
     }
 
-    fn evaluate_literal_expr(&self, literal_expr: &LiteralExpr) -> FelicoResult<InterpreterValue> {
+    fn evaluate_literal_expr(
+        &self,
+        literal_expr: &LiteralExpr,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         Ok(match literal_expr {
             LiteralExpr::Unit => self.value_factory.unit(),
             LiteralExpr::Str(string) => self.value_factory.new_string(string.clone()),
@@ -670,20 +693,23 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate_create_struct_expr(
         &mut self,
-        ast_node: &AstNode<Expr>,
-        create_struct_expr: &CreateStructExpr,
-    ) -> FelicoResult<InterpreterValue> {
+        ast_node: &AstNode<'ws, Expr<'ws>>,
+        create_struct_expr: &CreateStructExpr<'ws>,
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let mut fields = HashMap::new();
         for field in &create_struct_expr.field_initializers {
             let value = self.evaluate_expr(&field.expression)?;
-            fields.insert(field.field_name.lexeme().into(), value);
+            fields.insert(field.field_name.lexeme(), value);
         }
-        Ok(self.value_factory.make_struct(&ast_node.ty, fields))
+        Ok(self.value_factory.make_struct(ast_node.ty, fields))
     }
 }
 
 pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
-    let mut interpreter = Interpreter::new(SourceFile::from_string(name, input))?;
+    let arena = Arena::new();
+    let workspace = Workspace::new(&arena);
+    let mut interpreter =
+        Interpreter::new(workspace, workspace.source_file_from_string(name, input))?;
     let output_buffer = std::sync::Arc::new(std::sync::RwLock::new(String::new()));
     let output_buffer_clone = output_buffer.clone();
     interpreter.set_print_fn(Box::new(move |value| {
@@ -699,17 +725,22 @@ pub fn run_program_to_string(name: &str, input: &str) -> FelicoResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use crate::infra::source_file::SourceFile;
+    use crate::infra::arena::Arena;
+    use crate::infra::result::unwrap_error_result_to_string;
     use crate::interpret::eval::eval_expression;
     use crate::interpret::interpreter::{run_program_to_string, Interpreter};
+    use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
 
     #[test]
     fn test_panic() {
-        let interpreter = Interpreter::new(SourceFile::from_string(
-            "panicking",
-            r#"
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
+        let interpreter = Interpreter::new(
+            workspace,
+            workspace.source_file_from_string(
+                "panicking",
+                r#"
             fun p() {
                 panic("something went wrong");
             }
@@ -718,7 +749,8 @@ mod tests {
             }
             x();
             "#,
-        ))
+            ),
+        )
         .unwrap();
         let error = interpreter.run().expect_err("Expected some error");
         let message = error.to_string();
@@ -731,7 +763,10 @@ mod tests {
     }
 
     fn test_eval_expression(name: &str, input: &str, expected: Expect) {
-        let result = eval_expression(SourceFile::from_string(name, input)).unwrap();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
+        let result =
+            eval_expression(workspace, workspace.source_file_from_string(name, input)).unwrap();
         expected.assert_eq(&format!("{:?}", result));
     }
 
@@ -797,10 +832,13 @@ mod tests {
     );
 
     fn test_interpret_program_error(name: &str, input: &str, expected: Expect) {
-        let mut interpreter = Interpreter::new(SourceFile::from_string(name, input)).unwrap();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
+        let mut interpreter =
+            Interpreter::new(workspace, workspace.source_file_from_string(name, input)).unwrap();
         interpreter.set_print_fn(Box::new(move |_value| {}));
         let result = interpreter.run();
-        let diagnostic_string = unwrap_diagnostic_to_string(&result);
+        let diagnostic_string = unwrap_error_result_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }
 
@@ -934,4 +972,3 @@ mod tests {
         "#]];
     );
 }
-*/

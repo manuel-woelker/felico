@@ -7,17 +7,17 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-pub struct EnvironmentInner<'a> {
-    values: HashMap<String, InterpreterValue<'a>>,
-    parent: Option<Environment<'a>>,
+pub struct EnvironmentInner<'ws> {
+    values: HashMap<String, InterpreterValue<'ws>>,
+    parent: Option<Environment<'ws>>,
 }
 
 #[derive(Clone)]
-pub struct Environment<'a> {
-    inner: Rc<Mutex<EnvironmentInner<'a>>>,
+pub struct Environment<'ws> {
+    inner: Rc<Mutex<EnvironmentInner<'ws>>>,
 }
 
-impl<'a> Debug for Environment<'a> {
+impl<'ws> Debug for Environment<'ws> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -26,13 +26,13 @@ impl<'a> Debug for Environment<'a> {
         )
     }
 }
-impl<'a> Default for Environment<'a> {
+impl<'ws> Default for Environment<'ws> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a> Environment<'a> {
+impl<'ws> Environment<'ws> {
     pub fn new() -> Self {
         Self {
             inner: Rc::new(Mutex::new(EnvironmentInner {
@@ -41,7 +41,7 @@ impl<'a> Environment<'a> {
             })),
         }
     }
-    pub fn define(&self, name: &str, value: InterpreterValue<'a>) {
+    pub fn define(&self, name: &str, value: InterpreterValue<'ws>) {
         self.inner
             .lock()
             .unwrap()
@@ -49,7 +49,7 @@ impl<'a> Environment<'a> {
             .insert(name.to_string(), value);
     }
 
-    pub fn assign(&self, name: &str, value: InterpreterValue<'a>) -> FelicoResult<()> {
+    pub fn assign(&self, name: &str, value: InterpreterValue<'ws>) -> FelicoResult<()> {
         let mut inner = self.inner.lock().unwrap();
         if let Some(destination) = inner.values.get_mut(name) {
             *destination = value;
@@ -63,7 +63,7 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn get(&self, name: &str) -> FelicoResult<InterpreterValue<'a>> {
+    pub fn get(&self, name: &str) -> FelicoResult<InterpreterValue<'ws>> {
         let inner = self.inner.lock().unwrap();
         if let Some(value) = inner.values.get(name) {
             return Ok(value.clone());
@@ -77,9 +77,9 @@ impl<'a> Environment<'a> {
 
     pub fn get_at_distance(
         &self,
-        qualified_name: &'a AstNode<QualifiedName<'a>>,
+        qualified_name: &AstNode<'ws, QualifiedName<'ws>>,
         distance: i32,
-    ) -> FelicoResult<InterpreterValue<'a>> {
+    ) -> FelicoResult<InterpreterValue<'ws>> {
         let parts = &qualified_name.data.parts;
         let name = parts[0].lexeme();
         let environment = self.get_environment_at_distance(name, distance)?;
@@ -122,7 +122,7 @@ impl<'a> Environment<'a> {
         &self,
         name: &str,
         distance: i32,
-    ) -> FelicoResult<Environment<'a>> {
+    ) -> FelicoResult<Environment<'ws>> {
         let mut environment = self.clone();
         for _ in 0..distance {
             let cloned = environment.clone();
@@ -140,7 +140,7 @@ impl<'a> Environment<'a> {
         &self,
         qualified_name: &AstNode<QualifiedName>,
         distance: i32,
-        value: InterpreterValue<'a>,
+        value: InterpreterValue<'ws>,
     ) -> FelicoResult<()> {
         let name = qualified_name.data.parts[0].lexeme();
         let environment = self.get_environment_at_distance(name, distance)?;
