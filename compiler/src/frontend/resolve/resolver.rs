@@ -175,7 +175,7 @@ impl<'ws> Resolver<'ws> {
         Ok(())
     }
 
-    pub fn get_module_manifest(&self) -> FelicoResult<ModuleManifest> {
+    pub fn get_module_manifest(&self) -> FelicoResult<ModuleManifest<'ws>> {
         let module_entries: HashMap<Name, ModuleEntry> = self.scopes[1]
             .symbols
             .iter()

@@ -9,8 +9,8 @@ use axum::routing::get;
 use axum::{middleware, Json, Router};
 use felico_compiler::frontend::compile::compile_module;
 use felico_compiler::frontend::resolve::module_manifest::BundleManifest;
+use felico_compiler::infra::arena::Arena;
 use felico_compiler::infra::result::FelicoResult;
-use felico_compiler::infra::source_file::SourceFile;
 use felico_compiler::model::workspace::Workspace;
 use http::StatusCode;
 use log::{info, warn};
@@ -26,10 +26,15 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     // initialize tracing
     tracing_subscriber::fmt::init();
     info!("Starting up;");
-    let workspace = Workspace::new();
-    let module = compile_module(SourceFile::from_path("bundles/test.felico")?, &workspace)?;
+    let arena = Box::leak(Box::new(Arena::new()));
+    let workspace = Workspace::new(arena);
+    let module = compile_module(
+        workspace.source_file_from_path("bundles/test.felico")?,
+        workspace,
+    )?;
+    arena.log_memory_usage();
     let bundle = BundleManifest {
-        name: module.name.clone(),
+        name: module.name,
         modules: vec![module],
     };
     let model_facade = ModelFacade::new(vec![bundle]);
@@ -59,9 +64,9 @@ pub async fn start_server_inner() -> FelicoResult<()> {
     Ok(())
 }
 
-async fn get_bundle(
+async fn get_bundle<'ws>(
     Path((bundle_name, bundle_version)): Path<(String, String)>,
-    State(model_facade): State<ModelFacade>,
+    State(model_facade): State<ModelFacade<'ws>>,
 ) -> Result<Json<BundleDescription>, ServerError> {
     //    Err("foo".into())
     let found = model_facade
@@ -103,7 +108,9 @@ async fn get_bundle(
     }))
 }
 
-async fn get_bundles(State(model_facade): State<ModelFacade>) -> (StatusCode, Json<BundleIndex>) {
+async fn get_bundles<'ws>(
+    State(model_facade): State<ModelFacade<'ws>>,
+) -> (StatusCode, Json<BundleIndex>) {
     let bundle_index = BundleIndex {
         bundles: model_facade
             .bundles()

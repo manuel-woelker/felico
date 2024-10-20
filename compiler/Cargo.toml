@@ -17,6 +17,7 @@ itertools = "0.13.0"
 bumpalo = "3.16.0"
 internment = { version = "0.8.6", features = ["arena"] }
 owning_ref = "0.4.1"
+log = "0.4.22"
 
 [dev-dependencies]
 expect-test = "1.5.0"

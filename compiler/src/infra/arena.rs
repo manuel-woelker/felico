@@ -2,6 +2,7 @@ use crate::infra::full_name::{FullName, FullNameInner};
 use crate::model::workspace::WorkspaceString;
 use bumpalo::Bump;
 use internment::Arena as InternmentArena;
+use log::info;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
@@ -59,5 +60,12 @@ impl Arena {
             parent: Some(parent),
         });
         FullName { inner }
+    }
+
+    pub fn log_memory_usage(&self) {
+        info!(
+            "Arena memory usage: {} bytes",
+            self.inner.bump.allocated_bytes_including_metadata()
+        )
     }
 }

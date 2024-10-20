@@ -1,9 +1,11 @@
 use crate::infra::arena::Arena;
 use crate::infra::full_name::FullName;
+use crate::infra::result::FelicoResult;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
 use crate::interpret::value::ValueFactory;
 use crate::model::type_factory::TypeFactory;
 use std::fmt::{Debug, Formatter};
+use std::path::Path;
 
 #[derive(Clone)]
 pub struct Workspace<'ws> {
@@ -80,6 +82,17 @@ impl<'ws> Workspace<'ws> {
             source_code: ws_source_code,
         });
         SourceFile { inner }
+    }
+
+    pub fn source_file_from_path<P: AsRef<Path>>(&self, path: P) -> FelicoResult<SourceFile<'ws>> {
+        let actual_path = path.as_ref();
+        let filename = actual_path.to_str().ok_or(format!(
+            "Could not turn path into string: {:?}",
+            path.as_ref()
+        ))?;
+        let file = std::fs::File::open(actual_path)?;
+        let source = std::io::read_to_string(file)?;
+        Ok(self.source_file_from_string(filename, source))
     }
 }
 
