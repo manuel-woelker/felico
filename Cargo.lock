@@ -327,6 +327,7 @@ dependencies = [
     "pretty_assertions",
     "termtree",
     "thiserror",
+    "unescaper",
     "unscanny",
 ]
 
@@ -1245,6 +1246,15 @@ dependencies = [
     "thread_local",
     "tracing-core",
     "tracing-log",
+]
+
+[[package]]
+name = "unescaper"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c878a167baa8afd137494101a688ef8c67125089ff2249284bd2b5f9bfedb815"
+dependencies = [
+    "thiserror",
 ]
 
 [[package]]

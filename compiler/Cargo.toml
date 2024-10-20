@@ -14,6 +14,7 @@ bumpalo = "3.16.0"
 internment = { version = "0.8.6", features = ["arena"] }
 log = "0.4.22"
 unscanny = "0.1.0"
+unescaper = "0.1.5"
 
 [dev-dependencies]
 expect-test = "1.5.0"
@@ -21,11 +22,11 @@ libtest-mimic = "0.8.1"
 pretty_assertions = "1.4.1"
 located_yaml = "0.2.1"
 
-#[[test]]
-#name = "exec"
-#path = "tests/exec_test/exec_test.rs"
-#harness = false
-#
+[[test]]
+name = "exec"
+path = "tests/exec_test/exec_test.rs"
+harness = false
+
 #[[test]]
 #name = "error"
 #path = "tests/error_test/error_test.rs"

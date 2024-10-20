@@ -14,6 +14,11 @@ testcases:
       debug_print("😻");
     output: "😻"
 
+  - name: escapes
+    input: |-
+      debug_print("A\u0061B\x62C\nD");
+    output: "AaBbC\nD"
+
   - name: plus
     input: |-
       debug_print(1+2);

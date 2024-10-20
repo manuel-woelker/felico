@@ -696,8 +696,20 @@ impl<'ws> Parser<'ws> {
                 }
                 TokenType::String => {
                     let lexeme = self.current_token.lexeme();
-                    let string = lexeme[1..lexeme.len() - 1].to_string();
-                    LiteralExpr::Str(string)
+                    let string = &lexeme[1..lexeme.len() - 1];
+                    let unescape_result = unescaper::unescape(string);
+                    let Ok(unescaped_string) = unescape_result else {
+                        return Err(InterpreterDiagnostic::new(
+                            &self.current_location(),
+                            format!(
+                                "Could not unescape string literal '{}': {}",
+                                lexeme,
+                                unescape_result.unwrap_err()
+                            ),
+                        )
+                        .into());
+                    };
+                    LiteralExpr::Str(unescaped_string)
                 }
                 TokenType::True => LiteralExpr::Bool(true),
                 TokenType::False => LiteralExpr::Bool(false),
@@ -1614,6 +1626,22 @@ mod tests {
                   ╭─[script_if_else_no_parentheses:1:4]
                 1 │ if c a else b;
                   ·    ─
+                  ╰────
+
+           "#]];
+           script_string_escape_incomplete: r#" "\uzz" "# => expect![[r#"
+               × Could not unescape string literal '"\uzz"': incomplete str, break at 4
+                  ╭─[script_string_escape_incomplete:1:2]
+                1 │  "\uzz" 
+                  ·  ──────
+                  ╰────
+
+           "#]];
+           script_string_escape_invalid: r#" "\ud83f" "# => expect![[r#"
+               × Could not unescape string literal '"\ud83f"': invalid char, 'f' break at 5
+                  ╭─[script_string_escape_invalid:1:2]
+                1 │  "\ud83f" 
+                  ·  ────────
                   ╰────
 
            "#]];
