@@ -59,19 +59,14 @@ impl<'ws> Symbol<'ws> {
     }
 
     pub fn define_value(declaration_site: &SourceSpan<'ws>, value: InterpreterValue<'ws>) -> Self {
-        Self::new(
-            declaration_site.clone(),
-            true,
-            value.ty.clone(),
-            Some(value),
-        )
+        Self::new(declaration_site.clone(), true, value.ty, Some(value))
     }
 
     pub fn define(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
-        Self::new(declaration_site.clone(), true, ty.clone(), None)
+        Self::new(declaration_site.clone(), true, *ty, None)
     }
     pub fn declare(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
-        Self::new(declaration_site.clone(), false, ty.clone(), None)
+        Self::new(declaration_site.clone(), false, *ty, None)
     }
 }
 
@@ -161,8 +156,8 @@ impl<'ws> Resolver<'ws> {
     }
 
     pub fn resolve_program(&mut self, program: &mut AstNode<'ws, Module<'ws>>) -> FelicoResult<()> {
-        self.module_name = program.data.name.clone();
-        let module_scope = LexicalScope::new(self.module_name.clone());
+        self.module_name = program.data.name;
+        let module_scope = LexicalScope::new(self.module_name);
         self.scopes.push(module_scope);
         self.resolve_stmts(&mut program.data.stmts)?;
         if !self.diagnostics.is_empty() {
@@ -187,7 +182,7 @@ impl<'ws> Resolver<'ws> {
             .map(|(name, symbol)| {
                 let name = SharedString::from(name);
                 (
-                    name.clone(),
+                    name,
                     ModuleEntry {
                         name,
                         type_signature: symbol.ty.to_string(),
@@ -196,7 +191,7 @@ impl<'ws> Resolver<'ws> {
             })
             .collect();
         Ok(ModuleManifest {
-            name: self.module_name.clone(),
+            name: self.module_name,
             module_entries,
         })
     }
@@ -263,7 +258,7 @@ impl<'ws> Resolver<'ws> {
         if else_type != then_type {
             self.diagnose(InterpreterDiagnostic::new(ast_info.location, format!("Then and else branch of if statement must evaluate to the same type, but then evaluates to {}, while else evaluates to {}", then_type, else_type)))
         }
-        *ast_info.ty = if_expr.then_expr.ty.clone();
+        *ast_info.ty = if_expr.then_expr.ty;
         Ok(())
     }
 
@@ -272,12 +267,12 @@ impl<'ws> Resolver<'ws> {
         block: &mut BlockExpr<'ws>,
         ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
-        let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
+        let new_scope = LexicalScope::new(self.current_scope().base_name);
         self.scopes.push(new_scope);
         self.resolve_stmts(&mut block.stmts)?;
         self.resolve_expr(&mut block.result_expression)?;
         self.scopes.pop();
-        *ast_info.ty = block.result_expression.ty.clone();
+        *ast_info.ty = block.result_expression.ty;
         Ok(())
     }
 
@@ -286,7 +281,7 @@ impl<'ws> Resolver<'ws> {
         fun_stmt: &mut FunStmt<'ws>,
         ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
-        let type_factory = self.type_factory.clone();
+        let type_factory = self.type_factory;
         let name = fun_stmt.name.lexeme();
         let return_type = self.resolve_type(&fun_stmt.return_type)?;
         let parameter_types: Vec<Type> = fun_stmt
@@ -294,17 +289,14 @@ impl<'ws> Resolver<'ws> {
             .iter()
             .map(|parameter| self.resolve_type(&parameter.type_expression))
             .collect::<FelicoResult<Vec<_>>>()?;
-        let function_type = type_factory.function(
-            parameter_types,
-            return_type.clone(),
-            fun_stmt.name.location.clone(),
-        );
+        let function_type =
+            type_factory.function(parameter_types, return_type, fun_stmt.name.location.clone());
         self.add_symbol_to_scope(
             name,
             Symbol::define(&fun_stmt.name.location, &function_type),
         )?;
         *ast_info.ty = function_type;
-        let mut function_scope = LexicalScope::new(self.current_scope().base_name.clone());
+        let mut function_scope = LexicalScope::new(self.current_scope().base_name);
         function_scope.current_function = Some(CurrentFunctionInfo {
             return_type_declaration_site: fun_stmt.return_type.location.clone(),
             declared_return_type: return_type,
@@ -333,17 +325,17 @@ impl<'ws> Resolver<'ws> {
             self.resolve_expr(&mut field.data.type_expression)?;
             field.ty = self.resolve_type(&field.data.type_expression)?;
             let name = SharedString::from(field.data.name.lexeme());
-            fields.insert(name.clone(), StructField::new(&field.data.name, field.ty));
+            fields.insert(name, StructField::new(&field.data.name, field.ty));
         }
         let ty =
             type_factory.make_struct(&struct_stmt.name, fields, struct_stmt.name.location.clone());
         *ast_info.ty = self.type_factory.ty();
         self.add_symbol_to_scope(
-            struct_stmt.name.lexeme().into(),
+            struct_stmt.name.lexeme(),
             Symbol::define_value(
                 &struct_stmt.name.location,
                 InterpreterValue {
-                    val: ValueKind::Type(ty.clone()),
+                    val: ValueKind::Type(ty),
                     ty,
                 },
             ),
@@ -356,7 +348,7 @@ impl<'ws> Resolver<'ws> {
         impl_stmt: &mut ImplStmt<'ws>,
         ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
-        let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
+        let new_scope = LexicalScope::new(self.current_scope().base_name);
         self.scopes.push(new_scope);
         for method in &mut impl_stmt.methods {
             self.resolve_fun_stmt(
@@ -415,8 +407,8 @@ impl<'ws> Resolver<'ws> {
         let type_factory = self.type_factory;
         *ast_info.ty = type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location.clone());
         self.add_symbol_to_scope(
-            trait_stmt.name.lexeme().into(),
-            Symbol::define(&trait_stmt.name.location, &ast_info.ty),
+            trait_stmt.name.lexeme(),
+            Symbol::define(&trait_stmt.name.location, ast_info.ty),
         )?;
         Ok(())
     }
@@ -436,7 +428,7 @@ impl<'ws> Resolver<'ws> {
         let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
             self.resolve_type(type_expr)?
         } else {
-            let_stmt.expression.ty.clone()
+            let_stmt.expression.ty
         };
         if !self
             .type_checker
@@ -446,7 +438,7 @@ impl<'ws> Resolver<'ws> {
             self.diagnose(diagnostic);
             *ast_info.ty = self.type_factory.unresolved();
         } else {
-            *ast_info.ty = variable_type.clone();
+            *ast_info.ty = variable_type;
         }
         let symbol = self.current_scope_mut().get_mut(name).unwrap();
         symbol.is_defined = true;
@@ -539,12 +531,12 @@ impl<'ws> Resolver<'ws> {
                                         parts: vec![get_expr.name.clone()],
                                     },
                                     get_expr.name.location.clone(),
-                                    symbol.ty.clone(),
+                                    symbol.ty,
                                 ),
                                 distance,
                             }),
                             get_expr.name.location.clone(),
-                            symbol.ty.clone(),
+                            symbol.ty,
                         );
                         let first_argument = get_expr.object.clone();
                         call.callee = fun_node;
@@ -590,7 +582,7 @@ impl<'ws> Resolver<'ws> {
             );
             self.diagnose(diagnostic);
         }
-        *ast_info.ty = field.ty.clone();
+        *ast_info.ty = field.ty;
         Ok(())
     }
 
@@ -612,7 +604,7 @@ impl<'ws> Resolver<'ws> {
             self.diagnose(diagnostic);
             return Ok(());
         };
-        *ast_info.ty = field.ty.clone();
+        *ast_info.ty = field.ty;
         Ok(())
     }
 
@@ -664,7 +656,7 @@ impl<'ws> Resolver<'ws> {
             *ast_info.ty = self.type_factory.unresolved();
             return Ok(());
         };
-        *ast_info.ty = function_type.return_type.clone();
+        *ast_info.ty = function_type.return_type;
         let mut diagnostics = vec![];
         let mut diagnose = |location: &SourceSpan<'ws>, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message);
@@ -719,7 +711,7 @@ impl<'ws> Resolver<'ws> {
             *ast_info.ty = self.type_factory.unresolved();
             return Ok(());
         };
-        *ast_info.ty = type_expression.ty.clone();
+        *ast_info.ty = type_expression.ty;
         let mut diagnostics = vec![];
         let mut diagnose = |location: &SourceSpan<'ws>, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message);
@@ -801,7 +793,7 @@ impl<'ws> Resolver<'ws> {
         if let Some((distance, symbol)) = distance_and_symbol {
             assign.distance = distance;
             let destination_type = &symbol.ty;
-            *ast_info.ty = symbol.ty.clone();
+            *ast_info.ty = symbol.ty;
 
             let expression_type = &assign.value.ty;
             if !self
@@ -835,13 +827,13 @@ impl<'ws> Resolver<'ws> {
         let distance_and_symbol = self.get_definition_distance_and_symbol(&parts[0]);
         if let Some((distance, symbol)) = distance_and_symbol {
             var_use.distance = distance;
-            let mut ty = symbol.ty.clone();
+            let mut ty = symbol.ty;
             for part in parts.iter().skip(1) {
                 let methods = symbol.symbol_map.lock().unwrap();
                 let Some(sym) = methods.get(part.lexeme()) else {
                     bail!("No symbol found for name {}", var_use.name);
                 };
-                ty = sym.ty.clone();
+                ty = sym.ty;
             }
             *ast_info.ty = ty;
         } else {
@@ -879,7 +871,7 @@ impl<'ws> Resolver<'ws> {
         if binary.operator.is_comparison_operator() {
             *ast_info.ty = self.type_factory.bool();
         } else if binary.left.ty == binary.right.ty {
-            *ast_info.ty = binary.left.ty.clone();
+            *ast_info.ty = binary.left.ty;
         }
         Ok(())
     }
@@ -890,7 +882,7 @@ impl<'ws> Resolver<'ws> {
         ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut unary.right)?;
-        *ast_info.ty = unary.right.ty.clone();
+        *ast_info.ty = unary.right.ty;
         Ok(())
     }
 

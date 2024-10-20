@@ -48,7 +48,7 @@ pub fn get_core_definitions<'ws>(
             ),
         ),
     );
-    let value_factory_clone = value_factory.clone();
+    let value_factory_clone = value_factory;
     add_definition(
         "debug_print",
         value_factory.new_native_callable(
@@ -67,7 +67,7 @@ pub fn get_core_definitions<'ws>(
             ),
         ),
     );
-    let value_factory_clone = value_factory.clone();
+    let value_factory_clone = value_factory;
     add_definition(
         "panic",
         value_factory.new_native_callable(
@@ -86,7 +86,7 @@ pub fn get_core_definitions<'ws>(
             ),
         ),
     );
-    let value_factory_clone = value_factory.clone();
+    let value_factory_clone = value_factory;
     add_definition(
         "abs",
         value_factory.new_native_callable(

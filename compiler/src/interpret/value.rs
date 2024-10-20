@@ -121,7 +121,7 @@ impl<'a> ValueFactory<'a> {
     ) -> InterpreterValue<'a> {
         InterpreterValue {
             val: ValueKind::StructInstance(StructInstance::new(fields)),
-            ty: ty.clone(),
+            ty: *ty,
         }
     }
 }
