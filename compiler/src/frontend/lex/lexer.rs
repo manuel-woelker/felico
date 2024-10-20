@@ -1,25 +1,21 @@
-use phf::phf_map;
-use std::fmt::Debug;
-use std::str::Chars;
-
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::{ByteOffset, SourceSpan};
 use crate::model::workspace::Workspace;
+use phf::phf_map;
+use std::fmt::Debug;
+use std::vec;
+use unscanny::Scanner;
 
 #[derive(Debug)]
 pub struct Lexer<'ws> {
     workspace: Workspace<'ws>,
-    chars_left: i64,
-    char_iter: Chars<'ws>,
+    scanner: Scanner<'ws>,
     source_file: SourceFile<'ws>,
     current_offset: ByteOffset,
     start_offset: ByteOffset,
-    lexeme_collector: Vec<char>,
     current_char: char,
-    next_char: char,
-    next_next_char: char,
 }
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
@@ -38,6 +34,14 @@ static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "impl" => TokenType::Impl,
 };
 
+pub fn lex_tokens<'ws>(
+    source_file: SourceFile<'ws>,
+    workspace: Workspace<'ws>,
+) -> FelicoResult<Vec<Token<'ws>>> {
+    let mut lexer = Lexer::new(source_file, workspace)?;
+    lexer.lex()
+}
+
 impl<'ws> Lexer<'ws> {
     pub fn emit_token(&mut self, token_type: TokenType) -> Token<'ws> {
         let token = self.workspace.make_token(
@@ -50,7 +54,6 @@ impl<'ws> Lexer<'ws> {
             self.current_lexeme(),
         );
         self.start_offset = self.current_offset;
-        self.lexeme_collector.clear();
         token
     }
 
@@ -58,28 +61,28 @@ impl<'ws> Lexer<'ws> {
         &self.source_file.source_code()[self.start_offset as usize..self.current_offset as usize]
     }
 
+    fn lookahead(&mut self, n: isize) -> Option<char> {
+        self.scanner.scout(n - 1)
+    }
+
+    fn next_char(&mut self) -> Option<char> {
+        self.lookahead(1)
+    }
+
     pub(crate) fn advance(&mut self) -> char {
-        self.chars_left -= 1;
-        self.current_char = self.next_char;
-        self.current_offset += self.current_char.len_utf8() as i32;
-        self.next_char = self.next_next_char;
-        if self.chars_left > 0 {
-            if let Some(char) = self.char_iter.next() {
-                self.next_next_char = char;
-            } else {
-                self.next_next_char = '\0';
-                self.chars_left = 1;
-            }
+        let current_char = self.scanner.eat().unwrap_or('\0');
+        self.current_char = current_char;
+        if !self.is_at_end() {
+            self.current_offset += current_char.len_utf8() as i32;
         }
-        self.lexeme_collector.push(self.current_char);
-        self.current_char
+        current_char
     }
 
     pub(crate) fn matches(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
         }
-        if self.next_char != expected {
+        if self.lookahead(1) != Some(expected) {
             return false;
         }
         self.advance();
@@ -87,7 +90,7 @@ impl<'ws> Lexer<'ws> {
     }
 
     pub(crate) fn lex_string(&mut self) -> Token<'ws> {
-        while self.next_char != '"' && !self.is_at_end() {
+        while self.next_char() != Some('"') && !self.is_at_end() {
             self.advance();
         }
 
@@ -97,22 +100,21 @@ impl<'ws> Lexer<'ws> {
     }
 
     pub(crate) fn lex_number(&mut self) -> Token<'ws> {
-        while is_digit(self.next_char) {
+        while is_digit(self.next_char()) {
             self.advance();
         }
-        if self.next_char == '.' && is_digit(self.next_next_char) {
+        if self.next_char() == Some('.') && is_digit(self.lookahead(2)) {
             // Consume the "."
             self.advance();
-            while is_digit(self.next_char) {
+            while is_digit(self.next_char()) {
                 self.advance();
             }
         }
-
         self.emit_token(TokenType::Number)
     }
 
     fn lex_identifier_or_keyword(&mut self) -> Token<'ws> {
-        while is_alpha_numeric(self.next_char) {
+        while is_alpha_numeric(self.next_char()) {
             self.advance();
         }
         let token_type = KEYWORDS
@@ -122,58 +124,32 @@ impl<'ws> Lexer<'ws> {
     }
 
     fn is_at_end(&self) -> bool {
-        self.chars_left <= 0
+        self.current_char == '\0'
     }
 
     fn ignore_chars(&mut self) {
         self.start_offset = self.current_offset;
-        self.lexeme_collector.clear();
     }
 
     pub fn new(source_file: SourceFile<'ws>, workspace: Workspace<'ws>) -> FelicoResult<Self> {
-        let mut char_iter = source_file.source_code().chars();
-        let mut next_char = '\0';
-        let mut next_next_char = '\0';
-        let mut chars_left = i64::MAX;
-        if let Some(char) = char_iter.next() {
-            next_char = char;
-            if let Some(char) = char_iter.next() {
-                next_next_char = char;
-            } else {
-                chars_left = 1;
-            }
-        } else {
-            chars_left = 0;
-        }
+        let scanner = Scanner::new(source_file.source_code());
         Ok(Self {
             workspace,
-            char_iter,
+            scanner,
             source_file,
             current_offset: 0,
             start_offset: 0,
-            lexeme_collector: Default::default(),
             current_char: '\0',
-            next_char,
-            next_next_char,
-            chars_left,
         })
     }
-}
 
-impl<'ws> Iterator for Lexer<'ws> {
-    type Item = Token<'ws>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn lex(&mut self) -> FelicoResult<Vec<Token<'ws>>> {
+        let mut result = vec![];
         loop {
-            if self.chars_left <= 0 {
-                return if self.chars_left < 0 {
-                    None
-                } else {
-                    self.chars_left -= 1;
-                    Some(self.emit_token(TokenType::EOF))
-                };
-            }
             let c = self.advance();
+            if self.is_at_end() {
+                break;
+            }
             let token_type = match c {
                 '(' => TokenType::LeftParen,
                 ')' => TokenType::RightParen,
@@ -242,7 +218,7 @@ impl<'ws> Iterator for Lexer<'ws> {
                 }
                 '/' => {
                     if self.matches('/') {
-                        while self.next_char != '\n' && !self.is_at_end() {
+                        while self.next_char() != Some('\n') && !self.is_at_end() {
                             self.advance();
                         }
                         self.ignore_chars();
@@ -251,8 +227,14 @@ impl<'ws> Iterator for Lexer<'ws> {
                         TokenType::Slash
                     }
                 }
-                '0'..='9' => return Some(self.lex_number()),
-                'a'..='z' | 'A'..='Z' | '_' => return Some(self.lex_identifier_or_keyword()),
+                '0'..='9' => {
+                    result.push(self.lex_number());
+                    continue;
+                }
+                'a'..='z' | 'A'..='Z' | '_' => {
+                    result.push(self.lex_identifier_or_keyword());
+                    continue;
+                }
                 ' ' | '\t' | '\r' => {
                     self.ignore_chars();
                     continue;
@@ -262,24 +244,28 @@ impl<'ws> Iterator for Lexer<'ws> {
                     continue;
                 }
                 '"' => {
-                    return Some(self.lex_string());
+                    result.push(self.lex_string());
+                    continue;
                 }
                 _ => TokenType::UnexpectedCharacter,
             };
-            return Some(self.emit_token(token_type));
+            result.push(self.emit_token(token_type));
         }
+        result.push(self.emit_token(TokenType::EOF));
+        Ok(result)
     }
 }
 
-fn is_digit(c: char) -> bool {
-    c.is_ascii_digit()
+fn is_digit(c: Option<char>) -> bool {
+    c.map(|x| x.is_ascii_digit()).unwrap_or(false)
 }
 
-fn is_alpha(c: char) -> bool {
-    c.is_ascii_alphabetic() || c == '_'
+fn is_alpha(c: Option<char>) -> bool {
+    c.map(|x| x.is_ascii_alphabetic() || x == '_')
+        .unwrap_or(false)
 }
 
-fn is_alpha_numeric(c: char) -> bool {
+fn is_alpha_numeric(c: Option<char>) -> bool {
     is_alpha(c) || is_digit(c)
 }
 
@@ -303,8 +289,8 @@ mod tests {
     fn test_lexing(name: &str, input: &str, expected: Expect) {
         let arena = Arena::new();
         let workspace = Workspace::new(&arena);
-        let s = Lexer::new(workspace.source_file_from_string(name, input), workspace).unwrap();
-        let result = s.collect::<Vec<_>>();
+        //        let s = Lexer::new(workspace.source_file_from_string(name, input), workspace).unwrap();
+        let result = lex_tokens(workspace.source_file_from_string(name, input), workspace).unwrap();
         let result_tokens = result
             .iter()
             .map(|token| {

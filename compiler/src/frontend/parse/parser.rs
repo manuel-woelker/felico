@@ -10,11 +10,11 @@ use crate::frontend::ast::stmt::{
     TraitStmt, WhileStmt,
 };
 use crate::frontend::ast::AstData;
-use crate::frontend::lex::lexer::Lexer;
+use crate::frontend::lex::lexer::lex_tokens;
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::full_name::FullName;
-use crate::infra::result::{bail, failed, FelicoResult, FelicoResultExt};
+use crate::infra::result::{bail, FelicoResult, FelicoResultExt};
 use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use crate::model::type_factory::TypeFactory;
@@ -23,9 +23,9 @@ use crate::model::workspace::Workspace;
 #[derive(Debug)]
 pub struct Parser<'ws> {
     workspace: Workspace<'ws>,
-    lexer: Lexer<'ws>,
+    tokens: Vec<Token<'ws>>,
+    token_index: usize,
     current_token: Token<'ws>,
-    next_token: Token<'ws>,
     source_file: SourceFile<'ws>,
     type_factory: TypeFactory<'ws>,
     module_name: FullName<'ws>,
@@ -33,11 +33,8 @@ pub struct Parser<'ws> {
 
 impl<'ws> Parser<'ws> {
     pub fn new(source_file: SourceFile<'ws>, workspace: Workspace<'ws>) -> FelicoResult<Self> {
-        let mut lexer = Lexer::new(source_file, workspace).whatever_context("oops")?;
-        let current_token = lexer
-            .next()
-            .ok_or_else(|| failed("Expected at least one token"))?;
-        let next_token = lexer.next().unwrap_or(current_token);
+        let tokens = lex_tokens(source_file, workspace).whatever_context("oops")?;
+        let current_token = tokens[0];
         let file_path = source_file.filename();
         let file_name = file_path
             .rsplit_once("/")
@@ -46,22 +43,19 @@ impl<'ws> Parser<'ws> {
         let module_name = file_name.split_once(".").map(|a| a.0).unwrap_or(file_name);
         Ok(Parser {
             workspace,
-            module_name: workspace.make_full_name(module_name),
-            lexer,
+            tokens,
             current_token,
-            next_token,
+            token_index: 0,
+            module_name: workspace.make_full_name(module_name),
             source_file,
             type_factory: workspace.type_factory(),
         })
     }
 
     pub fn advance(&mut self) {
-        std::mem::swap(&mut self.current_token, &mut self.next_token);
-        if let Some(token) = self.lexer.next() {
-            self.next_token = token;
-        } else {
-            // EOF
-            self.next_token = self.current_token;
+        self.token_index += 1;
+        if self.token_index < self.tokens.len() {
+            self.current_token = self.tokens[self.token_index];
         }
     }
 

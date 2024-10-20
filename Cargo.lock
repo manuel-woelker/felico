@@ -349,6 +349,7 @@ dependencies = [
  "pretty_assertions",
  "termtree",
  "thiserror",
+ "unscanny",
  "utf8-chars",
  "yaml-rust",
 ]
@@ -1380,6 +1381,12 @@ name = "unicode-width"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+
+[[package]]
+name = "unscanny"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9df2af067a7953e9c3831320f35c1cc0600c30d44d9f7a12b01db1cd88d6b47"
 
 [[package]]
 name = "utf8-chars"
