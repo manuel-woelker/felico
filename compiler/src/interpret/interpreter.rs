@@ -123,7 +123,7 @@ impl<'ws> Interpreter<'ws> {
     }
 
     pub fn run(mut self) -> FelicoResult<()> {
-        let mut module = parse_script(self.source_file.clone(), self.workspace)?;
+        let mut module = parse_script(self.source_file, self.workspace)?;
         resolve_variables(&mut module, self.workspace)?;
         self.evaluate_main(&module)
     }
@@ -149,7 +149,7 @@ impl<'ws> Interpreter<'ws> {
     }
 
     pub fn evaluate_expression(mut self) -> FelicoResult<InterpreterValue<'ws>> {
-        let expr = parse_expression(self.source_file.clone(), self.workspace)?;
+        let expr = parse_expression(self.source_file, self.workspace)?;
         self.evaluate_expr(&expr)
     }
 
@@ -575,7 +575,7 @@ impl<'ws> Interpreter<'ws> {
                 self.self_evaluate_fun_stmt(stmt, fun);
             }
             Stmt::While(while_stmt) => {
-                let result = self.evaluate_while_stmt(&while_stmt)?;
+                let result = self.evaluate_while_stmt(while_stmt)?;
                 check_early_return!(result);
             }
             Stmt::Struct(_struct_stmt) => {
@@ -629,7 +629,7 @@ impl<'ws> Interpreter<'ws> {
         self.environment.enter_new();
         let symbol_map = ValueMap::new();
         for fun in &impl_stmt.methods {
-            let callable = self.create_fun_callable(&fun.data, fun.ty.clone());
+            let callable = self.create_fun_callable(&fun.data, fun.ty);
             symbol_map.set_symbol(fun.data.name.lexeme(), callable)?;
         }
         self.environment.exit();
@@ -646,7 +646,7 @@ impl<'ws> Interpreter<'ws> {
     }
 
     fn self_evaluate_fun_stmt(&mut self, stmt: &AstNode<'ws, Stmt>, fun: &FunStmt<'ws>) {
-        let callable = self.create_fun_callable(fun, stmt.ty.clone());
+        let callable = self.create_fun_callable(fun, stmt.ty);
         self.environment.define(fun.name.lexeme(), callable);
     }
 
