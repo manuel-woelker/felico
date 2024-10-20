@@ -1,3 +1,4 @@
+/*
 use crate::frontend::ast::expr::{
     AssignExpr, BinaryExpr, BlockExpr, CallExpr, CreateStructExpr, Expr, GetExpr, IfExpr,
     LiteralExpr, ReturnExpr, SetExpr, UnaryExpr, VarUse,
@@ -21,29 +22,37 @@ use crate::interpret::value::{
 use crate::model::type_factory::TypeFactory;
 use crate::model::types::Type;
 use crate::model::workspace::Workspace;
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::rc::Rc;
 
 type PrintFn = Box<dyn Fn(&InterpreterValue)>;
-
-#[derive(Debug, Clone)]
-pub struct StackFrame {
-    pub call_source_span: SourceSpan,
-}
+ */
+use crate::interpret::stack_frame::StackFrame;
+use crate::interpret::value::InterpreterValue;
+use crate::model::workspace::Workspace;
 
 pub struct Interpreter<'a> {
     workspace: Workspace<'a>,
-    source_file: SourceFile,
+    /*    source_file: SourceFile,
     type_factory: TypeFactory<'a>,
     value_factory: ValueFactory<'a>,
     environment: Environment<'a>,
     print_fn: PrintFn,
     fuel: i64,
     available_stack: i64,
-    frame_stack: Vec<StackFrame>,
+    frame_stack: Vec<StackFrame>,*/
 }
 
+impl<'a> Interpreter<'a> {
+    pub fn print(&self, value: &InterpreterValue<'a>) {
+        todo!("Call print fn");
+        //        (self.print_fn)(value);
+    }
+
+    pub fn get_current_call_stack(&self) -> Vec<StackFrame<'a>> {
+        todo!("Implement");
+        //self.frame_stack.clone()
+    }
+}
+/*
 macro_rules! check_early_return {
     ($expr:expr) => {
         if $expr.should_return_early() {
@@ -85,17 +94,11 @@ impl<'a> Interpreter<'a> {
         })
     }
 
-    pub fn get_current_call_stack(&self) -> Vec<StackFrame> {
-        self.frame_stack.clone()
-    }
 
     pub fn set_print_fn(&mut self, print_fn: PrintFn) {
         self.print_fn = print_fn;
     }
 
-    pub fn print(&self, value: &InterpreterValue) {
-        (self.print_fn)(value);
-    }
 
     pub fn set_fuel(&mut self, fuel: i64) {
         self.fuel = fuel;
@@ -721,9 +724,9 @@ mod tests {
         let message = error.to_string();
         expect![[r#"
             Execution panicked: something went wrong
-            	[panicking:3:17] panic("something went wrong");
-            	[panicking:6:17] p();
-            	[panicking:8:13] x();"#]]
+                [panicking:3:17] panic("something went wrong");
+                [panicking:6:17] p();
+                [panicking:8:13] x();"#]]
         .assert_eq(&message);
     }
 
@@ -785,7 +788,7 @@ mod tests {
           fun new(val: f64) -> Something {
             debug_print(\"Create Something\n\");
             return Something {val: val};
-          }      
+          }
       };
       let a = Something::new(123);
       debug_print(a.val);
@@ -931,3 +934,4 @@ mod tests {
         "#]];
     );
 }
+*/

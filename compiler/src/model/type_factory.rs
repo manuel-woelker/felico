@@ -78,7 +78,7 @@ impl<'ws> TypeFactory<'ws> {
     }
 
     pub fn make_type<S: AsRef<str>>(
-        &'ws self,
+        &self,
         name: S,
         kind: TypeKind<'ws>,
         declaration_site: SourceSpan<'ws>,
@@ -94,11 +94,11 @@ impl<'ws> TypeFactory<'ws> {
     }
 
     pub fn function(
-        &'ws self,
+        &self,
         parameter_types: Vec<Type<'ws>>,
         return_type: Type<'ws>,
         declaration_site: SourceSpan<'ws>,
-    ) -> Type {
+    ) -> Type<'ws> {
         let name = "Fn(".to_string()
             + &parameter_types
                 .iter()

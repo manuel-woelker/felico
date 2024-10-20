@@ -7,19 +7,21 @@ use crate::model::types::TypeKind;
 use itertools::Itertools;
 
 pub struct CoreDefinition<'ws> {
-    pub name: SharedString,
+    pub name: SharedString<'ws>,
     pub value: InterpreterValue<'ws>,
 }
 
-pub fn get_core_definitions<'ws>(type_factory: &'ws TypeFactory<'ws>) -> Vec<CoreDefinition<'ws>> {
+pub fn get_core_definitions<'ws>(
+    value_factory: ValueFactory<'ws>,
+    type_factory: TypeFactory<'ws>,
+) -> Vec<CoreDefinition<'ws>> {
     let mut core_definitions = Vec::new();
-    let mut add_definition = |name: &str, value: InterpreterValue| {
+    let mut add_definition = |name: SharedString<'ws>, value: InterpreterValue<'ws>| {
         core_definitions.push(CoreDefinition {
             name: SharedString::from(name),
             value,
         });
     };
-    let value_factory = ValueFactory::new(type_factory);
 
     add_definition("bool", value_factory.new_type(type_factory.bool()));
     add_definition("i64", value_factory.new_type(type_factory.i64()));
@@ -34,7 +36,7 @@ pub fn get_core_definitions<'ws>(type_factory: &'ws TypeFactory<'ws>) -> Vec<Cor
             1,
             move |_interpreter, arguments| {
                 if let ValueKind::F64(arg) = arguments[0].val {
-                    Ok(value_factory.f64(arg.sqrt()))
+                    Ok(value_factory_clone.f64(arg.sqrt()))
                 } else {
                     bail!("Expected number as argument to sqrt")
                 }
