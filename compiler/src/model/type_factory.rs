@@ -118,7 +118,7 @@ impl<'ws> TypeFactory<'ws> {
     }
 
     pub fn make_struct(
-        &'ws self,
+        &self,
         name: &Token<'ws>,
         fields: HashMap<SharedString<'ws>, StructField<'ws>>,
         declaration_site: SourceSpan<'ws>,
@@ -142,7 +142,7 @@ impl<'ws> TypeFactory<'ws> {
         self.make_type(name.lexeme(), TypeKind::Namespace, declaration_site)
     }
 
-    pub fn make_trait(&self, name: &Token<'ws>, declaration_site: SourceSpan<'ws>) -> Type {
+    pub fn make_trait(&self, name: &Token<'ws>, declaration_site: SourceSpan<'ws>) -> Type<'ws> {
         self.make_type(
             name.lexeme(),
             TypeKind::Trait(TraitType { name: name.clone() }),

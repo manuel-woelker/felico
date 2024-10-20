@@ -17,11 +17,11 @@ impl<'ws> Type<'ws> {
     pub fn is_bool(&self) -> bool {
         matches!(self.inner.kind, TypeKind::Primitive(PrimitiveType::Bool))
     }
-    pub fn kind(&self) -> &TypeKind {
+    pub fn kind(&self) -> &TypeKind<'ws> {
         &self.inner.kind
     }
 
-    pub fn declaration_site(&self) -> &SourceSpan {
+    pub fn declaration_site(&self) -> &SourceSpan<'ws> {
         &self.inner.declaration_site
     }
 }

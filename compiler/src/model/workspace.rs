@@ -1,6 +1,7 @@
 use crate::infra::arena::Arena;
 use crate::infra::full_name::FullName;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
+use crate::interpret::value::ValueFactory;
 use crate::model::type_factory::TypeFactory;
 use std::fmt::{Debug, Formatter};
 
@@ -20,6 +21,7 @@ impl<'ws> Debug for Workspace<'ws> {
 pub struct WorkspaceInner<'ws> {
     pub arena: &'ws Arena,
     pub type_factory: TypeFactory<'ws>,
+    pub value_factory: ValueFactory<'ws>,
 }
 
 pub type WorkspaceString<'ws> = &'ws str;
@@ -27,9 +29,11 @@ pub type WorkspaceString<'ws> = &'ws str;
 impl<'ws> Workspace<'ws> {
     pub fn new(arena: &'ws Arena) -> Self {
         let type_factory = TypeFactory::new(arena);
+        let value_factory = ValueFactory::new(type_factory, arena);
         let inner = WorkspaceInner {
             arena,
             type_factory,
+            value_factory,
         };
         Self {
             inner: arena.alloc(inner),
@@ -40,7 +44,11 @@ impl<'ws> Workspace<'ws> {
         self.inner.type_factory
     }
 
-    pub fn alloc<T>(&self, val: T) -> &mut T {
+    pub fn value_factory(&self) -> ValueFactory<'ws> {
+        self.inner.value_factory
+    }
+
+    pub fn alloc<T>(&self, val: T) -> &'ws mut T {
         self.inner.arena.alloc(val)
     }
 
@@ -64,7 +72,7 @@ impl<'ws> Workspace<'ws> {
         &self,
         filename: F,
         source_code: S,
-    ) -> SourceFile<'_> {
+    ) -> SourceFile<'ws> {
         let ws_filename = self.alloc_str(filename.as_ref());
         let ws_source_code = self.alloc_str(source_code.as_ref());
         let inner = self.alloc(SourceFileInner {

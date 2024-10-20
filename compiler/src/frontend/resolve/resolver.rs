@@ -16,12 +16,12 @@ use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::full_name::FullName;
 use crate::infra::result::{bail, FelicoError, FelicoReport, FelicoResult};
 use crate::infra::shared_string::{Name, SharedString};
-use crate::infra::source_file::SourceFile;
 use crate::infra::source_span::SourceSpan;
 use crate::interpret::core_definitions::get_core_definitions;
 use crate::interpret::value::{InterpreterValue, ValueKind};
 use crate::model::type_factory::TypeFactory;
 use crate::model::types::{StructField, Type, TypeKind};
+use crate::model::workspace::{Workspace, WorkspaceString};
 use error_stack::Report;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -29,26 +29,26 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::Mutex;
 
-pub type SymbolMap<'a> = HashMap<SharedString, Symbol<'a>>;
+pub type SymbolMap<'ws> = HashMap<SharedString<'ws>, Symbol<'ws>>;
 
 #[derive(Debug)]
-pub struct Symbol<'a> {
-    declaration_site: SourceSpan,
+pub struct Symbol<'ws> {
+    declaration_site: SourceSpan<'ws>,
     is_defined: bool,
     // Type of the symbol or expression
-    ty: Type<'a>,
+    ty: Type<'ws>,
     // Value of the expression
-    value: Option<InterpreterValue<'a>>,
-    symbol_map: Mutex<SymbolMap<'a>>,
+    value: Option<InterpreterValue<'ws>>,
+    symbol_map: Mutex<SymbolMap<'ws>>,
 }
 
-impl<'a> Symbol<'a> {
+impl<'ws> Symbol<'ws> {
     pub fn new(
-        declaration_site: SourceSpan,
+        declaration_site: SourceSpan<'ws>,
         is_defined: bool,
-        ty: Type<'a>,
-        value: Option<InterpreterValue<'a>>,
-    ) -> Symbol<'a> {
+        ty: Type<'ws>,
+        value: Option<InterpreterValue<'ws>>,
+    ) -> Symbol<'ws> {
         Symbol {
             declaration_site,
             is_defined,
@@ -58,7 +58,7 @@ impl<'a> Symbol<'a> {
         }
     }
 
-    pub fn define_value(declaration_site: &SourceSpan, value: InterpreterValue<'a>) -> Self {
+    pub fn define_value(declaration_site: &SourceSpan<'ws>, value: InterpreterValue<'ws>) -> Self {
         Self::new(
             declaration_site.clone(),
             true,
@@ -67,94 +67,100 @@ impl<'a> Symbol<'a> {
         )
     }
 
-    pub fn define(declaration_site: &SourceSpan, ty: &Type<'a>) -> Self {
+    pub fn define(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
         Self::new(declaration_site.clone(), true, ty.clone(), None)
     }
-    pub fn declare(declaration_site: &SourceSpan, ty: &Type<'a>) -> Self {
+    pub fn declare(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
         Self::new(declaration_site.clone(), false, ty.clone(), None)
     }
 }
 
-struct CurrentFunctionInfo<'a> {
-    declared_return_type: Type<'a>,
-    return_type_declaration_site: SourceSpan,
+struct CurrentFunctionInfo<'ws> {
+    declared_return_type: Type<'ws>,
+    return_type_declaration_site: SourceSpan<'ws>,
 }
 
-pub struct LexicalScope<'a> {
-    symbols: HashMap<SharedString, Symbol<'a>>,
-    current_function: Option<CurrentFunctionInfo<'a>>,
-    base_name: FullName,
+pub struct LexicalScope<'ws> {
+    symbols: HashMap<SharedString<'ws>, Symbol<'ws>>,
+    current_function: Option<CurrentFunctionInfo<'ws>>,
+    base_name: FullName<'ws>,
 }
 
-impl<'a> LexicalScope<'a> {
-    fn new(base_name: FullName) -> Self {
+impl<'ws> LexicalScope<'ws> {
+    fn new(base_name: FullName<'ws>) -> Self {
         Self {
             symbols: Default::default(),
             current_function: None,
             base_name,
         }
     }
-    fn insert<S: Into<SharedString>>(&mut self, name: S, symbol: Symbol<'a>) {
+    fn insert<S: Into<SharedString<'ws>>>(&mut self, name: S, symbol: Symbol<'ws>) {
         self.symbols.insert(name.into(), symbol);
     }
-    fn get(&self, name: &str) -> Option<&Symbol<'a>> {
+    fn get(&self, name: &str) -> Option<&Symbol<'ws>> {
         self.symbols.get(name)
     }
-    fn get_mut(&mut self, name: &str) -> Option<&mut Symbol<'a>> {
+    fn get_mut(&mut self, name: &str) -> Option<&mut Symbol<'ws>> {
         self.symbols.get_mut(name)
     }
-    fn entry<S: Into<SharedString>>(&mut self, name: S) -> Entry<SharedString, Symbol<'a>> {
+    fn entry<S: Into<SharedString<'ws>>>(
+        &mut self,
+        name: S,
+    ) -> Entry<SharedString<'ws>, Symbol<'ws>> {
         self.symbols.entry(name.into())
     }
 }
 
-pub struct Resolver<'a> {
-    scopes: Vec<LexicalScope<'a>>,
-    type_factory: TypeFactory<'a>,
+pub struct Resolver<'ws> {
+    scopes: Vec<LexicalScope<'ws>>,
+    type_factory: TypeFactory<'ws>,
     type_checker: TypeChecker,
-    diagnostics: Vec<InterpreterDiagnostic>,
-    module_name: FullName,
+    diagnostics: Vec<InterpreterDiagnostic<'ws>>,
+    module_name: FullName<'ws>,
 }
 
 // Ast information extract during resolution to make separate borrows
-struct CommonAstInfo<'a> {
-    location: &'a SourceSpan,
-    ty: &'a mut Type<'a>,
+struct CommonAstInfo<'a, 'ws: 'a> {
+    location: &'a SourceSpan<'ws>,
+    ty: &'a mut Type<'ws>,
 }
-impl<'a> CommonAstInfo<'a> {
-    fn new(location: &'a SourceSpan, ty: &'a mut Type<'a>) -> Self {
+impl<'a, 'ws: 'a> CommonAstInfo<'a, 'ws> {
+    fn new(location: &'a SourceSpan<'ws>, ty: &'a mut Type<'ws>) -> Self {
         Self { location, ty }
     }
 }
 
-impl<'a> Resolver<'a> {
-    pub fn new(type_factory: TypeFactory) -> Self {
-        let mut global_scope: LexicalScope = LexicalScope::new(FullName::from("__global"));
+impl<'ws> Resolver<'ws> {
+    pub fn new(workspace: Workspace<'ws>) -> Resolver<'ws> {
+        let mut global_scope: LexicalScope =
+            LexicalScope::new(workspace.make_full_name("__global"));
         let location = SourceSpan {
-            source_file: SourceFile::from_string("native", "native_code"),
+            source_file: workspace.source_file_from_string("native", "native_code"),
             start_byte: 0,
             end_byte: 0,
         };
-        for core_definition in get_core_definitions(&type_factory) {
+        for core_definition in
+            get_core_definitions(workspace.value_factory(), workspace.type_factory())
+        {
             global_scope.insert(
-                core_definition.name.to_string(),
+                core_definition.name,
                 Symbol::define_value(&location, core_definition.value.clone()),
             );
         }
         Resolver {
             scopes: vec![global_scope],
-            type_factory,
+            type_factory: workspace.type_factory(),
             type_checker: TypeChecker::new(),
             diagnostics: vec![],
-            module_name: "<undefined>".into(),
+            module_name: workspace.make_full_name("<undefined>"),
         }
     }
 
-    pub fn diagnose(&mut self, diagnostic: InterpreterDiagnostic) {
+    pub fn diagnose(&mut self, diagnostic: InterpreterDiagnostic<'ws>) {
         self.diagnostics.push(diagnostic);
     }
 
-    pub fn resolve_program(&mut self, program: &mut AstNode<Module>) -> FelicoResult<()> {
+    pub fn resolve_program(&mut self, program: &mut AstNode<'ws, Module<'ws>>) -> FelicoResult<()> {
         self.module_name = program.data.name.clone();
         let module_scope = LexicalScope::new(self.module_name.clone());
         self.scopes.push(module_scope);
@@ -195,14 +201,14 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_stmts(&mut self, stmts: &mut Vec<AstNode<Stmt>>) -> FelicoResult<()> {
+    fn resolve_stmts(&mut self, stmts: &mut Vec<AstNode<'ws, Stmt<'ws>>>) -> FelicoResult<()> {
         for stmt in stmts {
             self.resolve_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn resolve_stmt(&mut self, stmt: &mut AstNode<Stmt>) -> FelicoResult<()> {
+    fn resolve_stmt(&mut self, stmt: &mut AstNode<'ws, Stmt<'ws>>) -> FelicoResult<()> {
         let mut ast_info = CommonAstInfo::new(&stmt.location, &mut stmt.ty);
         match stmt.data.deref_mut() {
             Let(let_stmt) => {
@@ -230,7 +236,7 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn resolve_while_stmt(&mut self, while_stmt: &mut WhileStmt) -> FelicoResult<()> {
+    fn resolve_while_stmt(&mut self, while_stmt: &mut WhileStmt<'ws>) -> FelicoResult<()> {
         self.resolve_expr(&mut while_stmt.condition)?;
         self.resolve_stmt(&mut while_stmt.body_stmt)?;
         Ok(())
@@ -238,8 +244,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_if_expr(
         &mut self,
-        if_expr: &mut IfExpr,
-        ast_info: &mut CommonAstInfo,
+        if_expr: &mut IfExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut if_expr.condition)?;
         let condition_type = &if_expr.condition.ty;
@@ -263,8 +269,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_block_expr(
         &mut self,
-        block: &mut BlockExpr,
-        ast_info: &mut CommonAstInfo,
+        block: &mut BlockExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
         self.scopes.push(new_scope);
@@ -277,8 +283,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_fun_stmt(
         &mut self,
-        fun_stmt: &mut FunStmt,
-        ast_info: &mut CommonAstInfo,
+        fun_stmt: &mut FunStmt<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let type_factory = self.type_factory.clone();
         let name = fun_stmt.name.lexeme();
@@ -294,7 +300,7 @@ impl<'a> Resolver<'a> {
             fun_stmt.name.location.clone(),
         );
         self.add_symbol_to_scope(
-            name.to_string(),
+            name,
             Symbol::define(&fun_stmt.name.location, &function_type),
         )?;
         *ast_info.ty = function_type;
@@ -307,7 +313,7 @@ impl<'a> Resolver<'a> {
         for parameter in &fun_stmt.parameters {
             let ty = &self.resolve_type(&parameter.type_expression)?;
             self.add_symbol_to_scope(
-                parameter.name.lexeme().to_string(),
+                parameter.name.lexeme(),
                 Symbol::define(&parameter.name.location, ty),
             )?;
         }
@@ -318,10 +324,10 @@ impl<'a> Resolver<'a> {
 
     fn resolve_struct_stmt(
         &mut self,
-        struct_stmt: &mut StructStmt,
-        ast_info: &mut CommonAstInfo,
+        struct_stmt: &mut StructStmt<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
-        let type_factory = self.type_factory.clone();
+        let type_factory = self.type_factory;
         let mut fields = HashMap::new();
         for field in &mut struct_stmt.fields {
             self.resolve_expr(&mut field.data.type_expression)?;
@@ -347,8 +353,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_impl_stmt(
         &mut self,
-        impl_stmt: &mut ImplStmt,
-        ast_info: &mut CommonAstInfo,
+        impl_stmt: &mut ImplStmt<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let new_scope = LexicalScope::new(self.current_scope().base_name.clone());
         self.scopes.push(new_scope);
@@ -403,10 +409,10 @@ impl<'a> Resolver<'a> {
 
     fn resolve_trait_stmt(
         &mut self,
-        trait_stmt: &mut TraitStmt,
-        ast_info: &mut CommonAstInfo,
+        trait_stmt: &mut TraitStmt<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
-        let type_factory = self.type_factory.clone();
+        let type_factory = self.type_factory;
         *ast_info.ty = type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location.clone());
         self.add_symbol_to_scope(
             trait_stmt.name.lexeme().into(),
@@ -417,12 +423,12 @@ impl<'a> Resolver<'a> {
 
     fn resolve_let_stmt(
         &mut self,
-        let_stmt: &mut LetStmt,
-        ast_info: &mut CommonAstInfo,
+        let_stmt: &mut LetStmt<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let name = let_stmt.name.lexeme();
         self.add_symbol_to_scope(
-            name.to_string(),
+            name,
             Symbol::declare(&let_stmt.name.location, &self.type_factory.unknown()),
         )?;
         self.resolve_expr(&mut let_stmt.expression)?;
@@ -442,13 +448,13 @@ impl<'a> Resolver<'a> {
         } else {
             *ast_info.ty = variable_type.clone();
         }
-        let symbol = self.current_scope().get_mut(name).unwrap();
+        let symbol = self.current_scope_mut().get_mut(name).unwrap();
         symbol.is_defined = true;
         symbol.ty = variable_type;
         Ok(())
     }
 
-    fn resolve_type(&mut self, expr: &AstNode<Expr>) -> FelicoResult<Type> {
+    fn resolve_type(&mut self, expr: &AstNode<'ws, Expr<'ws>>) -> FelicoResult<Type<'ws>> {
         // TODO: make bails into diagnostics
         let Expr::Variable(type_id) = &*expr.data else {
             bail!("Unsupported expression in type position: {:?}", expr);
@@ -465,10 +471,10 @@ impl<'a> Resolver<'a> {
         let ValueKind::Type(ty) = &value.val else {
             bail!("Type expression must be a type: {}", type_id.name);
         };
-        Ok(ty.clone())
+        Ok(*ty)
     }
 
-    fn resolve_expr(&mut self, expr: &mut AstNode<Expr>) -> FelicoResult<()> {
+    fn resolve_expr(&mut self, expr: &mut AstNode<'ws, Expr<'ws>>) -> FelicoResult<()> {
         let mut ast_info = CommonAstInfo::new(&expr.location, &mut expr.ty);
         match expr.data.deref_mut() {
             Expr::Unary(unary) => {
@@ -511,8 +517,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_method_call_expr(
         &mut self,
-        call: &mut CallExpr,
-        ast_info: &mut CommonAstInfo,
+        call: &mut CallExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<bool> {
         if let Expr::Get(get_expr) = &mut *call.callee.data {
             self.resolve_expr(&mut get_expr.object)?;
@@ -554,8 +560,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_set_expr(
         &mut self,
-        set: &mut SetExpr,
-        ast_info: &mut CommonAstInfo,
+        set: &mut SetExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut set.value)?;
         self.resolve_expr(&mut set.object)?;
@@ -590,8 +596,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_get_expr(
         &mut self,
-        get: &mut GetExpr,
-        ast_info: &mut CommonAstInfo,
+        get: &mut GetExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut get.object)?;
         let Some(field) = self.get_struct_field(&get.object.ty, get.name.lexeme())? else {
@@ -610,12 +616,12 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn get_struct_field(
+    fn get_struct_field<'b>(
         &mut self,
-        ty: &'a Type,
+        ty: &'b Type<'ws>,
         field_name: &str,
         //_ast_info: &mut CommonAstInfo,
-    ) -> FelicoResult<Option<&'a StructField>> {
+    ) -> FelicoResult<Option<&'b StructField<'ws>>> {
         let TypeKind::Struct(struct_type) = ty.kind() else {
             /*            let diagnostic = InterpreterDiagnostic::new(ast_info.location,
                                                         format!("Using the dot operator to access a field, but the type of the object is not a struct but {}", ty));
@@ -635,8 +641,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_call_expr(
         &mut self,
-        call: &mut CallExpr,
-        ast_info: &mut CommonAstInfo,
+        call: &mut CallExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         if self.resolve_method_call_expr(call, ast_info)? {
             return Ok(());
@@ -660,7 +666,7 @@ impl<'a> Resolver<'a> {
         };
         *ast_info.ty = function_type.return_type.clone();
         let mut diagnostics = vec![];
-        let mut diagnose = |location: &SourceSpan, message: String| {
+        let mut diagnose = |location: &SourceSpan<'ws>, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message);
             let declaration_site = call.callee.ty.declaration_site();
             if !declaration_site.is_ephemeral() {
@@ -696,8 +702,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_create_struct_expr(
         &mut self,
-        create_struct_expr: &mut CreateStructExpr,
-        ast_info: &mut CommonAstInfo,
+        create_struct_expr: &mut CreateStructExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let type_expression = &mut create_struct_expr.type_expression;
         self.resolve_expr(type_expression)?;
@@ -715,7 +721,7 @@ impl<'a> Resolver<'a> {
         };
         *ast_info.ty = type_expression.ty.clone();
         let mut diagnostics = vec![];
-        let mut diagnose = |location: &SourceSpan, message: String| {
+        let mut diagnose = |location: &SourceSpan<'ws>, message: String| {
             let mut diagnostic = InterpreterDiagnostic::new(location, message);
             let declaration_site = type_expression.ty.declaration_site();
             if !declaration_site.is_ephemeral() {
@@ -769,7 +775,7 @@ impl<'a> Resolver<'a> {
         }
 
         for (name, field) in struct_type.fields.iter().sorted_by_key(|(name, _)| *name) {
-            if !seen_fields.contains_key(name.as_str()) {
+            if !seen_fields.contains_key(name) {
                 diagnose(
                     ast_info.location,
                     format!(
@@ -785,8 +791,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_assign_expr(
         &mut self,
-        assign: &mut AssignExpr,
-        ast_info: &mut CommonAstInfo,
+        assign: &mut AssignExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let destination = &assign.destination;
         self.resolve_expr(&mut assign.value)?;
@@ -822,8 +828,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_var_use_expr(
         &mut self,
-        var_use: &mut VarUse,
-        ast_info: &mut CommonAstInfo,
+        var_use: &mut VarUse<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         let parts = &var_use.name.data.parts;
         let distance_and_symbol = self.get_definition_distance_and_symbol(&parts[0]);
@@ -851,7 +857,7 @@ impl<'a> Resolver<'a> {
     fn resolve_literal_expr(
         &mut self,
         literal: &mut LiteralExpr,
-        ast_info: &mut CommonAstInfo,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         *ast_info.ty = match literal {
             LiteralExpr::Str(_) => self.type_factory.str(),
@@ -865,8 +871,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_binary_expr(
         &mut self,
-        binary: &mut BinaryExpr,
-        ast_info: &mut CommonAstInfo,
+        binary: &mut BinaryExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut binary.left)?;
         self.resolve_expr(&mut binary.right)?;
@@ -880,15 +886,18 @@ impl<'a> Resolver<'a> {
 
     fn resolve_unary_expr(
         &mut self,
-        unary: &mut UnaryExpr,
-        ast_info: &mut CommonAstInfo,
+        unary: &mut UnaryExpr<'ws>,
+        ast_info: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut unary.right)?;
         *ast_info.ty = unary.right.ty.clone();
         Ok(())
     }
 
-    fn get_definition_distance_and_symbol(&self, token: &Token) -> Option<(i32, &Symbol)> {
+    fn get_definition_distance_and_symbol(
+        &self,
+        token: &Token<'ws>,
+    ) -> Option<(i32, &Symbol<'ws>)> {
         let name = token.lexeme();
         let mut distance = -1;
         for scope in self.scopes.iter().rev() {
@@ -904,15 +913,26 @@ impl<'a> Resolver<'a> {
         None
     }
 
-    fn current_scope(&mut self) -> &mut LexicalScope {
+    fn current_scope(&self) -> &LexicalScope<'ws> {
+        self.scopes
+            .iter()
+            .last()
+            .expect("Scope Stack should not be empty")
+    }
+
+    fn current_scope_mut(&mut self) -> &mut LexicalScope<'ws> {
         self.scopes
             .iter_mut()
             .last()
             .expect("Scope Stack should not be empty")
     }
 
-    fn add_symbol_to_scope(&mut self, name: String, symbol: Symbol) -> FelicoResult<()> {
-        match self.current_scope().entry(&name) {
+    fn add_symbol_to_scope(
+        &mut self,
+        name: WorkspaceString<'ws>,
+        symbol: Symbol<'ws>,
+    ) -> FelicoResult<()> {
+        match self.current_scope_mut().entry(name) {
             Entry::Occupied(value) => {
                 let mut diagnostic = InterpreterDiagnostic::new(
                     &symbol.declaration_site,
@@ -930,8 +950,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_return_expr(
         &mut self,
-        return_expr: &mut ReturnExpr,
-        ast: &mut CommonAstInfo,
+        return_expr: &mut ReturnExpr<'ws>,
+        ast: &mut CommonAstInfo<'_, 'ws>,
     ) -> FelicoResult<()> {
         self.resolve_expr(&mut return_expr.expression)?;
         if let Some(Some(current_function_info)) = self
@@ -971,11 +991,11 @@ impl<'a> Resolver<'a> {
     }
 }
 
-pub fn resolve_variables(
-    ast: &mut AstNode<Module>,
-    type_factory: &TypeFactory,
+pub fn resolve_variables<'ws>(
+    ast: &mut AstNode<'ws, Module<'ws>>,
+    workspace: Workspace<'ws>,
 ) -> FelicoResult<()> {
-    Resolver::new(type_factory.clone()).resolve_program(ast)
+    Resolver::new(workspace).resolve_program(ast)
 }
 
 #[cfg(test)]
@@ -983,8 +1003,8 @@ mod tests {
     use crate::frontend::ast::print_ast::AstPrinter;
     use crate::frontend::parse::parser::Parser;
     use crate::frontend::resolve::resolver::{resolve_variables, Resolver};
-    use crate::infra::diagnostic::unwrap_diagnostic_to_string;
-    use crate::model::type_factory::TypeFactory;
+    use crate::infra::arena::Arena;
+    use crate::infra::result::unwrap_error_result_to_string;
     use crate::model::workspace::Workspace;
     use expect_test::{expect, Expect};
 
@@ -994,11 +1014,12 @@ mod tests {
         expected_ast: Expect,
         expected_manifest: Expect,
     ) {
-        let workspace = Workspace::new();
-        let type_factory = &TypeFactory::new(&workspace);
-        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
+        let mut parser =
+            Parser::new(workspace.source_file_from_string(name, input), workspace).unwrap();
         let mut program = parser.parse_script().unwrap();
-        let mut resolver = Resolver::new(type_factory.clone());
+        let mut resolver = Resolver::new(workspace);
         resolver.resolve_program(&mut program).unwrap();
         let printed_ast = AstPrinter::new()
             .with_locations(false)
@@ -1232,12 +1253,13 @@ mod tests {
            "#]];
     );
     fn test_resolve_program_error(name: &str, input: &str, expected: Expect) {
-        let workspace = Workspace::new();
-        let type_factory = &TypeFactory::new(&workspace);
-        let parser = Parser::new_in_memory(name, input, type_factory).unwrap();
+        let arena = Arena::new();
+        let workspace = Workspace::new(&arena);
+        let mut parser =
+            Parser::new(workspace.source_file_from_string(name, input), workspace).unwrap();
         let mut ast = parser.parse_script().unwrap();
-        let result = resolve_variables(&mut ast, type_factory);
-        let diagnostic_string = unwrap_diagnostic_to_string(&result);
+        let result = resolve_variables(&mut ast, workspace);
+        let diagnostic_string = unwrap_error_result_to_string(&result);
         expected.assert_eq(&diagnostic_string);
     }
 
