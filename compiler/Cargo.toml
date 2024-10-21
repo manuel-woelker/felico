@@ -31,6 +31,11 @@ name = "exec"
 path = "tests/exec_test/exec_test.rs"
 harness = false
 
+[[test]]
+name = "exec_c_code"
+path = "tests/exec_test/exec_test_c_code.rs"
+harness = false
+
 #[[test]]
 #name = "error"
 #path = "tests/error_test/error_test.rs"

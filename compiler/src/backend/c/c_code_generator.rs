@@ -1,8 +1,12 @@
-use crate::frontend::ast::expr::{BlockExpr, CallExpr, Expr, LiteralExpr, VarUse};
+use crate::frontend::ast::expr::{
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, LiteralExpr, VarUse,
+};
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::stmt::{FunStmt, Stmt};
+use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt};
+use crate::frontend::lex::token::TokenType;
 use crate::infra::result::{bail, FelicoResult};
+use crate::model::types::{PrimitiveType, Type, TypeKind};
 use itertools::{Itertools, Position};
 use std::fs::File;
 use std::io::Write;
@@ -34,19 +38,51 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
     }
 
     pub fn generate_code(&mut self) -> FelicoResult<()> {
-        write!(
-            self.output_file,
-            "{}",
+        self.output_file.write_all(
             r#"
+
+        #include <stdio.h>
+
+#define debug_print(X) _Generic((X), int: debug_print_int, \
+                              char*: debug_print_string, \
+                              _Bool: debug_print_bool, \
+                              double: debug_print_double \
+                              )(X)
+
+int debug_print_string(char* string)
+{
+  return printf("%s", string);
+}
+
+int debug_print_int(int i)
+{
+  return printf("%d", i);
+}
+
+int debug_print_double(double f)
+{
+  return printf("%f", f);
+}
+
+int debug_print_bool(_Bool b)
+{
+  return printf("%s", b?"true":"false");
+}
+
+int debug_print_unknown(...)
+{
+  return printf("ERROR: Unknown type\n");
+}
         
-        #include <stdio.h>"
-        
+        int _main();
+    
         int main(int argc, char **argv) {
-            fprintf(stderr, "Hello, World!\n");
-            return 123;
+            _main();
+            return 0;
         }
 
-        "#,
+        "#
+            .as_bytes(),
         )?;
         self.generate_module(self.ast)?;
         Ok(())
@@ -67,10 +103,22 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
             Stmt::Fun(fun_stmt) => {
                 self.generate_fun_stmt(fun_stmt)?;
             }
+            Stmt::Let(let_stmt) => {
+                self.generate_let_stmt(let_stmt, stmt)?;
+            }
             _ => {
                 bail!("Implement code generation for stmt {:?}", stmt);
             }
         }
+        self.output_file.write_all(";\n".as_bytes())?;
+        Ok(())
+    }
+
+    fn generate_let_stmt(&mut self, stmt: &LetStmt, ast: &AstNode<Stmt>) -> FelicoResult<()> {
+        let c_type = self.get_c_type(ast.ty)?;
+        writeln!(self.output_file, "{} {} = ", c_type, stmt.name.lexeme())?;
+        self.generate_expr(&stmt.expression)?;
+        writeln!(self.output_file, ";")?;
         Ok(())
     }
 
@@ -95,6 +143,12 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
             Expr::Variable(var_use_expr) => {
                 self.generate_var_use_expr(var_use_expr)?;
             }
+            Expr::Binary(binary_expr) => {
+                self.generate_binary_expr(binary_expr)?;
+            }
+            Expr::Assign(assign_expr) => {
+                self.generate_assign_expr(assign_expr)?;
+            }
             _ => {
                 bail!("Implement code generation for expr {:?}", expr);
             }
@@ -107,10 +161,45 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
             LiteralExpr::Str(string) => {
                 write!(self.output_file, "\"{}\"", string)?;
             }
-            _ => {
-                bail!("Implement code generation for literal {:?}", literal_expr);
+            LiteralExpr::F64(number) => {
+                write!(self.output_file, "((double){})", number)?;
             }
+            LiteralExpr::I64(number) => {
+                write!(self.output_file, "((int64_t){})", number)?;
+            }
+            LiteralExpr::Bool(bool) => {
+                write!(self.output_file, "{}", bool)?;
+            }
+            LiteralExpr::Unit => {}
         }
+        Ok(())
+    }
+
+    fn generate_assign_expr(&mut self, assign_expr: &AssignExpr) -> FelicoResult<()> {
+        write!(self.output_file, "({} =", &assign_expr.destination)?;
+        self.generate_expr(&assign_expr.value)?;
+        write!(self.output_file, ")")?;
+        Ok(())
+    }
+
+    fn generate_binary_expr(&mut self, binary_expr: &BinaryExpr) -> FelicoResult<()> {
+        let operator = match binary_expr.operator.token_type() {
+            TokenType::Plus => "+",
+            TokenType::Minus => "-",
+            TokenType::Star => "*",
+            TokenType::Slash => "/",
+            _ => {
+                bail!(
+                    "Implement code generation for binary expr {:?}",
+                    binary_expr
+                );
+            }
+        };
+        write!(self.output_file, "(")?;
+        self.generate_expr(&binary_expr.left)?;
+        self.output_file.write_all(operator.as_bytes())?;
+        self.generate_expr(&binary_expr.right)?;
+        write!(self.output_file, ")")?;
         Ok(())
     }
 
@@ -130,12 +219,27 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
                 write!(self.output_file, ",")?;
             }
         }
+        write!(self.output_file, ")")?;
         Ok(())
     }
 
     fn generate_var_use_expr(&mut self, var_use_expr: &VarUse) -> FelicoResult<()> {
         write!(self.output_file, "{}", var_use_expr.name)?;
         Ok(())
+    }
+
+    fn get_c_type(&self, ty: Type) -> FelicoResult<&'ws str> {
+        match ty.kind() {
+            TypeKind::Primitive(primitive) => Ok(match primitive {
+                PrimitiveType::Bool => "_Bool",
+                PrimitiveType::F64 => "double",
+                PrimitiveType::I64 => "int64_t",
+                PrimitiveType::Str => "char*",
+            }),
+            _ => {
+                bail!("Implement get_c_type for type {}", ty);
+            }
+        }
     }
 }
 
@@ -168,7 +272,11 @@ mod tests {
         expect![[r#"
 
         
-                    #include <stdio.h>"
+                    #include <stdio.h>
+                    
+                    int debug_print(char* message) {
+                        printf(message);
+                    }
         
                     int main(int argc, char **argv) {
                         fprintf(stderr, "Hello, World!\n");
@@ -176,7 +284,9 @@ mod tests {
                     }
 
                     int _main() {
-            debug_print("Hello World!"}
+            debug_print("Hello World!");
+            }
+            ;
         "#]]
         .assert_eq(&std::fs::read_to_string(output_path).unwrap())
     }

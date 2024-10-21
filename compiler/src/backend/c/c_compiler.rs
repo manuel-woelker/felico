@@ -2,7 +2,7 @@ use crate::infra::result::{bail, FelicoResult};
 use directories::ProjectDirs;
 use rand::random;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use zip::read::read_zipfile_from_stream;
 
 pub struct CCompiler {
@@ -71,10 +71,19 @@ impl CCompiler {
             .arg(destination_file.as_ref())
             .arg(source_file.as_ref())
             .arg("-target")
-            .arg("x86_64-windows-gnu");
-        let status = command.status()?;
-        if !status.success() {
-            bail!("Compilation failed")
+            .arg("x86_64-windows-gnu")
+            .arg("-std=c23")
+        // end of args
+        ;
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        let output = command.output()?;
+        if !output.status.success() {
+            bail!(
+                "Compilation failed of '{}': {}",
+                source_file.as_ref().display(),
+                String::from_utf8_lossy(&output.stderr)
+            )
         }
         Ok(())
     }

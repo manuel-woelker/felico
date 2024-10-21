@@ -141,17 +141,18 @@ pub fn unwrap_error_result_to_string<T>(result: &FelicoResult<T>) -> String {
 }
 
 #[allow(unused)]
+#[macro_export]
 macro_rules! bail {
     ($($t:tt)*) => {{
         let message = format!($($t)*);
-        return Err(crate::infra::result::failed(message));
+        return Err($crate::infra::result::failed(message));
     }};
 }
 //use crate::interpret::value::Panic;
 
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::interpret::value::Panic;
-pub(crate) use bail;
+pub use bail;
 
 #[cfg(test)]
 mod tests {
