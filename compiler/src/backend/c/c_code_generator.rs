@@ -1,9 +1,9 @@
 use crate::frontend::ast::expr::{
-    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, LiteralExpr, VarUse,
+    AssignExpr, BinaryExpr, BlockExpr, CallExpr, Expr, IfExpr, LiteralExpr, UnaryExpr, VarUse,
 };
 use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
-use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt};
+use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, WhileStmt};
 use crate::frontend::lex::token::TokenType;
 use crate::infra::result::{bail, FelicoResult};
 use crate::model::types::{PrimitiveType, Type, TypeKind};
@@ -61,7 +61,7 @@ int debug_print_int(int i)
 
 int debug_print_double(double f)
 {
-  return printf("%f", f);
+  return printf("%g", f);
 }
 
 int debug_print_bool(_Bool b)
@@ -106,6 +106,9 @@ int debug_print_unknown(...)
             Stmt::Let(let_stmt) => {
                 self.generate_let_stmt(let_stmt, stmt)?;
             }
+            Stmt::While(while_stmt) => {
+                self.generate_while_stmt(while_stmt)?;
+            }
             _ => {
                 bail!("Implement code generation for stmt {:?}", stmt);
             }
@@ -118,7 +121,6 @@ int debug_print_unknown(...)
         let c_type = self.get_c_type(ast.ty)?;
         writeln!(self.output_file, "{} {} = ", c_type, stmt.name.lexeme())?;
         self.generate_expr(&stmt.expression)?;
-        writeln!(self.output_file, ";")?;
         Ok(())
     }
 
@@ -126,6 +128,14 @@ int debug_print_unknown(...)
         writeln!(self.output_file, "int _{}() {{", stmt.name.lexeme())?;
         self.generate_expr(&stmt.body)?;
         writeln!(self.output_file, "}}")?;
+        Ok(())
+    }
+
+    fn generate_while_stmt(&mut self, while_stmt: &WhileStmt) -> FelicoResult<()> {
+        write!(self.output_file, "while(")?;
+        self.generate_expr(&while_stmt.condition)?;
+        write!(self.output_file, ")")?;
+        self.generate_stmt(&while_stmt.body_stmt)?;
         Ok(())
     }
 
@@ -141,13 +151,19 @@ int debug_print_unknown(...)
                 self.generate_block_expr(block_expr)?;
             }
             Expr::Variable(var_use_expr) => {
-                self.generate_var_use_expr(var_use_expr)?;
+                self.generate_var_use_expr(var_use_expr, expr)?;
             }
             Expr::Binary(binary_expr) => {
                 self.generate_binary_expr(binary_expr)?;
             }
+            Expr::Unary(unary_expr) => {
+                self.generate_unary_expr(unary_expr)?;
+            }
             Expr::Assign(assign_expr) => {
                 self.generate_assign_expr(assign_expr)?;
+            }
+            Expr::If(if_expr) => {
+                self.generate_if_expr(if_expr)?;
             }
             _ => {
                 bail!("Implement code generation for expr {:?}", expr);
@@ -182,12 +198,34 @@ int debug_print_unknown(...)
         Ok(())
     }
 
+    fn generate_if_expr(&mut self, if_expr: &IfExpr) -> FelicoResult<()> {
+        write!(self.output_file, "(")?;
+        self.generate_expr(&if_expr.condition)?;
+        write!(self.output_file, ") ? (")?;
+        self.generate_expr(&if_expr.then_expr)?;
+        write!(self.output_file, ") : (")?;
+        if let Some(else_expr) = &if_expr.else_expr {
+            self.generate_expr(else_expr)?;
+        } else {
+            write!(self.output_file, "0")?;
+        }
+        write!(self.output_file, ")")?;
+        Ok(())
+    }
+
     fn generate_binary_expr(&mut self, binary_expr: &BinaryExpr) -> FelicoResult<()> {
         let operator = match binary_expr.operator.token_type() {
             TokenType::Plus => "+",
             TokenType::Minus => "-",
             TokenType::Star => "*",
             TokenType::Slash => "/",
+            TokenType::And => "&&",
+            TokenType::Or => "||",
+            TokenType::EqualEqual => "==",
+            TokenType::Greater => ">",
+            TokenType::GreaterEqual => ">=",
+            TokenType::Less => "<",
+            TokenType::LessEqual => "<=",
             _ => {
                 bail!(
                     "Implement code generation for binary expr {:?}",
@@ -203,10 +241,27 @@ int debug_print_unknown(...)
         Ok(())
     }
 
+    fn generate_unary_expr(&mut self, unary_expr: &UnaryExpr) -> FelicoResult<()> {
+        let operator = match unary_expr.operator.token_type() {
+            TokenType::Plus => "+",
+            TokenType::Minus => "-",
+            _ => {
+                bail!("Implement code generation for unary expr {:?}", unary_expr);
+            }
+        };
+        write!(self.output_file, "(")?;
+        self.output_file.write_all(operator.as_bytes())?;
+        self.generate_expr(&unary_expr.right)?;
+        write!(self.output_file, ")")?;
+        Ok(())
+    }
+
     fn generate_block_expr(&mut self, block_expr: &BlockExpr) -> FelicoResult<()> {
+        writeln!(self.output_file, "{{")?;
         for stmt in &block_expr.stmts {
             self.generate_stmt(stmt)?;
         }
+        writeln!(self.output_file, "}}")?;
         Ok(())
     }
 
@@ -223,8 +278,27 @@ int debug_print_unknown(...)
         Ok(())
     }
 
-    fn generate_var_use_expr(&mut self, var_use_expr: &VarUse) -> FelicoResult<()> {
-        write!(self.output_file, "{}", var_use_expr.name)?;
+    fn generate_var_use_expr(
+        &mut self,
+        var_use_expr: &VarUse,
+        expr: &AstNode<Expr>,
+    ) -> FelicoResult<()> {
+        if matches!(expr.ty.kind(), TypeKind::Type) {
+            // TODO: use full name, once resolved
+            write!(
+                self.output_file,
+                "\"❬{}❭\"",
+                var_use_expr
+                    .name
+                    .data
+                    .parts
+                    .iter()
+                    .map(|part| part.lexeme())
+                    .join("::")
+            )?;
+        } else {
+            write!(self.output_file, "{}", var_use_expr.name)?;
+        }
         Ok(())
     }
 

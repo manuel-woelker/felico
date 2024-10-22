@@ -67,7 +67,7 @@ testcases:
     output: |-
       33
 
-  - name: assign twice
+  - name: assign twice 2
     input: |-
       let a = 1;
       let b = 2;
