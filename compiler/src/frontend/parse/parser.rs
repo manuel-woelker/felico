@@ -84,6 +84,7 @@ impl<'ws> Parser<'ws> {
                     start_location.clone(),
                     "main",
                 ),
+                full_name: FullName::unresolved(),
                 parameters: vec![],
                 return_type,
                 body,
@@ -285,6 +286,7 @@ impl<'ws> Parser<'ws> {
         self.create_node(
             &start_location,
             Stmt::Fun(FunStmt {
+                full_name: FullName::unresolved(),
                 name,
                 parameters,
                 return_type,
@@ -311,6 +313,7 @@ impl<'ws> Parser<'ws> {
                             },
                             "unit",
                         )],
+                        full_name: FullName::unresolved(),
                     },
                     SourceSpan::ephemeral(),
                     self.type_factory.unknown(),
@@ -766,7 +769,13 @@ impl<'ws> Parser<'ws> {
             last_location = token.location().clone();
             parts.push(token);
         }
-        let mut result = self.create_node(&start_location, QualifiedName { parts })?;
+        let mut result = self.create_node(
+            &start_location,
+            QualifiedName {
+                parts,
+                full_name: FullName::unresolved(),
+            },
+        )?;
         result.location.end_byte = last_location.end_byte;
         Ok(result)
     }

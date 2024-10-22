@@ -1,6 +1,6 @@
 use crate::frontend::lex::token::{Token, TokenType};
 use crate::infra::arena::Arena;
-use crate::infra::full_name::FullName;
+use crate::infra::full_name::{FullName, FullNameInner};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
 use crate::infra::source_span::SourceSpan;
@@ -26,18 +26,26 @@ pub struct WorkspaceInner<'ws> {
     pub arena: &'ws Arena,
     pub type_factory: TypeFactory<'ws>,
     pub value_factory: ValueFactory<'ws>,
+    pub unresolved_full_name: FullName<'ws>,
 }
 
 pub type WorkspaceString<'ws> = &'ws str;
 
 impl<'ws> Workspace<'ws> {
     pub fn new(arena: &'ws Arena) -> Self {
+        let unresolved_full_name = FullName {
+            inner: arena.alloc(FullNameInner {
+                name_part: "unresolved",
+                parent: None,
+            }),
+        };
         let type_factory = TypeFactory::new(arena);
         let value_factory = ValueFactory::new(type_factory, arena);
         let inner = WorkspaceInner {
             arena,
             type_factory,
             value_factory,
+            unresolved_full_name,
         };
         Self {
             inner: arena.alloc(inner),

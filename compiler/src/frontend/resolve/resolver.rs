@@ -107,6 +107,7 @@ impl<'ws> LexicalScope<'ws> {
 }
 
 pub struct Resolver<'ws> {
+    workspace: Workspace<'ws>,
     scopes: Vec<LexicalScope<'ws>>,
     type_factory: TypeFactory<'ws>,
     type_checker: TypeChecker,
@@ -143,6 +144,7 @@ impl<'ws> Resolver<'ws> {
             );
         }
         Resolver {
+            workspace,
             scopes: vec![global_scope],
             type_factory: workspace.type_factory(),
             type_checker: TypeChecker::new(),
@@ -283,6 +285,7 @@ impl<'ws> Resolver<'ws> {
     ) -> FelicoResult<()> {
         let type_factory = self.type_factory;
         let name = fun_stmt.name.lexeme();
+        fun_stmt.full_name = self.make_full_name(name);
         let return_type = self.resolve_type(&fun_stmt.return_type)?;
         let parameter_types: Vec<Type> = fun_stmt
             .parameters
@@ -315,6 +318,10 @@ impl<'ws> Resolver<'ws> {
         self.resolve_expr(&mut fun_stmt.body)?;
         self.scopes.pop();
         Ok(())
+    }
+
+    fn make_full_name(&self, name: &str) -> FullName<'ws> {
+        self.workspace.make_child_name(self.module_name, name)
     }
 
     fn resolve_struct_stmt(
@@ -515,6 +522,7 @@ impl<'ws> Resolver<'ws> {
                                 name: AstNode::new(
                                     QualifiedName {
                                         parts: vec![get_expr.name],
+                                        full_name: FullName::unresolved(),
                                     },
                                     get_expr.name.location().clone(),
                                     symbol.ty,
@@ -813,6 +821,9 @@ impl<'ws> Resolver<'ws> {
         let distance_and_symbol = self.get_definition_distance_and_symbol(&parts[0]);
         if let Some((distance, symbol)) = distance_and_symbol {
             var_use.distance = distance;
+            var_use.name.data.full_name = self
+                .workspace
+                .make_full_name(var_use.name.data.parts[0].lexeme());
             let mut ty = symbol.ty;
             for part in parts.iter().skip(1) {
                 let methods = symbol.symbol_map.lock().unwrap();

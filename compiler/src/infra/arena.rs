@@ -26,8 +26,9 @@ impl Debug for Arena {
 
 impl Arena {
     pub fn new() -> Self {
+        let bump = Bump::new();
         let inner = ArenaInner {
-            bump: Bump::new(),
+            bump,
             string_arena: internment::Arena::new(),
         };
         Self {
@@ -58,6 +59,7 @@ impl Arena {
         });
         FullName { inner }
     }
+
     pub fn make_child_name<'ws>(&'ws self, parent: FullName<'ws>, name: &str) -> FullName<'ws> {
         let interned_name = self.intern(name);
         let inner = self.alloc(FullNameInner {

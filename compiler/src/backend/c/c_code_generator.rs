@@ -5,6 +5,7 @@ use crate::frontend::ast::module::Module;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::stmt::{FunStmt, LetStmt, Stmt, WhileStmt};
 use crate::frontend::lex::token::TokenType;
+use crate::infra::full_name::FullName;
 use crate::infra::result::{bail, FelicoResult};
 use crate::model::types::{PrimitiveType, Type, TypeKind};
 use itertools::{Itertools, Position};
@@ -38,6 +39,7 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
     }
 
     pub fn generate_code(&mut self) -> FelicoResult<()> {
+        let main_name = fullname_to_c(self.ast.data.name)? + "__main";
         self.output_file.write_all(
             r#"
 
@@ -74,17 +76,20 @@ int debug_print_unknown(...)
   return printf("ERROR: Unknown type\n");
 }
         
-        int _main();
-    
-        int main(int argc, char **argv) {
-            _main();
-            return 0;
-        }
-
-        "#
+// Generated code
+"#
             .as_bytes(),
         )?;
         self.generate_module(self.ast)?;
+        write!(
+            self.output_file,
+            "
+int main(int argc, char **argv) {{
+    {main_name}();
+    return 0;
+}}
+"
+        )?;
         Ok(())
     }
 
@@ -96,6 +101,13 @@ int debug_print_unknown(...)
     }
 
     fn generate_stmt(&mut self, stmt: &AstNode<Stmt>) -> FelicoResult<()> {
+        writeln!(
+            self.output_file,
+            "\t// {}:{}",
+            stmt.location.source_file.filename(),
+            stmt.location.get_line_number()
+        )?;
+        write!(self.output_file, "\t")?;
         match &*stmt.data {
             Stmt::Expression(expr_stmt) => {
                 self.generate_expr(&expr_stmt.expression)?;
@@ -119,15 +131,19 @@ int debug_print_unknown(...)
 
     fn generate_let_stmt(&mut self, stmt: &LetStmt, ast: &AstNode<Stmt>) -> FelicoResult<()> {
         let c_type = self.get_c_type(ast.ty)?;
-        writeln!(self.output_file, "{} {} = ", c_type, stmt.name.lexeme())?;
+        write!(self.output_file, "{} {} = ", c_type, stmt.name.lexeme())?;
         self.generate_expr(&stmt.expression)?;
         Ok(())
     }
 
     fn generate_fun_stmt(&mut self, stmt: &FunStmt) -> FelicoResult<()> {
-        writeln!(self.output_file, "int _{}() {{", stmt.name.lexeme())?;
+        writeln!(
+            self.output_file,
+            "\nint {}() {{",
+            fullname_to_c(stmt.full_name)?
+        )?;
         self.generate_expr(&stmt.body)?;
-        writeln!(self.output_file, "}}")?;
+        write!(self.output_file, "}}")?;
         Ok(())
     }
 
@@ -284,7 +300,6 @@ int debug_print_unknown(...)
         expr: &AstNode<Expr>,
     ) -> FelicoResult<()> {
         if matches!(expr.ty.kind(), TypeKind::Type) {
-            // TODO: use full name, once resolved
             write!(
                 self.output_file,
                 "\"❬{}❭\"",
@@ -297,7 +312,11 @@ int debug_print_unknown(...)
                     .join("::")
             )?;
         } else {
-            write!(self.output_file, "{}", var_use_expr.name)?;
+            write!(
+                self.output_file,
+                "{}",
+                fullname_to_c(var_use_expr.name.data.full_name)?
+            )?;
         }
         Ok(())
     }
@@ -315,6 +334,14 @@ int debug_print_unknown(...)
             }
         }
     }
+}
+
+fn fullname_to_c(full_name: FullName) -> FelicoResult<String> {
+    if full_name.is_unresolved() {
+        bail!("Fullname is unresolved");
+    }
+    let c_name = full_name.parts().join("__");
+    Ok(c_name)
 }
 
 #[cfg(test)]
@@ -345,23 +372,26 @@ mod tests {
 
         expect![[r#"
 
-        
-                    #include <stdio.h>
-                    
-                    int debug_print(char* message) {
-                        printf(message);
-                    }
-        
-                    int main(int argc, char **argv) {
-                        fprintf(stderr, "Hello, World!\n");
-                        return 123;
-                    }
-
-                    int _main() {
-            debug_print("Hello World!");
+            	// hello.c:1
+	
+            int hello__main() {
+            {
+            	// hello.c:1
+            	debug_print("Hello World!");
             }
-            ;
+            };
+
+            int main(int argc, char **argv) {
+                hello__main();
+                return 0;
+            }
         "#]]
-        .assert_eq(&std::fs::read_to_string(output_path).unwrap())
+        .assert_eq(
+            &std::fs::read_to_string(output_path)
+                .unwrap()
+                .rsplit_once("// Generated code")
+                .unwrap()
+                .1,
+        )
     }
 }

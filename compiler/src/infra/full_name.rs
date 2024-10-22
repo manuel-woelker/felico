@@ -1,10 +1,17 @@
-use crate::infra::shared_string::Name;
+use crate::infra::shared_string::{Name, SharedString};
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone)]
 pub struct FullName<'ws> {
     pub(crate) inner: &'ws FullNameInner<'ws>,
 }
+
+const UNRESOLVED_FULL_NAME: FullName<'static> = FullName {
+    inner: &FullNameInner {
+        name_part: "<unresolved>",
+        parent: None,
+    },
+};
 
 impl<'ws> Copy for FullName<'ws> {}
 
@@ -51,8 +58,27 @@ impl<'ws> From<&FullName<'ws>> for String {
 }
 
 impl<'ws> FullName<'ws> {
-    pub fn short_name(&self) -> &str {
+    pub fn short_name(&self) -> &'ws str {
         self.inner.name_part
+    }
+
+    pub fn unresolved() -> Self {
+        UNRESOLVED_FULL_NAME
+    }
+    pub fn is_unresolved(&self) -> bool {
+        self == &UNRESOLVED_FULL_NAME
+    }
+
+    pub fn parts(&self) -> Vec<SharedString<'ws>> {
+        let mut parts = Vec::new();
+        parts.push(self.short_name());
+        let mut maybe_parent = self.inner.parent;
+        while let Some(parent) = maybe_parent {
+            parts.push(parent.short_name());
+            maybe_parent = parent.inner.parent
+        }
+        parts.reverse();
+        parts
     }
 }
 

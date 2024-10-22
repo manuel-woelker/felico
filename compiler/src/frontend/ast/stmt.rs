@@ -2,6 +2,7 @@ use crate::frontend::ast::expr::Expr;
 use crate::frontend::ast::node::AstNode;
 use crate::frontend::ast::AstData;
 use crate::frontend::lex::token::Token;
+use crate::infra::full_name::FullName;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,7 @@ impl<'ws> FunParameter<'ws> {
 #[derive(Debug, Clone)]
 pub struct FunStmt<'ws> {
     pub name: Token<'ws>,
+    pub full_name: FullName<'ws>,
     pub parameters: Vec<FunParameter<'ws>>,
     pub return_type: AstNode<'ws, Expr<'ws>>,
     pub body: AstNode<'ws, Expr<'ws>>,
