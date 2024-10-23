@@ -43,7 +43,14 @@ impl<'a, 'ws> CCodeGenerator<'a, 'ws> {
         self.output_file.write_all(
             r#"
 
+#ifdef _WIN32
+// needed for CLRF fix
+#include <fcntl.h>
+#include <io.h>
+#endif
+
         #include <stdio.h>
+        #include <math.h>
 
 #define debug_print(X) _Generic((X), int: debug_print_int, \
                               char*: debug_print_string, \
@@ -85,6 +92,10 @@ int debug_print_unknown(...)
             self.output_file,
             "
 int main(int argc, char **argv) {{
+    // Prevent Windows from rewriting LF as CRLF
+#ifdef _WIN32
+    _setmode(_fileno(stdout), _O_BINARY);
+#endif
     {main_name}();
     return 0;
 }}
@@ -191,13 +202,13 @@ int main(int argc, char **argv) {{
     fn generate_literal_expr(&mut self, literal_expr: &LiteralExpr) -> FelicoResult<()> {
         match literal_expr {
             LiteralExpr::Str(string) => {
-                write!(self.output_file, "\"{}\"", string)?;
+                write!(self.output_file, "\"{}\"", string.escape_default())?;
             }
             LiteralExpr::F64(number) => {
-                write!(self.output_file, "((double){})", number)?;
+                write!(self.output_file, "({:?})", number)?;
             }
             LiteralExpr::I64(number) => {
-                write!(self.output_file, "((int64_t){})", number)?;
+                write!(self.output_file, "{}LL", number)?;
             }
             LiteralExpr::Bool(bool) => {
                 write!(self.output_file, "{}", bool)?;
@@ -251,7 +262,9 @@ int main(int argc, char **argv) {{
         };
         write!(self.output_file, "(")?;
         self.generate_expr(&binary_expr.left)?;
+        write!(self.output_file, " ")?;
         self.output_file.write_all(operator.as_bytes())?;
+        write!(self.output_file, " ")?;
         self.generate_expr(&binary_expr.right)?;
         write!(self.output_file, ")")?;
         Ok(())
