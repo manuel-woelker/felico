@@ -17,6 +17,16 @@ impl<'ws> Type<'ws> {
     pub fn is_bool(&self) -> bool {
         matches!(self.inner.kind, TypeKind::Primitive(PrimitiveType::Bool))
     }
+    pub fn is_value(&self) -> bool {
+        !matches!(
+            self.inner.kind,
+            TypeKind::Namespace
+                | TypeKind::Struct(_)
+                | TypeKind::Function(_)
+                | TypeKind::Trait(_)
+                | TypeKind::Type
+        )
+    }
     pub fn kind(&self) -> &TypeKind<'ws> {
         &self.inner.kind
     }

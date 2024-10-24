@@ -13,7 +13,7 @@ impl TypeChecker {
         Self {}
     }
 
-    pub fn is_assignable_to(&self, source: &Type, destination: &Type) -> bool {
+    pub fn is_assignable_to(&self, source: Type, destination: Type) -> bool {
         if source == destination {
             return true;
         }

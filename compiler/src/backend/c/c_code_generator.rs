@@ -395,6 +395,10 @@ mod tests {
             };
 
             int main(int argc, char **argv) {
+                // Prevent Windows from rewriting LF as CRLF
+            #ifdef _WIN32
+                _setmode(_fileno(stdout), _O_BINARY);
+            #endif
                 hello__main();
                 return 0;
             }

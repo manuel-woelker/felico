@@ -11,6 +11,7 @@ use crate::frontend::ast::stmt::{
 };
 use crate::frontend::lex::token::Token;
 use crate::frontend::resolve::module_manifest::{ModuleEntry, ModuleManifest};
+use crate::frontend::resolve::symbol::Symbol;
 use crate::frontend::resolve::type_checker::TypeChecker;
 use crate::infra::diagnostic::InterpreterDiagnostic;
 use crate::infra::full_name::FullName;
@@ -27,50 +28,9 @@ use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::DerefMut;
-use std::sync::Mutex;
-
-pub type SymbolMap<'ws> = HashMap<SharedString<'ws>, Symbol<'ws>>;
-
-#[derive(Debug)]
-pub struct Symbol<'ws> {
-    declaration_site: SourceSpan<'ws>,
-    is_defined: bool,
-    // Type of the symbol or expression
-    ty: Type<'ws>,
-    // Value of the expression
-    value: Option<InterpreterValue<'ws>>,
-    symbol_map: Mutex<SymbolMap<'ws>>,
-}
-
-impl<'ws> Symbol<'ws> {
-    pub fn new(
-        declaration_site: SourceSpan<'ws>,
-        is_defined: bool,
-        ty: Type<'ws>,
-        value: Option<InterpreterValue<'ws>>,
-    ) -> Symbol<'ws> {
-        Symbol {
-            declaration_site,
-            is_defined,
-            ty,
-            value,
-            symbol_map: Mutex::new(SymbolMap::new()),
-        }
-    }
-
-    pub fn define_value(declaration_site: &SourceSpan<'ws>, value: InterpreterValue<'ws>) -> Self {
-        Self::new(declaration_site.clone(), true, value.ty, Some(value))
-    }
-
-    pub fn define(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
-        Self::new(declaration_site.clone(), true, *ty, None)
-    }
-    pub fn declare(declaration_site: &SourceSpan<'ws>, ty: &Type<'ws>) -> Self {
-        Self::new(declaration_site.clone(), false, *ty, None)
-    }
-}
 
 struct CurrentFunctionInfo<'ws> {
+    name: FullName<'ws>,
     declared_return_type: Type<'ws>,
     return_type_declaration_site: SourceSpan<'ws>,
 }
@@ -104,6 +64,12 @@ impl<'ws> LexicalScope<'ws> {
     ) -> Entry<SharedString<'ws>, Symbol<'ws>> {
         self.symbols.entry(name.into())
     }
+}
+
+pub struct SymbolResolutionResult<'a, 'ws> {
+    distance: i32,
+    is_local: bool,
+    symbol: &'a Symbol<'ws>,
 }
 
 pub struct Resolver<'ws> {
@@ -140,7 +106,7 @@ impl<'ws> Resolver<'ws> {
         {
             global_scope.insert(
                 core_definition.name,
-                Symbol::define_value(&location, core_definition.value.clone()),
+                workspace.make_symbol_with_value(&location, core_definition.value.clone()),
             );
         }
         Resolver {
@@ -187,7 +153,7 @@ impl<'ws> Resolver<'ws> {
                     name,
                     ModuleEntry {
                         name,
-                        type_signature: symbol.ty.to_string(),
+                        type_signature: symbol.type_signature(),
                     },
                 )
             })
@@ -299,11 +265,13 @@ impl<'ws> Resolver<'ws> {
         );
         self.add_symbol_to_scope(
             name,
-            Symbol::define(fun_stmt.name.location(), &function_type),
+            self.workspace
+                .make_symbol_defined(fun_stmt.name.location(), &function_type),
         )?;
         *ast_info.ty = function_type;
         let mut function_scope = LexicalScope::new(self.current_scope().base_name);
         function_scope.current_function = Some(CurrentFunctionInfo {
+            name: fun_stmt.full_name,
             return_type_declaration_site: fun_stmt.return_type.location.clone(),
             declared_return_type: return_type,
         });
@@ -312,7 +280,8 @@ impl<'ws> Resolver<'ws> {
             let ty = &self.resolve_type(&parameter.type_expression)?;
             self.add_symbol_to_scope(
                 parameter.name.lexeme(),
-                Symbol::define(parameter.name.location(), ty),
+                self.workspace
+                    .make_symbol_defined(parameter.name.location(), ty),
             )?;
         }
         self.resolve_expr(&mut fun_stmt.body)?;
@@ -345,7 +314,7 @@ impl<'ws> Resolver<'ws> {
         *ast_info.ty = self.type_factory.ty();
         self.add_symbol_to_scope(
             struct_stmt.name.lexeme(),
-            Symbol::define_value(
+            self.workspace.make_symbol_with_value(
                 struct_stmt.name.location(),
                 InterpreterValue {
                     val: ValueKind::Type(ty),
@@ -373,7 +342,8 @@ impl<'ws> Resolver<'ws> {
             )?;
         }
         self.scopes.pop();
-        let Some((_distance, symbol)) = self.get_definition_distance_and_symbol(&impl_stmt.name)
+        let Some(SymbolResolutionResult { symbol, .. }) =
+            self.get_definition_distance_and_symbol(&impl_stmt.name)
         else {
             bail!(
                 "Could not find symbol entry for {}",
@@ -382,10 +352,11 @@ impl<'ws> Resolver<'ws> {
         };
 
         for method in &mut impl_stmt.methods {
-            symbol.symbol_map.lock().unwrap().insert(
+            symbol.add_symbol(
                 SharedString::from(method.data.name.lexeme()),
-                Symbol::define(&method.location, &method.ty),
-            );
+                self.workspace
+                    .make_symbol_defined(&method.location, &method.ty),
+            )?;
         }
         *ast_info.ty = self.type_factory.unit();
         Ok(())
@@ -401,7 +372,8 @@ impl<'ws> Resolver<'ws> {
             type_factory.make_trait(&trait_stmt.name, trait_stmt.name.location().clone());
         self.add_symbol_to_scope(
             trait_stmt.name.lexeme(),
-            Symbol::define(trait_stmt.name.location(), ast_info.ty),
+            self.workspace
+                .make_symbol_defined(trait_stmt.name.location(), ast_info.ty),
         )?;
         Ok(())
     }
@@ -414,10 +386,11 @@ impl<'ws> Resolver<'ws> {
         let name = let_stmt.name.lexeme();
         self.add_symbol_to_scope(
             name,
-            Symbol::declare(let_stmt.name.location(), &self.type_factory.unknown()),
+            self.workspace
+                .make_symbol_declared(let_stmt.name.location(), &self.type_factory.unknown()),
         )?;
         self.resolve_expr(&mut let_stmt.expression)?;
-        let expression_type = &let_stmt.expression.ty;
+        let expression_type = let_stmt.expression.ty;
         let variable_type = if let Some(type_expr) = &let_stmt.type_expression {
             self.resolve_type(type_expr)?
         } else {
@@ -425,7 +398,7 @@ impl<'ws> Resolver<'ws> {
         };
         if !self
             .type_checker
-            .is_assignable_to(expression_type, &variable_type)
+            .is_assignable_to(expression_type, variable_type)
         {
             let diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' declared to be type {}", expression_type, let_stmt.name.lexeme(), variable_type));
             self.diagnose(diagnostic);
@@ -434,8 +407,8 @@ impl<'ws> Resolver<'ws> {
             *ast_info.ty = variable_type;
         }
         let symbol = self.current_scope_mut().get_mut(name).unwrap();
-        symbol.is_defined = true;
-        symbol.ty = variable_type;
+        symbol.set_defined(true);
+        symbol.set_type(variable_type);
         Ok(())
     }
 
@@ -446,11 +419,10 @@ impl<'ws> Resolver<'ws> {
         };
         let distance_and_symbol =
             self.get_definition_distance_and_symbol(&type_id.name.data.parts[0]);
-        let Some((_distance, symbol)) = distance_and_symbol else {
+        let Some(SymbolResolutionResult { symbol, .. }) = distance_and_symbol else {
             bail!("Unknown symbol: {}", type_id.name);
         };
-        let Some(value) = &symbol.value else {
-            dbg!(&self.current_scope().symbols);
+        let Some(value) = symbol.value() else {
             bail!("Unknown value for symbol: {}", type_id.name);
         };
         let ValueKind::Type(ty) = &value.val else {
@@ -513,9 +485,14 @@ impl<'ws> Resolver<'ws> {
             {
                 // Not a field, try to resolve function instead
                 let distance_and_symbol = self.get_definition_distance_and_symbol(&get_expr.name);
-                if let Some((distance, symbol)) = distance_and_symbol {
+                if let Some(SymbolResolutionResult {
+                    distance,
+                    is_local,
+                    symbol,
+                }) = distance_and_symbol
+                {
                     // Matching name found
-                    if let TypeKind::Function(_fun) = symbol.ty.kind() {
+                    if let TypeKind::Function(_fun) = symbol.ty().kind() {
                         // function in method call position, replace ast
                         let fun_node = AstNode::new(
                             Expr::Variable(VarUse {
@@ -525,12 +502,12 @@ impl<'ws> Resolver<'ws> {
                                         full_name: FullName::unresolved(),
                                     },
                                     get_expr.name.location().clone(),
-                                    symbol.ty,
+                                    symbol.ty(),
                                 ),
                                 distance,
                             }),
                             get_expr.name.location().clone(),
-                            symbol.ty,
+                            symbol.ty(),
                         );
                         let first_argument = get_expr.object.clone();
                         call.callee = fun_node;
@@ -563,7 +540,7 @@ impl<'ws> Resolver<'ws> {
             self.diagnose(diagnostic);
             return Ok(());
         };
-        if !self.type_checker.is_assignable_to(&set.value.ty, &field.ty) {
+        if !self.type_checker.is_assignable_to(set.value.ty, field.ty) {
             let diagnostic = InterpreterDiagnostic::new(
                 ast_info.location,
                 format!(
@@ -672,7 +649,7 @@ impl<'ws> Resolver<'ws> {
             );
         }
         for (parameter, argument) in function_type.parameter_types.iter().zip(&call.arguments) {
-            if !self.type_checker.is_assignable_to(&argument.ty, parameter) {
+            if !self.type_checker.is_assignable_to(argument.ty, *parameter) {
                 diagnose(
                     &argument.location,
                     format!(
@@ -734,7 +711,7 @@ impl<'ws> Resolver<'ws> {
             };
             if !self
                 .type_checker
-                .is_assignable_to(&field_initializer.expression.ty, &field.ty)
+                .is_assignable_to(field_initializer.expression.ty, field.ty)
             {
                 diagnose(
                     field_initializer.field_name.location(),
@@ -784,19 +761,22 @@ impl<'ws> Resolver<'ws> {
         self.resolve_expr(&mut assign.value)?;
         let distance_and_symbol =
             self.get_definition_distance_and_symbol(&destination.data.parts[0]);
-        if let Some((distance, symbol)) = distance_and_symbol {
+        if let Some(SymbolResolutionResult {
+            symbol, distance, ..
+        }) = distance_and_symbol
+        {
             assign.distance = distance;
-            let destination_type = &symbol.ty;
-            *ast_info.ty = symbol.ty;
+            let destination_type = symbol.ty();
+            *ast_info.ty = symbol.ty();
 
-            let expression_type = &assign.value.ty;
+            let expression_type = assign.value.ty;
             if !self
                 .type_checker
                 .is_assignable_to(expression_type, destination_type)
             {
                 let mut diagnostic = InterpreterDiagnostic::new(ast_info.location, format!("Expression value of type {} cannot be assigned to variable '{}' of type {}", expression_type, assign.destination, destination_type));
                 diagnostic.add_label(
-                    &symbol.declaration_site,
+                    &symbol.declaration_site(),
                     format!("is declared as {} here", destination_type),
                 );
                 self.diagnose(diagnostic);
@@ -819,18 +799,32 @@ impl<'ws> Resolver<'ws> {
     ) -> FelicoResult<()> {
         let parts = &var_use.name.data.parts;
         let distance_and_symbol = self.get_definition_distance_and_symbol(&parts[0]);
-        if let Some((distance, symbol)) = distance_and_symbol {
+        if let Some(SymbolResolutionResult {
+            distance, symbol, ..
+        }) = distance_and_symbol
+        {
+            if distance < 0 && symbol.ty().is_value() {
+                let diagnostic = InterpreterDiagnostic::new(
+                    ast_info.location,
+                    format!(
+                        "Function may not capture variable '{}' of type '{}'",
+                        var_use.name,
+                        symbol.ty()
+                    ),
+                );
+                self.diagnose(diagnostic);
+                return Ok(());
+            }
             var_use.distance = distance;
             var_use.name.data.full_name = self
                 .workspace
                 .make_full_name(var_use.name.data.parts[0].lexeme());
-            let mut ty = symbol.ty;
+            let mut ty = symbol.ty();
             for part in parts.iter().skip(1) {
-                let methods = symbol.symbol_map.lock().unwrap();
-                let Some(sym) = methods.get(part.lexeme()) else {
+                let Some(sym) = symbol.lookup_symbol(part.lexeme()) else {
                     bail!("No symbol found for name {}", var_use.name);
                 };
-                ty = sym.ty;
+                ty = sym.ty();
             }
             *ast_info.ty = ty;
         } else {
@@ -883,20 +877,29 @@ impl<'ws> Resolver<'ws> {
         Ok(())
     }
 
-    fn get_definition_distance_and_symbol(
-        &self,
-        token: &Token<'ws>,
-    ) -> Option<(i32, &Symbol<'ws>)> {
+    fn get_definition_distance_and_symbol<'a>(
+        &'a self,
+        token: &'a Token<'ws>,
+    ) -> Option<SymbolResolutionResult<'a, 'ws>> {
         let name = token.lexeme();
         let mut distance = -1;
+        let mut is_local = true;
         for scope in self.scopes.iter().rev() {
             distance += 1;
             if let Some(entry) = scope.get(name) {
-                return if entry.is_defined {
-                    Some((distance, entry))
+                return if entry.is_defined() {
+                    Some(SymbolResolutionResult {
+                        distance,
+                        is_local,
+                        symbol: entry,
+                    })
                 } else {
                     None
                 };
+            }
+            if scope.current_function.is_some() {
+                // Now leaving current function
+                is_local = false;
             }
         }
         None
@@ -924,10 +927,10 @@ impl<'ws> Resolver<'ws> {
         match self.current_scope_mut().entry(name) {
             Entry::Occupied(value) => {
                 let mut diagnostic = InterpreterDiagnostic::new(
-                    &symbol.declaration_site,
+                    symbol.declaration_site(),
                     format!("The name '{}' already declared", name),
                 );
-                diagnostic.add_label(&value.get().declaration_site, "is already declared here");
+                diagnostic.add_label(value.get().declaration_site(), "is already declared here");
                 self.diagnose(diagnostic);
             }
             Entry::Vacant(slot) => {
@@ -950,8 +953,8 @@ impl<'ws> Resolver<'ws> {
             .map(|symbol| &symbol.current_function)
             .find(|ret| ret.is_some())
         {
-            let returned_type = &return_expr.expression.ty;
-            let expected_type = &current_function_info.declared_return_type;
+            let returned_type = return_expr.expression.ty;
+            let expected_type = current_function_info.declared_return_type;
             if !self
                 .type_checker
                 .is_assignable_to(returned_type, expected_type)

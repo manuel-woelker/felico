@@ -1,11 +1,13 @@
 use crate::frontend::lex::token::{Token, TokenType};
+use crate::frontend::resolve::symbol::Symbol;
 use crate::infra::arena::Arena;
 use crate::infra::full_name::{FullName, FullNameInner};
 use crate::infra::result::FelicoResult;
 use crate::infra::source_file::{SourceFile, SourceFileInner};
 use crate::infra::source_span::SourceSpan;
-use crate::interpret::value::ValueFactory;
+use crate::interpret::value::{InterpreterValue, ValueFactory};
 use crate::model::type_factory::TypeFactory;
+use crate::model::types::Type;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
 
@@ -105,13 +107,46 @@ impl<'ws> Workspace<'ws> {
         Ok(self.source_file_from_string(filename, source))
     }
 
-    pub(crate) fn make_token(
+    pub fn make_token(
         &self,
         token_type: TokenType,
         location: SourceSpan<'ws>,
         value: &'ws str,
     ) -> Token<'ws> {
         self.inner.arena.make_token(token_type, location, value)
+    }
+
+    pub fn make_symbol(
+        &self,
+        declaration_site: SourceSpan<'ws>,
+        is_defined: bool,
+        ty: Type<'ws>,
+        value: Option<InterpreterValue<'ws>>,
+    ) -> Symbol<'ws> {
+        Symbol::new(self.inner.arena, declaration_site, is_defined, ty, value)
+    }
+
+    pub fn make_symbol_with_value(
+        &self,
+        declaration_site: &SourceSpan<'ws>,
+        value: InterpreterValue<'ws>,
+    ) -> Symbol<'ws> {
+        self.make_symbol(declaration_site.clone(), true, value.ty, Some(value))
+    }
+
+    pub fn make_symbol_defined(
+        &self,
+        declaration_site: &SourceSpan<'ws>,
+        ty: &Type<'ws>,
+    ) -> Symbol<'ws> {
+        self.make_symbol(declaration_site.clone(), true, *ty, None)
+    }
+    pub fn make_symbol_declared(
+        &self,
+        declaration_site: &SourceSpan<'ws>,
+        ty: &Type<'ws>,
+    ) -> Symbol<'ws> {
+        self.make_symbol(declaration_site.clone(), false, *ty, None)
     }
 }
 
