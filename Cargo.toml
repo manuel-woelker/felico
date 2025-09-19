@@ -1,6 +1,23 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 
 members = [
     "base",
 ]
+
+[profile.dev.package."*"]
+# Set the default for dependencies in Development mode.
+opt-level = 3
+
+[profile.dev]
+# Turn on a small amount of optimization in Development mode.
+opt-level = 0
+lto = false
+#debug = false
+
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
