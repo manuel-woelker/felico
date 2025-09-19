@@ -2,7 +2,7 @@
 resolver = "3"
 
 members = [
-    "base",
+    "base", "lexer",
 ]
 
 [profile.dev.package."*"]
