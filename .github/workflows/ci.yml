@@ -61,7 +61,7 @@ jobs:
         with:
           # Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: manuel-woelker/tool-tool          # Specify whether the Codecov output should be verbose
+          slug: manuel-woelker/felico          # Specify whether the Codecov output should be verbose
           files: ${{ steps.coverage.outputs.report }}
           flags: rust
           verbose: true
