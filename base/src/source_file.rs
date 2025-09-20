@@ -1,12 +1,14 @@
+use crate::source_excerpt::SourceExcerpt;
+use crate::{FilePath, SourceType};
 use std::fmt::{Debug, Formatter};
 
 pub struct SourceFile {
-    path: String,
-    content: String,
+    path: FilePath,
+    content: SourceType,
 }
 
 impl SourceFile {
-    pub fn new(path: String, content: String) -> Self {
+    pub fn new(path: FilePath, content: SourceType) -> Self {
         Self { path, content }
     }
 
@@ -16,6 +18,16 @@ impl SourceFile {
 
     pub fn content(&self) -> &str {
         &self.content
+    }
+
+    pub fn excerpt(&self, start: usize, end: usize) -> SourceExcerpt {
+        let start_line = self.content[..start].lines().count();
+        SourceExcerpt::new(
+            self.path.clone(),
+            self.content[start..end].to_string(),
+            start_line,
+            start,
+        )
     }
 }
 
