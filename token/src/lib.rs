@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod token;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use felico_base::result::FelicoResult;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use crate::token::{Token, TokenKind};
+
+pub type TokenIterator<'source> = Box<dyn Iterator<Item = FelicoResult<Token<'source>>> + 'source>;

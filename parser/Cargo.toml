@@ -1,12 +1,14 @@
 [package]
-name = "felico-lexer"
+name = "felico-parser"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 felico-base = { path = "../base" }
+felico-ast = { path = "../ast" }
 felico-source = { path = "../source" }
 felico-token = { path = "../token" }
 
 [dev-dependencies]
+felico-lexer = { path = "../lexer" }
 expect-test = { workspace = true }

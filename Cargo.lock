@@ -63,14 +63,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ast"
-version = "0.1.0"
-dependencies = [
- "felico-base",
- "felico-source",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -93,6 +85,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "felico-ast"
+version = "0.1.0"
+dependencies = [
+ "felico-base",
+ "felico-source",
+]
+
+[[package]]
 name = "felico-base"
 version = "0.1.0"
 
@@ -103,6 +103,19 @@ dependencies = [
  "expect-test",
  "felico-base",
  "felico-source",
+ "felico-token",
+]
+
+[[package]]
+name = "felico-parser"
+version = "0.1.0"
+dependencies = [
+ "expect-test",
+ "felico-ast",
+ "felico-base",
+ "felico-lexer",
+ "felico-source",
+ "felico-token",
 ]
 
 [[package]]
@@ -118,6 +131,10 @@ dependencies = [
 [[package]]
 name = "felico-token"
 version = "0.1.0"
+dependencies = [
+ "felico-base",
+ "felico-source",
+]
 
 [[package]]
 name = "is_terminal_polyfill"

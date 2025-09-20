@@ -1,8 +1,8 @@
-use crate::token::{Token, TokenKind};
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
 use felico_source::source_file::SourceFile;
+use felico_token::{Token, TokenKind};
 use std::str::Chars;
 
 pub struct Lexer<'source> {
@@ -10,6 +10,7 @@ pub struct Lexer<'source> {
     current_position: usize,
     chars: Chars<'source>,
     source_file: &'source SourceFile,
+    at_end: bool,
 }
 
 impl<'source> Lexer<'source> {
@@ -19,12 +20,15 @@ impl<'source> Lexer<'source> {
             chars: source_file.content().chars(),
             start_position: 0,
             current_position: 0,
+            at_end: false,
         }
     }
 
     pub fn next_token(&mut self) -> FelicoResult<Token<'source>> {
         let Some(current_char) = self.chars.next() else {
-            return self.create_token(TokenKind::EOF);
+            let token = self.create_token(TokenKind::EOF);
+            self.at_end = true;
+            return token;
         };
         self.current_position += current_char.len_utf8();
         match current_char {
@@ -65,12 +69,23 @@ impl<'source> Lexer<'source> {
     }
 }
 
+impl<'source> Iterator for Lexer<'source> {
+    type Item = FelicoResult<Token<'source>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.at_end {
+            None
+        } else {
+            Some(self.next_token())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::lexer::Lexer;
-    use crate::token::TokenKind;
     use expect_test::{Expect, expect};
     use felico_source::source_file::SourceFile;
+    use felico_token::TokenKind;
     use std::fmt::Write;
 
     fn input_to_test_string(input: &str) -> String {

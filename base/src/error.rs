@@ -22,3 +22,14 @@ impl FelicoError {
         }
     }
 }
+
+impl<T> From<T> for FelicoError
+where
+    T: std::error::Error + 'static,
+{
+    fn from(value: T) -> Self {
+        Self {
+            error: Box::new(value),
+        }
+    }
+}

@@ -12,6 +12,10 @@ impl SourceFile {
         Self { path, content }
     }
 
+    pub fn in_memory(path: impl Into<FilePath>, content: impl Into<SourceType>) -> Self {
+        Self::new(path.into(), content.into())
+    }
+
     pub fn path(&self) -> &str {
         &self.path
     }
