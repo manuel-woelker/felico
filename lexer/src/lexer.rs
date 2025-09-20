@@ -30,6 +30,14 @@ impl<'source> Lexer<'source> {
         match current_char {
             '(' => self.create_token(TokenKind::ParenOpen),
             ')' => self.create_token(TokenKind::ParenClose),
+            '{' => self.create_token(TokenKind::BraceOpen),
+            '}' => self.create_token(TokenKind::BraceClose),
+            '[' => self.create_token(TokenKind::BracketOpen),
+            ']' => self.create_token(TokenKind::BracketClose),
+            ',' => self.create_token(TokenKind::Comma),
+            ';' => self.create_token(TokenKind::Semicolon),
+            ':' => self.create_token(TokenKind::Colon),
+            '.' => self.create_token(TokenKind::Dot),
             '"' => loop {
                 let Some(next_char) = self.chars.next() else {
                     return Err(FelicoError::message("Unterminated string"));
@@ -65,7 +73,7 @@ mod tests {
     use felico_source::source_file::SourceFile;
     use std::fmt::Write;
 
-    fn test_lexer(input: &str, expected: Expect) {
+    fn input_to_test_string(input: &str) -> String {
         let source_file = SourceFile::new("test".to_string(), input.to_string());
         let mut lexer = Lexer::new(&source_file);
         let mut test_string = String::new();
@@ -84,8 +92,45 @@ mod tests {
                 break;
             }
         }
+        test_string
+    }
+
+    fn test_lexer(input: &str, expected: Expect) {
+        let test_string = input_to_test_string(input);
         expected.assert_eq(&test_string);
     }
+
+    fn test_lex_symbol(input: &str, expected: &str) {
+        let test_string = input_to_test_string(input);
+        assert_eq!(
+            test_string,
+            format!("🧩   0+1  {expected:14} {input}\n🧩   1+0  EOF            \n")
+        );
+    }
+
+    macro_rules! test_lex_symbol {
+        ($(($name:ident $input:literal $expected:literal))*) => {
+            $(
+            #[test]
+            fn $name() {
+                test_lex_symbol($input, $expected);
+            }
+            )*
+        };
+    }
+
+    test_lex_symbol!(
+        (paren_open "(" "ParenOpen")
+        (paren_close ")" "ParenClose")
+        (brace_open "{" "BraceOpen")
+        (brace_close "}" "BraceClose")
+        (bracket_open "[" "BracketOpen")
+        (bracket_close "]" "BracketClose")
+        (comma "," "Comma")
+        (semicolon ";" "Semicolon")
+        (colon ":" "Colon")
+        (dot "." "Dot")
+    );
 
     macro_rules! test_lex {
         ($name:ident, $input:literal, $expected:expr) => {
@@ -101,24 +146,6 @@ mod tests {
         "",
         expect!([r#"
             🧩   0+0  EOF            
-        "#])
-    );
-
-    test_lex!(
-        paren_open,
-        "(",
-        expect!([r#"
-            🧩   0+1  ParenOpen      (
-            🧩   1+0  EOF            
-        "#])
-    );
-
-    test_lex!(
-        paren_close,
-        ")",
-        expect!([r#"
-            🧩   0+1  ParenClose     )
-            🧩   1+0  EOF            
         "#])
     );
 

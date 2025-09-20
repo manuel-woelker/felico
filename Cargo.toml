@@ -2,7 +2,7 @@
 resolver = "3"
 
 members = [
-    "base", "lexer", "source",
+    "base", "lexer", "source", "token",
 ]
 
 [workspace.dependencies]
