@@ -1,23 +1,23 @@
 use crate::{FilePath, SourceType};
 
 #[derive(Debug)]
-pub struct SourceExcerpt {
+pub struct SourceSnippet {
     file_path: FilePath,
-    source_excerpt: SourceType,
+    source_snippet: SourceType,
     start_line: usize,
     start_offset: usize,
 }
 
-impl SourceExcerpt {
+impl SourceSnippet {
     pub fn new(
         file_path: FilePath,
-        source_excerpt: SourceType,
+        source_snippet: SourceType,
         start_line: usize,
         start_offset: usize,
     ) -> Self {
         Self {
             file_path,
-            source_excerpt,
+            source_snippet,
             start_line,
             start_offset,
         }
@@ -27,8 +27,8 @@ impl SourceExcerpt {
         self.file_path.as_str()
     }
 
-    pub fn source_excerpt(&self) -> &str {
-        self.source_excerpt.as_str()
+    pub fn source_snippet(&self) -> &str {
+        self.source_snippet.as_str()
     }
 
     pub fn start_line(&self) -> usize {

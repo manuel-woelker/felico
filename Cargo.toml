@@ -5,6 +5,9 @@ members = [
     "base", "lexer",
 ]
 
+[workspace.dependencies]
+expect-test = "1.5.1"
+
 [profile.dev.package."*"]
 # Set the default for dependencies in Development mode.
 opt-level = 3

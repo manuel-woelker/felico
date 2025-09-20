@@ -1,4 +1,4 @@
-use crate::source_excerpt::SourceExcerpt;
+use crate::source_snippet::SourceSnippet;
 use crate::{FilePath, SourceType};
 use std::fmt::{Debug, Formatter};
 
@@ -20,9 +20,9 @@ impl SourceFile {
         &self.content
     }
 
-    pub fn excerpt(&self, start: usize, end: usize) -> SourceExcerpt {
+    pub fn excerpt(&self, start: usize, end: usize) -> SourceSnippet {
         let start_line = self.content[..start].lines().count();
-        SourceExcerpt::new(
+        SourceSnippet::new(
             self.path.clone(),
             self.content[start..end].to_string(),
             start_line,

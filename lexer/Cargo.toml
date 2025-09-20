@@ -7,4 +7,4 @@ edition = "2024"
 felico-base = { path = "../base" }
 
 [dev-dependencies]
-expect-test = "1.5.1"
+expect-test = { workspace = true }
