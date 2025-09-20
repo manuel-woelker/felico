@@ -3,6 +3,7 @@ pub mod file_location;
 pub mod result;
 pub mod source_excerpt;
 pub mod source_file;
+pub mod source_span;
 
 pub type FilePath = String;
 pub type SourceType = String;
