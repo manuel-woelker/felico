@@ -87,16 +87,22 @@ dependencies = [
 [[package]]
 name = "felico-base"
 version = "0.1.0"
-dependencies = [
- "annotate-snippets",
- "anstream",
- "expect-test",
-]
 
 [[package]]
 name = "felico-lexer"
 version = "0.1.0"
 dependencies = [
+ "expect-test",
+ "felico-base",
+ "felico-source",
+]
+
+[[package]]
+name = "felico-source"
+version = "0.1.0"
+dependencies = [
+ "annotate-snippets",
+ "anstream",
  "expect-test",
  "felico-base",
 ]

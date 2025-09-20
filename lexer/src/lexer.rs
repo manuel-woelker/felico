@@ -1,8 +1,8 @@
 use crate::token::{Token, TokenKind};
 use felico_base::error::FelicoError;
-use felico_base::file_location::FileLocation;
 use felico_base::result::FelicoResult;
-use felico_base::source_file::SourceFile;
+use felico_source::file_location::FileLocation;
+use felico_source::source_file::SourceFile;
 use std::str::Chars;
 
 pub struct Lexer<'source> {
@@ -62,7 +62,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::token::TokenKind;
     use expect_test::{Expect, expect};
-    use felico_base::source_file::SourceFile;
+    use felico_source::source_file::SourceFile;
     use std::fmt::Write;
 
     fn test_lexer(input: &str, expected: Expect) {

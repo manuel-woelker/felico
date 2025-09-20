@@ -1,4 +1,4 @@
-use felico_base::file_location::FileLocation;
+use felico_source::file_location::FileLocation;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

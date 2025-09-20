@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 felico-base = { path = "../base" }
+felico-source = { path = "../source" }
 
 [dev-dependencies]
 expect-test = { workspace = true }

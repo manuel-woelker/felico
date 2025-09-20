@@ -1,0 +1,13 @@
+[package]
+name = "felico-source"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+felico-base = { path = "../base" }
+annotate-snippets = "0.12.4"
+
+[dev-dependencies]
+expect-test = { workspace = true }
+anstream = "0.6.20"
+annotate-snippets = { version = "0.12.4", features = ["testing-colors"] }
