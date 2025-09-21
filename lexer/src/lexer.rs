@@ -277,4 +277,16 @@ mod tests {
             🧩  12+0  EOF            
         "#])
     );
+    test_lex!(
+        function_call,
+        "print(\"hello\");",
+        expect!([r#"
+            🧩   0+5  Identifier     print
+            🧩   5+1  ParenOpen      (
+            🧩   6+7  String         "hello"
+            🧩  13+1  ParenClose     )
+            🧩  14+1  Semicolon      ;
+            🧩  15+0  EOF            
+        "#])
+    );
 }

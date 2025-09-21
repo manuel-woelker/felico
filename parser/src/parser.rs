@@ -1,7 +1,9 @@
 use felico_ast::ast_node::AstNode;
 use felico_ast::compilation_unit::{CompilationUnit, CompilationUnitNode};
+use felico_ast::expression::{Expression, ExpressionNode};
 use felico_ast::fun_definition::{FunDefinition, FunDefinitionNode};
 use felico_ast::identifier::{Identifier, IdentifierNode};
+use felico_ast::statement::{ExpressionStatement, Statement, StatementNode};
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
@@ -101,11 +103,75 @@ impl<'source> Parser<'source> {
         self.consume(TokenKind::ParenOpen)?;
         self.consume(TokenKind::ParenClose)?;
         self.consume(TokenKind::BraceOpen)?;
+        let mut statements = Vec::new();
+        while self.current_token.kind != TokenKind::BraceClose {
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
         self.consume(TokenKind::BraceClose)?;
         Ok(AstNode::new(
             FileLocation::new(self.source_file, start_position, self.current_position()),
-            FunDefinition::new(name),
+            FunDefinition::new(name, statements),
         ))
+    }
+
+    fn parse_statement(&mut self) -> FelicoResult<StatementNode<'source>> {
+        let result = self.parse_expression_statement()?;
+        Ok(result)
+    }
+
+    fn parse_expression_statement(&mut self) -> FelicoResult<StatementNode<'source>> {
+        let start_position = self.current_position();
+        let expression = self.parse_expression()?;
+        Ok(AstNode::new(
+            FileLocation::new(self.source_file, start_position, self.current_position()),
+            Statement::Expression(ExpressionStatement { expression }),
+        ))
+    }
+
+    fn parse_expression(&mut self) -> FelicoResult<ExpressionNode<'source>> {
+        let expression = self.parse_call()?;
+        Ok(expression)
+    }
+
+    fn parse_call(&mut self) -> FelicoResult<ExpressionNode<'source>> {
+        let start_position = self.current_position();
+        let expr = self.parse_primary_expression()?;
+        if !self.is_at(TokenKind::ParenOpen) {
+            return Ok(expr);
+        }
+        self.consume(TokenKind::ParenOpen)?;
+        let argument = self.parse_expression()?;
+        self.consume(TokenKind::ParenClose)?;
+        Ok(AstNode::new(
+            FileLocation::new(self.source_file, start_position, self.current_position()),
+            Expression::call(expr, vec![argument]),
+        ))
+    }
+
+    fn parse_primary_expression(&mut self) -> FelicoResult<ExpressionNode<'source>> {
+        let result = match self.current_token.kind {
+            TokenKind::Identifier => {
+                let name = self.parse_identifier()?;
+                Ok(AstNode::new(
+                    FileLocation::new(self.source_file, 0, 0),
+                    Expression::var_use(name),
+                ))
+            }
+            TokenKind::String => {
+                let token = self.consume(TokenKind::String)?;
+                Ok(AstNode::new(
+                    FileLocation::new(self.source_file, 0, 0),
+                    Expression::literal(token.lexeme.to_string()),
+                ))
+            }
+            other => Err(FelicoError::message(format!("Unexpected token: {other}"))),
+        }?;
+        Ok(result)
+    }
+
+    fn is_at(&mut self, token_kind: TokenKind) -> bool {
+        self.current_token.kind == token_kind
     }
 
     fn current_position(&mut self) -> usize {
@@ -167,6 +233,16 @@ mod tests {
         🌲   0+19  Compilation Unit
         🌲   0+19  fun do_nothing
     "#]]
+    );
+
+    test_parse!(
+        fun_call,
+        "fun foo() {print(\"hello\")}",
+        expect![[r#"
+            🌲   0+26  Compilation Unit
+            🌲   0+26  fun foo
+            🌲  11+14   stmt  call  var use Ident print
+            🌲   0+0       literal ""hello"""#]]
     );
 
     fn test_parse_error(source: &str, expected: Expect) -> FelicoResult<()> {
