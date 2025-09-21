@@ -5,7 +5,11 @@ use felico_ast::identifier::{Identifier, IdentifierNode};
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
+use felico_source::source_error::SourceError;
 use felico_source::source_file::SourceFile;
+use felico_source::source_message::{SourceLabel, SourceMessage};
+use felico_source::source_snippet::SourceSnippet;
+use felico_source::source_span::SourceSpan;
 use felico_token::{Token, TokenIterator, TokenKind};
 
 pub struct Parser<'source> {
@@ -45,10 +49,27 @@ impl<'source> Parser<'source> {
 
     fn consume(&mut self, token_kind: TokenKind) -> FelicoResult<Token<'source>> {
         if self.current_token.kind != token_kind {
-            return Err(FelicoError::message(format!(
-                "Unexpected token: {}, expected {}",
-                self.current_token.kind, token_kind
-            )));
+            let source_snippet = SourceSnippet::new(
+                self.source_file.path().to_string(),
+                self.source_file.content().to_string(),
+                1,
+                0,
+            );
+            let mut source_message = SourceMessage::error(
+                format!(
+                    "Unexpected token: “{}” ({}) , expected {}",
+                    self.current_token.lexeme, self.current_token.kind, token_kind
+                ),
+                source_snippet,
+            );
+            source_message.add_label(SourceLabel::new(
+                SourceSpan::new(
+                    self.current_token.location.start,
+                    self.current_token.location.end,
+                ),
+                format!("expected {token_kind} here",),
+            ));
+            return Err(SourceError::new(source_message).into());
         }
         let token = self.advance()?;
         Ok(token)
@@ -104,41 +125,80 @@ impl<'source> Parser<'source> {
 #[cfg(test)]
 mod tests {
     use crate::parser::Parser;
-    use expect_test::expect;
+    use expect_test::{Expect, expect};
     use felico_ast::test_print::TestPrint;
+    use felico_base::error::FelicoError;
     use felico_base::result::FelicoResult;
     use felico_lexer::lexer::Lexer;
     use felico_source::source_file::SourceFile;
 
-    #[test]
-    fn test_parse_empty() {
-        let source_file = SourceFile::in_memory("test.felico", "");
-        let lexer = Lexer::new(&source_file);
-        let mut parser = Parser::new(&source_file, Box::new(lexer)).unwrap();
-        let result = parser.parse().unwrap();
-        assert_eq!(result.location.start, 0);
-        assert_eq!(result.location.end, 0);
-        let mut test_string = String::new();
-        result.test_print(&mut test_string, 0).unwrap();
-        expect!([r#"
-            🌲   0+0   Compilation Unit
-        "#])
-        .assert_eq(&test_string);
-    }
-
-    #[test]
-    fn test_parse_empty_fun() -> FelicoResult<()> {
-        let source_file = SourceFile::in_memory("test.felico", "fun do_nothing() {}");
+    fn test_parse(source: &str, expected: Expect) -> FelicoResult<()> {
+        let source_file = SourceFile::in_memory("test.felico", source);
         let lexer = Lexer::new(&source_file);
         let mut parser = Parser::new(&source_file, Box::new(lexer))?;
         let result = parser.parse()?;
         let mut test_string = String::new();
         result.test_print(&mut test_string, 0)?;
-        expect!([r#"
-            🌲   0+19  Compilation Unit
-            🌲   0+19  fun do_nothing
-        "#])
-        .assert_eq(&test_string);
+        expected.assert_eq(&test_string);
         Ok(())
     }
+
+    macro_rules! test_parse {
+        ($name:ident, $source:literal, $expected:expr) => {
+            #[test]
+            fn $name() -> FelicoResult<()> {
+                test_parse($source, $expected)
+            }
+        };
+    }
+
+    test_parse!(
+        empty,
+        "",
+        expect![[r#"
+        🌲   0+0   Compilation Unit
+    "#]]
+    );
+
+    test_parse!(
+        fun_empty,
+        "fun do_nothing() {}",
+        expect![[r#"
+        🌲   0+19  Compilation Unit
+        🌲   0+19  fun do_nothing
+    "#]]
+    );
+
+    fn test_parse_error(source: &str, expected: Expect) -> FelicoResult<()> {
+        let source_file = SourceFile::in_memory("test.felico", source);
+        let lexer = Lexer::new(&source_file);
+        let mut parser = Parser::new(&source_file, Box::new(lexer))?;
+        let Err(error) = parser.parse() else {
+            return Err(FelicoError::message("expected error"));
+        };
+        dbg!(&error);
+        expected.assert_eq(&error.to_test_string());
+        Ok(())
+    }
+
+    macro_rules! test_parse_error {
+        ($name:ident, $source:literal, $expected:expr) => {
+            #[test]
+            fn $name() -> FelicoResult<()> {
+                test_parse_error($source, $expected)
+            }
+        };
+    }
+
+    test_parse_error!(
+        error_fun_no_name,
+        "fun () {}",
+        expect![[r#"
+        Error: error: Unexpected token: “(” (ParenOpen) , expected Identifier
+          ╭▸ test.felico:1:5
+          │
+        1 │ fun () {}
+          ╰╴    ━ expected Identifier here
+    "#]]
+    );
 }

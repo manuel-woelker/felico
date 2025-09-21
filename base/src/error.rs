@@ -2,9 +2,8 @@ use std::backtrace::{Backtrace, BacktraceStatus};
 use std::fmt::{Debug, Formatter};
 
 mod message_error;
+use crate::unansi;
 pub use message_error::MessageError;
-mod source_error;
-pub use source_error::SourceError;
 
 pub struct FelicoError {
     pub error: Box<dyn std::error::Error>,
@@ -13,7 +12,7 @@ pub struct FelicoError {
 
 impl Debug for FelicoError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Error: {}", self.error)?;
+        self.write_to(f)?;
         if self.backtrace.status() == BacktraceStatus::Captured {
             writeln!(f, "{}", self.backtrace)?;
         }
@@ -24,6 +23,11 @@ impl Debug for FelicoError {
 impl FelicoError {
     pub fn message(s: impl Into<String>) -> Self {
         MessageError::from(s).into()
+    }
+
+    pub fn write_to(&self, write: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(write, "Error: {}", self.error)?;
+        Ok(())
     }
 }
 
@@ -36,6 +40,14 @@ where
             error: Box::new(value),
             backtrace: Backtrace::capture(),
         }
+    }
+}
+
+impl FelicoError {
+    pub fn to_test_string(&self) -> String {
+        let mut test_string = String::new();
+        self.write_to(&mut test_string).unwrap();
+        unansi(&test_string)
     }
 }
 

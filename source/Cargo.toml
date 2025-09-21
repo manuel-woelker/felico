@@ -9,5 +9,5 @@ annotate-snippets = "0.12.4"
 
 [dev-dependencies]
 expect-test = { workspace = true }
-anstream = "0.6.20"
+anstream = {workspace = true}
 annotate-snippets = { version = "0.12.4", features = ["testing-colors"] }

@@ -100,10 +100,7 @@ mod tests {
     use crate::source_snippet::SourceSnippet;
     use crate::source_span::SourceSpan;
     use expect_test::expect;
-
-    fn unansi(string: &str) -> String {
-        anstream::adapter::strip_str(string).to_string()
-    }
+    use felico_base::unansi;
 
     #[test]
     fn test_source_message() {

@@ -1,4 +1,5 @@
 pub mod file_location;
+pub mod source_error;
 pub mod source_file;
 pub mod source_message;
 pub mod source_snippet;
