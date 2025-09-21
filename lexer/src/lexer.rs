@@ -9,29 +9,49 @@ pub struct Lexer<'source> {
     start_position: usize,
     current_position: usize,
     chars: Chars<'source>,
+    current_char: char,
+    next_char: char,
     source_file: &'source SourceFile,
     at_end: bool,
 }
 
+const EOF: char = '␄';
+
 impl<'source> Lexer<'source> {
     pub fn new(source_file: &'source SourceFile) -> Self {
-        Self {
+        let mut lexer = Self {
             source_file,
             chars: source_file.content().chars(),
             start_position: 0,
             current_position: 0,
             at_end: false,
+            current_char: EOF,
+            next_char: EOF,
+        };
+        // Initialize next_char
+        lexer.advance();
+        lexer.current_position = 0;
+        lexer
+    }
+
+    fn advance(&mut self) {
+        self.current_char = self.next_char;
+        if self.current_char != EOF {
+            self.current_position += self.current_char.len_utf8();
         }
+        self.next_char = self.chars.next().unwrap_or(EOF);
     }
 
     pub fn next_token(&mut self) -> FelicoResult<Token<'source>> {
-        let Some(current_char) = self.chars.next() else {
-            let token = self.create_token(TokenKind::EOF);
-            self.at_end = true;
-            return token;
-        };
-        self.current_position += current_char.len_utf8();
-        match current_char {
+        loop {
+            self.start_position = self.current_position;
+            self.advance();
+            if !self.current_char.is_whitespace() {
+                break;
+            }
+        }
+        match self.current_char {
+            EOF => self.create_token(TokenKind::EOF),
             '(' => self.create_token(TokenKind::ParenOpen),
             ')' => self.create_token(TokenKind::ParenClose),
             '{' => self.create_token(TokenKind::BraceOpen),
@@ -43,14 +63,30 @@ impl<'source> Lexer<'source> {
             ':' => self.create_token(TokenKind::Colon),
             '.' => self.create_token(TokenKind::Dot),
             '"' => loop {
-                let Some(next_char) = self.chars.next() else {
-                    return Err(FelicoError::message("Unterminated string"));
-                };
-                self.current_position += next_char.len_utf8();
-                if next_char == '"' {
-                    return self.create_token(TokenKind::String);
+                self.advance();
+                match self.current_char {
+                    EOF => return Err(FelicoError::message("Unterminated string")),
+                    '"' => {
+                        return self.create_token(TokenKind::String);
+                    }
+                    _ => {}
                 }
             },
+            'a'..='z' | 'A'..='Z' | '_' => {
+                loop {
+                    self.advance();
+                    if !(self.next_char.is_alphanumeric() || self.next_char == '_') {
+                        break;
+                    }
+                }
+                let identifier =
+                    &self.source_file.content()[self.start_position..self.current_position];
+                let token_kind = match identifier {
+                    "fun" => TokenKind::Fun,
+                    _ => TokenKind::Identifier,
+                };
+                self.create_token(token_kind)
+            }
             other => Err(FelicoError::message(format!(
                 "Unexpected character: {other}"
             ))),
@@ -207,6 +243,38 @@ mod tests {
         expect!([r#"
             🧩   0+13 String         "👨‍🚀"
             🧩  13+0  EOF            
+        "#])
+    );
+
+    test_lex!(
+        fun,
+        "fun ",
+        expect!([r#"
+            🧩   0+3  Fun            fun
+            🧩   4+0  EOF            
+        "#])
+    );
+
+    test_lex!(
+        identifier,
+        "foobar",
+        expect!([r#"
+            🧩   0+6  Identifier     foobar
+            🧩   6+0  EOF            
+        "#])
+    );
+
+    test_lex!(
+        function,
+        "fun foo() {}",
+        expect!([r#"
+            🧩   0+3  Fun            fun
+            🧩   4+3  Identifier     foo
+            🧩   7+1  ParenOpen      (
+            🧩   8+1  ParenClose     )
+            🧩  10+1  BraceOpen      {
+            🧩  11+1  BraceClose     }
+            🧩  12+0  EOF            
         "#])
     );
 }

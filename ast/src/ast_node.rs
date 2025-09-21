@@ -3,6 +3,7 @@ use felico_base::indent;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
 use std::fmt::Write;
+use std::ops::Deref;
 
 pub struct AstNode<'source, T: TestPrint> {
     pub location: FileLocation<'source>,
@@ -25,5 +26,13 @@ impl<'source, T: TestPrint> TestPrint for AstNode<'source, T> {
         )?;
         indent::indent(write, indent)?;
         self.node.test_print(write, indent)
+    }
+}
+
+impl<T: TestPrint> Deref for AstNode<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
     }
 }
