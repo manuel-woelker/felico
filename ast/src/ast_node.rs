@@ -16,7 +16,7 @@ impl<'source, T: TestPrint> AstNode<'source, T> {
     }
 }
 
-impl<'source, T: TestPrint> TestPrint for AstNode<'source, T> {
+impl<T: TestPrint> TestPrint for AstNode<'_, T> {
     fn test_print(&self, write: &mut dyn Write, indent: usize) -> FelicoResult<()> {
         write!(
             write,

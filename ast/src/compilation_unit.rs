@@ -16,7 +16,7 @@ impl<'source> CompilationUnit<'source> {
 
 pub type CompilationUnitNode<'source> = AstNode<'source, CompilationUnit<'source>>;
 
-impl<'source> TestPrint for CompilationUnit<'source> {
+impl TestPrint for CompilationUnit<'_> {
     fn test_print(&self, write: &mut dyn Write, indent: usize) -> FelicoResult<()> {
         writeln!(write, "{} Compilation Unit", "\t".repeat(indent))?;
         for fun_definition in &self.fun_definitions {
