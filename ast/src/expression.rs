@@ -46,7 +46,7 @@ impl TestPrint for Expression<'_> {
                 var_use.name.deref().test_print(write, indent + 1)?;
             }
             Expression::Literal(literal) => {
-                write!(write, " literal \"{}\"", &literal.value)?;
+                writeln!(write, " literal \"{}\"", &literal.value)?;
             }
         }
         Ok(())

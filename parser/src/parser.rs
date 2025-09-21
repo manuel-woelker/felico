@@ -4,6 +4,7 @@ use felico_ast::expression::{Expression, ExpressionNode};
 use felico_ast::fun_definition::{FunDefinition, FunDefinitionNode};
 use felico_ast::identifier::{Identifier, IdentifierNode};
 use felico_ast::statement::{ExpressionStatement, Statement, StatementNode};
+use felico_ast::test_print::TestPrint;
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
@@ -17,6 +18,7 @@ use felico_token::{Token, TokenIterator, TokenKind};
 pub struct Parser<'source> {
     source_file: &'source SourceFile,
     current_token: Token<'source>,
+    last_position: usize,
     tokens: TokenIterator<'source>,
 }
 
@@ -32,6 +34,7 @@ impl<'source> Parser<'source> {
             source_file,
             tokens,
             current_token,
+            last_position: 0,
         })
     }
 }
@@ -42,6 +45,7 @@ impl<'source> Parser<'source> {
     }
 
     fn advance(&mut self) -> FelicoResult<Token<'source>> {
+        self.last_position = self.current_token.location.end;
         let mut token = self.tokens.next().ok_or_else(|| {
             FelicoError::message("No more token in source file, expected at least EOF")
         })??;
@@ -90,10 +94,7 @@ impl<'source> Parser<'source> {
             }
             self.advance()?;
         }
-        Ok(AstNode::new(
-            FileLocation::new(self.source_file, start_position, self.current_position()),
-            CompilationUnit::new(fun_definitions),
-        ))
+        self.create_node(start_position, CompilationUnit::new(fun_definitions))
     }
 
     fn parse_function(&mut self) -> FelicoResult<FunDefinitionNode<'source>> {
@@ -109,10 +110,7 @@ impl<'source> Parser<'source> {
             statements.push(statement);
         }
         self.consume(TokenKind::BraceClose)?;
-        Ok(AstNode::new(
-            FileLocation::new(self.source_file, start_position, self.current_position()),
-            FunDefinition::new(name, statements),
-        ))
+        self.create_node(start_position, FunDefinition::new(name, statements))
     }
 
     fn parse_statement(&mut self) -> FelicoResult<StatementNode<'source>> {
@@ -123,10 +121,10 @@ impl<'source> Parser<'source> {
     fn parse_expression_statement(&mut self) -> FelicoResult<StatementNode<'source>> {
         let start_position = self.current_position();
         let expression = self.parse_expression()?;
-        Ok(AstNode::new(
-            FileLocation::new(self.source_file, start_position, self.current_position()),
+        self.create_node(
+            start_position,
             Statement::Expression(ExpressionStatement { expression }),
-        ))
+        )
     }
 
     fn parse_expression(&mut self) -> FelicoResult<ExpressionNode<'source>> {
@@ -143,31 +141,37 @@ impl<'source> Parser<'source> {
         self.consume(TokenKind::ParenOpen)?;
         let argument = self.parse_expression()?;
         self.consume(TokenKind::ParenClose)?;
-        Ok(AstNode::new(
-            FileLocation::new(self.source_file, start_position, self.current_position()),
-            Expression::call(expr, vec![argument]),
-        ))
+        self.create_node(start_position, Expression::call(expr, vec![argument]))
     }
 
     fn parse_primary_expression(&mut self) -> FelicoResult<ExpressionNode<'source>> {
+        let start_position = self.current_position();
         let result = match self.current_token.kind {
             TokenKind::Identifier => {
                 let name = self.parse_identifier()?;
-                Ok(AstNode::new(
-                    FileLocation::new(self.source_file, 0, 0),
-                    Expression::var_use(name),
-                ))
+                self.create_node(start_position, Expression::var_use(name))
             }
             TokenKind::String => {
                 let token = self.consume(TokenKind::String)?;
-                Ok(AstNode::new(
-                    FileLocation::new(self.source_file, 0, 0),
+                self.create_node(
+                    start_position,
                     Expression::literal(token.lexeme.to_string()),
-                ))
+                )
             }
             other => Err(FelicoError::message(format!("Unexpected token: {other}"))),
         }?;
         Ok(result)
+    }
+
+    fn create_node<T: TestPrint>(
+        &mut self,
+        start_position: usize,
+        node: T,
+    ) -> FelicoResult<AstNode<'source, T>> {
+        Ok(AstNode::new(
+            FileLocation::new(self.source_file, start_position, self.last_position),
+            node,
+        ))
     }
 
     fn is_at(&mut self, token_kind: TokenKind) -> bool {
@@ -179,12 +183,9 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_identifier(&mut self) -> FelicoResult<IdentifierNode<'source>> {
+        let start_position = self.current_position();
         let name = self.consume(TokenKind::Identifier)?;
-        let file_location = FileLocation::new(self.source_file, 0, 0);
-        Ok(AstNode::new(
-            file_location,
-            Identifier::new(name.lexeme.to_string()),
-        ))
+        self.create_node(start_position, Identifier::new(name.lexeme.to_string()))
     }
 }
 
@@ -230,19 +231,20 @@ mod tests {
         fun_empty,
         "fun do_nothing() {}",
         expect![[r#"
-        🌲   0+19  Compilation Unit
-        🌲   0+19  fun do_nothing
-    "#]]
+            🌲   0+19  Compilation Unit
+            🌲   0+19  fun ❮do_nothing❯
+        "#]]
     );
 
     test_parse!(
         fun_call,
-        "fun foo() {print(\"hello\")}",
+        "fun foo() {print(\"hello\"   )}",
         expect![[r#"
-            🌲   0+26  Compilation Unit
-            🌲   0+26  fun foo
-            🌲  11+14   stmt  call  var use Ident print
-            🌲   0+0       literal ""hello"""#]]
+            🌲   0+29  Compilation Unit
+            🌲   0+29  fun ❮foo❯
+            🌲  11+17   stmt  call  var use ❮print❯
+            🌲  17+7       literal ""hello""
+        "#]]
     );
 
     fn test_parse_error(source: &str, expected: Expect) -> FelicoResult<()> {
