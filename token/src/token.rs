@@ -69,7 +69,7 @@ impl<'source> Token<'source> {
     }
 }
 
-impl<'source> Display for Token<'source> {
+impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "“{}” ({})", self.lexeme, self.kind)
     }
