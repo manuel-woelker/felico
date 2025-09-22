@@ -22,20 +22,20 @@ pub enum TokenKind {
 impl TokenKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            TokenKind::Fun => "Fun",
+            TokenKind::Fun => "keyword fun",
             TokenKind::Identifier => "Identifier",
-            TokenKind::ParenOpen => "ParenOpen",
-            TokenKind::ParenClose => "ParenClose",
-            TokenKind::BraceOpen => "BraceOpen",
-            TokenKind::BraceClose => "BraceClose",
-            TokenKind::BracketOpen => "BracketOpen",
-            TokenKind::BracketClose => "BracketClose",
+            TokenKind::ParenOpen => "Open Parenthesis",
+            TokenKind::ParenClose => "Close Parenthesis",
+            TokenKind::BraceOpen => "Open Brace",
+            TokenKind::BraceClose => "Close Brace",
+            TokenKind::BracketOpen => "Open Bracket",
+            TokenKind::BracketClose => "Close Bracket",
             TokenKind::Comma => "Comma",
             TokenKind::Semicolon => "Semicolon",
             TokenKind::Colon => "Colon",
             TokenKind::Dot => "Dot",
             TokenKind::String => "String",
-            TokenKind::EOF => "EOF",
+            TokenKind::EOF => "End of File",
         }
     }
 }
@@ -66,5 +66,11 @@ impl<'source> Token<'source> {
             lexeme,
             location,
         }
+    }
+}
+
+impl<'source> Display for Token<'source> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "“{}” ({})", self.lexeme, self.kind)
     }
 }

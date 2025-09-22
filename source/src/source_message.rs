@@ -117,7 +117,7 @@ mod tests {
         ));
 
         let rendered_message = source_message.render();
-        println!("{}", rendered_message);
+        //println!("{}", rendered_message);
         expect![[r#"
             error: test message
                ╭▸ hello_world.felico:19:5

@@ -155,7 +155,7 @@ mod tests {
         let test_string = input_to_test_string(input);
         assert_eq!(
             test_string,
-            format!("🧩   0+1  {expected:14} {input}\n🧩   1+0  EOF            \n")
+            format!("🧩   0+1  {expected:14} {input}\n🧩   1+0  End of File    \n")
         );
     }
 
@@ -171,12 +171,12 @@ mod tests {
     }
 
     test_lex_symbol!(
-        (paren_open "(" "ParenOpen")
-        (paren_close ")" "ParenClose")
-        (brace_open "{" "BraceOpen")
-        (brace_close "}" "BraceClose")
-        (bracket_open "[" "BracketOpen")
-        (bracket_close "]" "BracketClose")
+        (paren_open "(" "Open Parenthesis")
+        (paren_close ")" "Close Parenthesis")
+        (brace_open "{" "Open Brace")
+        (brace_close "}" "Close Brace")
+        (bracket_open "[" "Open Bracket")
+        (bracket_close "]" "Close Bracket")
         (comma "," "Comma")
         (semicolon ";" "Semicolon")
         (colon ":" "Colon")
@@ -196,7 +196,7 @@ mod tests {
         empty,
         "",
         expect!([r#"
-            🧩   0+0  EOF            
+            🧩   0+0  End of File    
         "#])
     );
 
@@ -204,9 +204,9 @@ mod tests {
         parens,
         "()",
         expect!([r#"
-            🧩   0+1  ParenOpen      (
-            🧩   1+1  ParenClose     )
-            🧩   2+0  EOF            
+            🧩   0+1  Open Parenthesis (
+            🧩   1+1  Close Parenthesis )
+            🧩   2+0  End of File    
         "#])
     );
 
@@ -215,7 +215,7 @@ mod tests {
         "\"\"",
         expect!([r#"
             🧩   0+2  String         ""
-            🧩   2+0  EOF            
+            🧩   2+0  End of File    
         "#])
     );
 
@@ -224,7 +224,7 @@ mod tests {
         "\"x\"",
         expect!([r#"
             🧩   0+3  String         "x"
-            🧩   3+0  EOF            
+            🧩   3+0  End of File    
         "#])
     );
 
@@ -233,7 +233,7 @@ mod tests {
         "\"hello\"",
         expect!([r#"
             🧩   0+7  String         "hello"
-            🧩   7+0  EOF            
+            🧩   7+0  End of File    
         "#])
     );
 
@@ -242,7 +242,7 @@ mod tests {
         "\"👨‍🚀\"",
         expect!([r#"
             🧩   0+13 String         "👨‍🚀"
-            🧩  13+0  EOF            
+            🧩  13+0  End of File    
         "#])
     );
 
@@ -250,8 +250,8 @@ mod tests {
         fun,
         "fun ",
         expect!([r#"
-            🧩   0+3  Fun            fun
-            🧩   4+0  EOF            
+            🧩   0+3  keyword fun    fun
+            🧩   4+0  End of File    
         "#])
     );
 
@@ -260,7 +260,7 @@ mod tests {
         "foobar",
         expect!([r#"
             🧩   0+6  Identifier     foobar
-            🧩   6+0  EOF            
+            🧩   6+0  End of File    
         "#])
     );
 
@@ -268,13 +268,13 @@ mod tests {
         function,
         "fun foo() {}",
         expect!([r#"
-            🧩   0+3  Fun            fun
+            🧩   0+3  keyword fun    fun
             🧩   4+3  Identifier     foo
-            🧩   7+1  ParenOpen      (
-            🧩   8+1  ParenClose     )
-            🧩  10+1  BraceOpen      {
-            🧩  11+1  BraceClose     }
-            🧩  12+0  EOF            
+            🧩   7+1  Open Parenthesis (
+            🧩   8+1  Close Parenthesis )
+            🧩  10+1  Open Brace     {
+            🧩  11+1  Close Brace    }
+            🧩  12+0  End of File    
         "#])
     );
     test_lex!(
@@ -282,11 +282,11 @@ mod tests {
         "print(\"hello\");",
         expect!([r#"
             🧩   0+5  Identifier     print
-            🧩   5+1  ParenOpen      (
+            🧩   5+1  Open Parenthesis (
             🧩   6+7  String         "hello"
-            🧩  13+1  ParenClose     )
+            🧩  13+1  Close Parenthesis )
             🧩  14+1  Semicolon      ;
-            🧩  15+0  EOF            
+            🧩  15+0  End of File    
         "#])
     );
 }

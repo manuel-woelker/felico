@@ -44,6 +44,15 @@ impl<'source> Parser<'source> {
         self.parse_compilation_unit()
     }
 
+    pub fn parse_script(&mut self) -> FelicoResult<CompilationUnitNode<'source>> {
+        let start_position = self.current_position();
+        let name = self.create_node(start_position, Identifier::new("script".to_string()))?;
+        let statements = self.parse_statements(TokenKind::EOF)?;
+        let script_function =
+            self.create_node(start_position, FunDefinition::new(name, statements))?;
+        self.create_node(start_position, CompilationUnit::new(vec![script_function]))
+    }
+
     fn advance(&mut self) -> FelicoResult<Token<'source>> {
         self.last_position = self.current_token.location.end;
         let mut token = self.tokens.next().ok_or_else(|| {
@@ -55,30 +64,46 @@ impl<'source> Parser<'source> {
 
     fn consume(&mut self, token_kind: TokenKind) -> FelicoResult<Token<'source>> {
         if self.current_token.kind != token_kind {
-            let source_snippet = SourceSnippet::new(
-                self.source_file.path().to_string(),
-                self.source_file.content().to_string(),
-                1,
-                0,
-            );
-            let mut source_message = SourceMessage::error(
+            return self.create_token_error(
                 format!(
-                    "Unexpected token: “{}” ({}) , expected {}",
-                    self.current_token.lexeme, self.current_token.kind, token_kind
+                    "Unexpected token: {}, expected {}",
+                    self.current_token, token_kind
                 ),
-                source_snippet,
+                format!("expected {token_kind} here"),
             );
-            source_message.add_label(SourceLabel::new(
-                SourceSpan::new(
-                    self.current_token.location.start,
-                    self.current_token.location.end,
-                ),
-                format!("expected {token_kind} here",),
-            ));
-            return Err(SourceError::new(source_message).into());
         }
         let token = self.advance()?;
         Ok(token)
+    }
+
+    fn create_token_error<T>(
+        &mut self,
+        error_message: String,
+        token_label: String,
+    ) -> FelicoResult<T> {
+        Err(self.create_token_error_internal(error_message, token_label))
+    }
+
+    fn create_token_error_internal(
+        &mut self,
+        error_message: String,
+        token_label: String,
+    ) -> FelicoError {
+        let source_snippet = SourceSnippet::new(
+            self.source_file.path().to_string(),
+            self.source_file.content().to_string(),
+            1,
+            0,
+        );
+        let mut source_message = SourceMessage::error(error_message, source_snippet);
+        source_message.add_label(SourceLabel::new(
+            SourceSpan::new(
+                self.current_token.location.start,
+                self.current_token.location.end,
+            ),
+            token_label,
+        ));
+        SourceError::new(source_message).into()
     }
 
     fn parse_compilation_unit(&mut self) -> FelicoResult<CompilationUnitNode<'source>> {
@@ -104,17 +129,26 @@ impl<'source> Parser<'source> {
         self.consume(TokenKind::ParenOpen)?;
         self.consume(TokenKind::ParenClose)?;
         self.consume(TokenKind::BraceOpen)?;
-        let mut statements = Vec::new();
-        while self.current_token.kind != TokenKind::BraceClose {
-            let statement = self.parse_statement()?;
-            statements.push(statement);
-        }
+        let statements = self.parse_statements(TokenKind::BraceClose)?;
         self.consume(TokenKind::BraceClose)?;
         self.create_node(start_position, FunDefinition::new(name, statements))
     }
 
+    fn parse_statements(
+        &mut self,
+        end_token_kind: TokenKind,
+    ) -> Result<Vec<StatementNode<'source>>, FelicoError> {
+        let mut statements = Vec::new();
+        while self.current_token.kind != end_token_kind {
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
+        Ok(statements)
+    }
+
     fn parse_statement(&mut self) -> FelicoResult<StatementNode<'source>> {
         let result = self.parse_expression_statement()?;
+        self.consume(TokenKind::Semicolon)?;
         Ok(result)
     }
 
@@ -158,7 +192,10 @@ impl<'source> Parser<'source> {
                     Expression::literal(token.lexeme.to_string()),
                 )
             }
-            other => Err(FelicoError::message(format!("Unexpected token: {other}"))),
+            _other => self.create_token_error(
+                format!("Unexpected token: {}", self.current_token),
+                "expected primary expression here".to_string(),
+            ),
         }?;
         Ok(result)
     }
@@ -238,12 +275,68 @@ mod tests {
 
     test_parse!(
         fun_call,
-        "fun foo() {print(\"hello\"   )}",
+        "fun foo() {print(\"hello\"   );}",
         expect![[r#"
-            🌲   0+29  Compilation Unit
-            🌲   0+29  fun ❮foo❯
+            🌲   0+30  Compilation Unit
+            🌲   0+30  fun ❮foo❯
             🌲  11+17   stmt  call  var use ❮print❯
             🌲  17+7       literal ""hello""
+        "#]]
+    );
+
+    fn test_parse_script(source: &str, expected: Expect) -> FelicoResult<()> {
+        let source_file = SourceFile::in_memory("script.felico", source);
+        let lexer = Lexer::new(&source_file);
+        let mut parser = Parser::new(&source_file, Box::new(lexer))?;
+        let result = parser.parse_script()?;
+        let mut test_string = String::new();
+        result.test_print(&mut test_string, 0)?;
+        expected.assert_eq(&test_string);
+        Ok(())
+    }
+
+    macro_rules! test_parse_script {
+        ($name:ident, $source:literal, $expected:expr) => {
+            #[test]
+            fn $name() -> FelicoResult<()> {
+                test_parse_script($source, $expected)
+            }
+        };
+    }
+
+    test_parse_script!(
+        script_empty,
+        "",
+        expect![[r#"
+            🌲   0+0   Compilation Unit
+            🌲   0+0   fun ❮script❯
+        "#]]
+    );
+
+    test_parse_script!(
+        script_print,
+        "print(\"hello\");",
+        expect![[r#"
+            🌲   0+15  Compilation Unit
+            🌲   0+15  fun ❮script❯
+            🌲   0+14   stmt  call  var use ❮print❯
+            🌲   6+7       literal ""hello""
+        "#]]
+    );
+
+    test_parse_script!(
+        script_print_twice,
+        r#"
+            print("hello");
+            print("world");
+        "#,
+        expect![[r#"
+            🌲  13+43  Compilation Unit
+            🌲  13+43  fun ❮script❯
+            🌲  13+14   stmt  call  var use ❮print❯
+            🌲  19+7       literal ""hello""
+            🌲  41+14   stmt  call  var use ❮print❯
+            🌲  47+7       literal ""world""
         "#]]
     );
 
@@ -254,7 +347,6 @@ mod tests {
         let Err(error) = parser.parse() else {
             return Err(FelicoError::message("expected error"));
         };
-        dbg!(&error);
         expected.assert_eq(&error.to_test_string());
         Ok(())
     }
@@ -272,11 +364,43 @@ mod tests {
         error_fun_no_name,
         "fun () {}",
         expect![[r#"
-        Error: error: Unexpected token: “(” (ParenOpen) , expected Identifier
-          ╭▸ test.felico:1:5
-          │
-        1 │ fun () {}
-          ╰╴    ━ expected Identifier here
-    "#]]
+            Error: error: Unexpected token: “(” (Open Parenthesis), expected Identifier
+              ╭▸ test.felico:1:5
+              │
+            1 │ fun () {}
+              ╰╴    ━ expected Identifier here
+        "#]]
+    );
+
+    fn test_parse_script_error(source: &str, expected: Expect) -> FelicoResult<()> {
+        let source_file = SourceFile::in_memory("script.felico", source);
+        let lexer = Lexer::new(&source_file);
+        let mut parser = Parser::new(&source_file, Box::new(lexer))?;
+        let Err(error) = parser.parse_script() else {
+            return Err(FelicoError::message("expected error"));
+        };
+        expected.assert_eq(&error.to_test_string());
+        Ok(())
+    }
+
+    macro_rules! test_parse_script_error {
+        ($name:ident, $source:literal, $expected:expr) => {
+            #[test]
+            fn $name() -> FelicoResult<()> {
+                test_parse_script_error($source, $expected)
+            }
+        };
+    }
+
+    test_parse_script_error!(
+        error_no_expression,
+        "}",
+        expect![[r#"
+            Error: error: Unexpected token: “}” (Close Brace)
+              ╭▸ script.felico:1:1
+              │
+            1 │ }
+              ╰╴━ expected primary expression here
+        "#]]
     );
 }
