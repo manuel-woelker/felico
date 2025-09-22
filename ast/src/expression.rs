@@ -2,6 +2,7 @@ use crate::ast_node::AstNode;
 use crate::identifier::IdentifierNode;
 use crate::test_print::TestPrint;
 use felico_base::result::FelicoResult;
+use felico_base::value::Value;
 use std::fmt::Write;
 use std::ops::Deref;
 
@@ -23,7 +24,7 @@ impl<'source> Expression<'source> {
         Self::VarUse(VarUseExpression { name })
     }
 
-    pub fn literal(value: String) -> Self {
+    pub fn literal(value: Value) -> Self {
         Self::Literal(LiteralExpression { value })
     }
 }
@@ -46,7 +47,7 @@ impl TestPrint for Expression<'_> {
                 var_use.name.deref().test_print(write, indent + 1)?;
             }
             Expression::Literal(literal) => {
-                writeln!(write, " literal \"{}\"", &literal.value)?;
+                writeln!(write, " literal {}", &literal.value)?;
             }
         }
         Ok(())
@@ -78,11 +79,11 @@ impl VarUseExpression<'_> {
 }
 
 pub struct LiteralExpression {
-    value: String, // TODO: support other values
+    value: Value,
 }
 
 impl LiteralExpression {
-    pub fn value(&self) -> &str {
+    pub fn value(&self) -> &Value {
         &self.value
     }
 }

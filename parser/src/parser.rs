@@ -7,13 +7,14 @@ use felico_ast::statement::{ExpressionStatement, Statement, StatementNode};
 use felico_ast::test_print::TestPrint;
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
+use felico_base::value::Value;
 use felico_source::file_location::FileLocation;
 use felico_source::source_error::SourceError;
 use felico_source::source_file::SourceFile;
 use felico_source::source_message::{SourceLabel, SourceMessage};
 use felico_source::source_snippet::SourceSnippet;
 use felico_source::source_span::SourceSpan;
-use felico_token::{Token, TokenIterator, TokenKind};
+use felico_token::{Lexeme, Token, TokenIterator, TokenKind};
 
 pub struct Parser<'source> {
     source_file: &'source SourceFile,
@@ -189,7 +190,7 @@ impl<'source> Parser<'source> {
                 let token = self.consume(TokenKind::String)?;
                 self.create_node(
                     start_position,
-                    Expression::literal(token.lexeme.to_string()),
+                    Expression::literal(extract_string_from_lexeme(token.lexeme)?),
                 )
             }
             _other => self.create_token_error(
@@ -226,15 +227,84 @@ impl<'source> Parser<'source> {
     }
 }
 
+fn extract_string_from_lexeme(lexeme: Lexeme) -> FelicoResult<Value> {
+    assert!(lexeme.starts_with('"') && lexeme.ends_with('"'));
+    let string_content = &lexeme[1..lexeme.len() - 1];
+    let string = if !string_content.contains("\\") {
+        string_content.to_string()
+    } else {
+        // unescape backslash escape codes
+        let mut unescaped = String::new();
+        let mut chars = string_content.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                match chars.peek() {
+                    Some('n') => {
+                        unescaped.push('\n');
+                        chars.next();
+                    }
+                    Some('t') => {
+                        unescaped.push('\t');
+                        chars.next();
+                    }
+                    Some('"') => {
+                        unescaped.push('\"');
+                        chars.next();
+                    }
+                    Some('\\') => {
+                        unescaped.push('\\');
+                        chars.next();
+                    }
+                    Some(other) => {
+                        return Err(FelicoError::message(format!(
+                            "Invalid escape sequence: \\{other}"
+                        )));
+                    }
+                    None => return Err(FelicoError::message("Incomplete escape sequence")),
+                }
+            } else {
+                unescaped.push(c);
+            }
+        }
+        unescaped
+    };
+    Ok(Value::String(string))
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::parser::Parser;
+    use crate::parser::{Parser, extract_string_from_lexeme};
     use expect_test::{Expect, expect};
     use felico_ast::test_print::TestPrint;
     use felico_base::error::FelicoError;
     use felico_base::result::FelicoResult;
     use felico_lexer::lexer::Lexer;
     use felico_source::source_file::SourceFile;
+
+    fn test_parse_string_from_lexeme(lexeme: &str, expected: Expect) -> FelicoResult<()> {
+        let value = extract_string_from_lexeme(lexeme)?;
+        expected.assert_eq(&value.to_string());
+        Ok(())
+    }
+
+    macro_rules! test_parse_string_from_lexeme {
+        ($name:ident, $source:literal, $expected:expr) => {
+            #[test]
+            fn $name() -> FelicoResult<()> {
+                test_parse_string_from_lexeme($source, $expected)
+            }
+        };
+    }
+
+    test_parse_string_from_lexeme!(string_empty, r#""""#, expect![[r#""""#]]);
+    test_parse_string_from_lexeme!(string_simple, r#""foo""#, expect![[r#""foo""#]]);
+    test_parse_string_from_lexeme!(
+        string_escapes,
+        "\"newline\\ntab\\tbackslash\\\"\"",
+        expect![[r#"
+        "newline
+        tab	backslash"""#]]
+    );
 
     fn test_parse(source: &str, expected: Expect) -> FelicoResult<()> {
         let source_file = SourceFile::in_memory("test.felico", source);
@@ -280,7 +350,7 @@ mod tests {
             🌲   0+30  Compilation Unit
             🌲   0+30  fun ❮foo❯
             🌲  11+17   stmt  call  var use ❮print❯
-            🌲  17+7       literal ""hello""
+            🌲  17+7       literal "hello"
         "#]]
     );
 
@@ -320,7 +390,7 @@ mod tests {
             🌲   0+15  Compilation Unit
             🌲   0+15  fun ❮script❯
             🌲   0+14   stmt  call  var use ❮print❯
-            🌲   6+7       literal ""hello""
+            🌲   6+7       literal "hello"
         "#]]
     );
 
@@ -334,9 +404,9 @@ mod tests {
             🌲  13+43  Compilation Unit
             🌲  13+43  fun ❮script❯
             🌲  13+14   stmt  call  var use ❮print❯
-            🌲  19+7       literal ""hello""
+            🌲  19+7       literal "hello"
             🌲  41+14   stmt  call  var use ❮print❯
-            🌲  47+7       literal ""world""
+            🌲  47+7       literal "world"
         "#]]
     );
 
