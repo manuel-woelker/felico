@@ -8,6 +8,7 @@ use felico_ast::test_print::TestPrint;
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
 use felico_base::value::Value;
+use felico_base::{bail, err};
 use felico_source::file_location::FileLocation;
 use felico_source::source_error::SourceError;
 use felico_source::source_file::SourceFile;
@@ -28,9 +29,9 @@ impl<'source> Parser<'source> {
         source_file: &'source SourceFile,
         mut tokens: TokenIterator<'source>,
     ) -> FelicoResult<Self> {
-        let current_token = tokens.next().ok_or_else(|| {
-            FelicoError::message("No token in source file, expected at least EOF")
-        })??;
+        let current_token = tokens
+            .next()
+            .ok_or_else(|| err!("No token in source file, expected at least EOF"))??;
         Ok(Self {
             source_file,
             tokens,
@@ -56,9 +57,10 @@ impl<'source> Parser<'source> {
 
     fn advance(&mut self) -> FelicoResult<Token<'source>> {
         self.last_position = self.current_token.location.end;
-        let mut token = self.tokens.next().ok_or_else(|| {
-            FelicoError::message("No more token in source file, expected at least EOF")
-        })??;
+        let mut token = self
+            .tokens
+            .next()
+            .ok_or_else(|| err!("No more token in source file, expected at least EOF"))??;
         std::mem::swap(&mut self.current_token, &mut token);
         Ok(token)
     }
@@ -116,7 +118,7 @@ impl<'source> Parser<'source> {
                 TokenKind::Fun => {
                     fun_definitions.push(self.parse_function()?);
                 }
-                other => return Err(FelicoError::message(format!("Unexpected token: {other}"))),
+                other => bail!("Unexpected token: {other}"),
             }
             self.advance()?;
         }
@@ -256,11 +258,9 @@ fn extract_string_from_lexeme(lexeme: Lexeme) -> FelicoResult<Value> {
                         chars.next();
                     }
                     Some(other) => {
-                        return Err(FelicoError::message(format!(
-                            "Invalid escape sequence: \\{other}"
-                        )));
+                        bail!("Invalid escape sequence: \\{other}")
                     }
-                    None => return Err(FelicoError::message("Incomplete escape sequence")),
+                    None => bail!("Incomplete escape sequence"),
                 }
             } else {
                 unescaped.push(c);
@@ -276,7 +276,7 @@ mod tests {
     use crate::parser::{Parser, extract_string_from_lexeme};
     use expect_test::{Expect, expect};
     use felico_ast::test_print::TestPrint;
-    use felico_base::error::FelicoError;
+    use felico_base::bail;
     use felico_base::result::FelicoResult;
     use felico_lexer::lexer::Lexer;
     use felico_source::source_file::SourceFile;
@@ -415,7 +415,7 @@ mod tests {
         let lexer = Lexer::new(&source_file);
         let mut parser = Parser::new(&source_file, Box::new(lexer))?;
         let Err(error) = parser.parse() else {
-            return Err(FelicoError::message("expected error"));
+            bail!("expected error")
         };
         expected.assert_eq(&error.to_test_string());
         Ok(())
@@ -447,7 +447,7 @@ mod tests {
         let lexer = Lexer::new(&source_file);
         let mut parser = Parser::new(&source_file, Box::new(lexer))?;
         let Err(error) = parser.parse_script() else {
-            return Err(FelicoError::message("expected error"));
+            bail!("expected error")
         };
         expected.assert_eq(&error.to_test_string());
         Ok(())

@@ -51,8 +51,40 @@ impl FelicoError {
     }
 }
 
+#[macro_export]
+macro_rules! err {
+    ($($arg:tt)*) => {
+        $crate::error::FelicoError::message(format!($($arg)*))
+    };
+}
+pub use err;
+
+#[macro_export]
+macro_rules! bail {
+    ($($arg:tt)*) => {
+        return Err($crate::err!($($arg)*))
+    };
+}
+pub use bail;
+
 #[cfg(test)]
 mod tests {
+    use crate::result::FelicoResult;
+
+    #[test]
+    fn test_err() {
+        let err = err!("test {}", 123);
+        assert_eq!(err.error.to_string(), "test 123");
+    }
+
+    #[test]
+    fn test_bail() {
+        let err = (|| -> FelicoResult<()> {
+            bail!("test {}", 123);
+        })()
+        .unwrap_err();
+        assert_eq!(err.error.to_string(), "test 123");
+    }
     /*
        use expect_test::expect;
        use crate::error::FelicoError;

@@ -1,4 +1,4 @@
-use felico_base::error::FelicoError;
+use felico_base::bail;
 use felico_base::result::FelicoResult;
 use felico_source::file_location::FileLocation;
 use felico_source::source_file::SourceFile;
@@ -65,7 +65,7 @@ impl<'source> Lexer<'source> {
             '"' => loop {
                 self.advance();
                 match self.current_char {
-                    EOF => return Err(FelicoError::message("Unterminated string")),
+                    EOF => bail!("Unterminated string"),
                     '"' => {
                         return self.create_token(TokenKind::String);
                     }
@@ -87,9 +87,7 @@ impl<'source> Lexer<'source> {
                 };
                 self.create_token(token_kind)
             }
-            other => Err(FelicoError::message(format!(
-                "Unexpected character: {other}"
-            ))),
+            other => bail!("Unexpected character: {other}"),
         }
     }
 
