@@ -1,7 +1,7 @@
 use crate::ast_node::AstNode;
 use crate::fun_definition::FunDefinitionNode;
-use crate::test_print::TestPrint;
 use felico_base::result::FelicoResult;
+use felico_base::test_print::TestPrint;
 use std::fmt::Write;
 
 pub struct CompilationUnit<'source> {

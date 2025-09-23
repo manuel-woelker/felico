@@ -1,6 +1,6 @@
-use crate::test_print::TestPrint;
 use felico_base::indent;
 use felico_base::result::FelicoResult;
+use felico_base::test_print::TestPrint;
 use felico_source::file_location::FileLocation;
 use std::fmt::Write;
 use std::ops::Deref;

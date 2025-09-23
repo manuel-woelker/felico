@@ -1,7 +1,7 @@
 use crate::ast_node::AstNode;
 use crate::identifier::IdentifierNode;
-use crate::test_print::TestPrint;
 use felico_base::result::FelicoResult;
+use felico_base::test_print::TestPrint;
 use felico_base::value::Value;
 use std::fmt::Write;
 use std::ops::Deref;

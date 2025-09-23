@@ -1,6 +1,7 @@
 pub mod error;
 pub mod indent;
 pub mod result;
+pub mod test_print;
 pub mod value;
 
 pub fn unansi(string: &str) -> String {

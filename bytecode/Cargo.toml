@@ -1,0 +1,10 @@
+[package]
+name = "felico-bytecode"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+felico-base = { path = "../base" }
+
+[dev-dependencies]
+expect-test = { workspace = true }

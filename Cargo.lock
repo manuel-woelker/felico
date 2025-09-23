@@ -101,6 +101,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "felico-bytecode"
+version = "0.1.0"
+dependencies = [
+ "expect-test",
+ "felico-base",
+]
+
+[[package]]
 name = "felico-lexer"
 version = "0.1.0"
 dependencies = [

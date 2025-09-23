@@ -4,9 +4,9 @@ use felico_ast::expression::{Expression, ExpressionNode};
 use felico_ast::fun_definition::{FunDefinition, FunDefinitionNode};
 use felico_ast::identifier::{Identifier, IdentifierNode};
 use felico_ast::statement::{ExpressionStatement, Statement, StatementNode};
-use felico_ast::test_print::TestPrint;
 use felico_base::error::FelicoError;
 use felico_base::result::FelicoResult;
+use felico_base::test_print::TestPrint;
 use felico_base::value::Value;
 use felico_base::{bail, err};
 use felico_source::file_location::FileLocation;
@@ -275,9 +275,9 @@ fn extract_string_from_lexeme(lexeme: Lexeme) -> FelicoResult<Value> {
 mod tests {
     use crate::parser::{Parser, extract_string_from_lexeme};
     use expect_test::{Expect, expect};
-    use felico_ast::test_print::TestPrint;
     use felico_base::bail;
     use felico_base::result::FelicoResult;
+    use felico_base::test_print::TestPrint;
     use felico_lexer::lexer::Lexer;
     use felico_source::source_file::SourceFile;
 
