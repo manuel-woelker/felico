@@ -77,7 +77,7 @@ pub struct FunctionBuilder<'module> {
     instructions: Vec<Instruction>,
 }
 
-impl<'module> FunctionBuilder<'module> {
+impl FunctionBuilder<'_> {
     pub fn load_string(
         &mut self,
         ptr_dst_slot: Slot,
