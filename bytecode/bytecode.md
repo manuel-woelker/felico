@@ -11,23 +11,12 @@ The instruction format is a 32 bit unsigned integer with the following layout:
 |---------|-----------|-----------|-----------|
 | op_code | operand_a | operand_b | operand_c |
 ```
-The op_code is a 8 bit unsigned integer that specifies the operation to be performed.
-The operand_a, operand_b and operand_c are 8-bit unsigned integers that specify the operands of the operation.
+The op_code is an 8-bit unsigned integer that specifies the operation to be performed.
+operand_a, operand_b and operand_c are 8-bit unsigned integers that specify the operands of the operation.
 
 ### operand addressing modes
 
 The operand addressing modes are as follows:
-
-| operand mode | description                                  |
-|--------------|----------------------------------------------|
-| 00xxxxxx     | slot (register) {0, ..., 63}                 |
-| 01xxxxxx     | memory (register) {0, ..., 63}               |
-| 10xxxxxx     | immediate signed value {-32, ..., 31}        |
-| 110xxxxx     | constant pool reference {0, ..., 31}         |
-| 11100001     | immediate value in the next 32 bits          |
-| 11100002     | constant pool reference in the next 32 bits  |
-| 11100003     | immediate value in the next 64 bits          |
-
 
 ### Constant pool
 The constant pool is a per module list of constants that are used by these instructions.

@@ -1,48 +1,62 @@
-use crate::instruction::{IMMEDIATE_CONST_PREFIX, Instruction, MAX_SLOT};
+use crate::instruction::Instruction;
+use crate::module_builder::ConstantIndex;
+use crate::op_code::OpCode;
+use crate::operand::Operand;
 use felico_base::result::FelicoResult;
 use felico_base::test_print::TestPrint;
+use felico_base::{bail, err};
 use std::fmt::Write;
 
 pub struct Module {
     pub name: String,
-    pub data_pool: Vec<u8>,
     pub constant_pool: Vec<ConstantPoolEntry>,
     pub functions: Vec<FunctionEntry>,
-    pub instruction_pool: Vec<u32>,
 }
 
 impl Module {
-    pub fn get_string_constant_by_entry(&self, entry: &ConstantPoolEntry) -> FelicoResult<&str> {
-        Ok(std::str::from_utf8(
-            &self.data_pool[entry.offset()..entry.offset() + entry.length()],
-        )?)
+    pub fn get_constant(&self, constant_index: ConstantIndex) -> FelicoResult<&ConstantPoolEntry> {
+        self.constant_pool
+            .get(constant_index.index() as usize)
+            .ok_or_else(|| err!("Constant index out of bounds: {}", constant_index.index()))
     }
 }
 
 pub struct ConstantPoolEntry {
-    pub length: u32,
-    pub offset: u32,
+    constant_type: ConstantType,
+    pub data: Vec<u8>,
 }
 
 impl ConstantPoolEntry {
-    pub fn new(constant_type: ConstantType, offset: u32, length: u32) -> Self {
-        assert!(length < 0xffffff);
+    pub fn new(constant_type: ConstantType, data: impl Into<Vec<u8>>) -> Self {
         Self {
-            length: length & 0xffffff | ((constant_type as u32) << 24),
-            offset,
+            constant_type,
+            data: data.into(),
         }
     }
 
     pub fn constant_type(&self) -> ConstantType {
-        ConstantType::from((self.length >> 24) as u8)
+        self.constant_type
     }
 
-    pub fn offset(&self) -> usize {
-        self.offset as usize
+    pub fn data(&self) -> &Vec<u8> {
+        &self.data
     }
 
-    pub fn length(&self) -> usize {
-        (self.length & 0xffffff) as usize
+    pub fn as_str(&self) -> FelicoResult<&str> {
+        if self.constant_type != ConstantType::String {
+            bail!("Constant is not a string, but {:?}", self.constant_type)
+        }
+        Ok(std::str::from_utf8(&self.data)?)
+    }
+
+    pub fn as_function_import(&self) -> FelicoResult<&str> {
+        if self.constant_type != ConstantType::FunctionImport {
+            bail!(
+                "Constant is not a FunctionImport, but {:?}",
+                self.constant_type
+            )
+        }
+        Ok(std::str::from_utf8(&self.data)?)
     }
 }
 
@@ -54,25 +68,16 @@ pub enum ConstantType {
     FunctionImport = 2,
 }
 
-impl From<u8> for ConstantType {
-    fn from(value: u8) -> Self {
-        assert!(value <= 2);
-        unsafe { std::mem::transmute(value) }
-    }
-}
-
 pub struct FunctionEntry {
-    pub name_constant: u32,
-    pub instruction_offset: u32,
-    pub instruction_length: u32,
+    pub name_constant: ConstantIndex,
+    instructions: Vec<Instruction>,
 }
 
 impl FunctionEntry {
-    pub fn new(name_constant: u32, instruction_offset: u32, instruction_length: u32) -> Self {
+    pub fn new(name_constant: ConstantIndex, instructions: Vec<Instruction>) -> Self {
         Self {
             name_constant,
-            instruction_offset,
-            instruction_length,
+            instructions,
         }
     }
 }
@@ -85,14 +90,14 @@ impl TestPrint for Module {
             write!(write, "   {index:3}: ")?;
             match constant.constant_type() {
                 ConstantType::ByteArray => {
-                    writeln!(write, "ByteArray ({} bytes)", constant.length())?;
+                    writeln!(write, "ByteArray ({} bytes)", constant.data().len())?;
                 }
                 ConstantType::String => {
-                    let string = self.get_string_constant_by_entry(constant)?;
+                    let string = constant.as_str()?;
                     writeln!(write, "String \"{string}\"")?;
                 }
                 ConstantType::FunctionImport => {
-                    let string = self.get_string_constant_by_entry(constant)?;
+                    let string = constant.as_function_import()?;
                     writeln!(write, "FunctionImport <{string}>")?;
                 }
             }
@@ -100,37 +105,74 @@ impl TestPrint for Module {
         writeln!(write, "  Functions:")?;
         for (index, function) in self.functions.iter().enumerate() {
             write!(write, "   {index:3}: ")?;
-            let name_constant = &self.constant_pool[function.name_constant as usize];
-            let name = std::str::from_utf8(
-                &self.data_pool
-                    [name_constant.offset()..name_constant.offset() + name_constant.length()],
-            )?;
-            writeln!(write, "Function <{name}>")?;
-            let instructions = &self.instruction_pool[function.instruction_offset as usize
-                ..function.instruction_offset as usize + function.instruction_length as usize];
+            let function_name = self.get_constant(function.name_constant)?.as_str()?;
+            writeln!(write, "Function <{function_name}>")?;
+            let instructions = &function.instructions;
             let mut iter = instructions.iter().enumerate();
             loop {
-                let Some((index, byte_code)) = iter.next() else {
+                let Some((index, instruction)) = iter.next() else {
                     break;
                 };
                 write!(write, "     {index:3}: ")?;
-                let instruction = Instruction::new(*byte_code);
                 write!(write, "{:?}", instruction.op_code())?;
-                let module = &self;
-                let write_operand = |write: &mut dyn Write, operand: u8| -> FelicoResult<()> {
-                    if operand as u32 <= MAX_SLOT {
-                        write!(write, " s{operand}")?
-                    } else if operand as u32 & IMMEDIATE_CONST_PREFIX != 0 {
-                        let immediate = operand as u32 & !IMMEDIATE_CONST_PREFIX;
-                        let constant = &module.constant_pool[immediate as usize];
-                        let string = module.get_string_constant_by_entry(constant)?;
-                        write!(write, " c{immediate} \"{string}\"")?
-                    }
+                let write_operand = |write: &mut dyn Write, operand: Operand| -> FelicoResult<()> {
+                    write!(write, " s{}", operand.slot().index())?;
                     Ok(())
                 };
+                let write_constant =
+                    |write: &mut dyn Write, constant_index: ConstantIndex| -> FelicoResult<()> {
+                        let constant = self.get_constant(constant_index)?;
+                        match constant.constant_type {
+                            ConstantType::String => {
+                                let string = constant.as_str()?;
+                                write!(
+                                    write,
+                                    " c{} (String \"{}\")",
+                                    constant_index.index(),
+                                    string
+                                )?;
+                            }
+                            ConstantType::FunctionImport => {
+                                let string = constant.as_function_import()?;
+                                write!(
+                                    write,
+                                    " c{} (FunctionImport <{}>)",
+                                    constant_index.index(),
+                                    string
+                                )?;
+                            }
+                            ConstantType::ByteArray => {
+                                write!(
+                                    write,
+                                    " c{} ({} bytes)",
+                                    constant_index.index(),
+                                    constant.data.len()
+                                )?;
+                            }
+                        }
+                        Ok(())
+                    };
                 write_operand(write, instruction.operand_a())?;
-                write_operand(write, instruction.operand_b())?;
-                write_operand(write, instruction.operand_c())?;
+                match instruction.op_code() {
+                    OpCode::StoreConstant | OpCode::StoreFunction => {
+                        let constant_index = instruction.operand_constant_index();
+                        write_constant(write, constant_index)?;
+                    }
+                    OpCode::StoreConstantLength => {
+                        let constant_index = instruction.operand_constant_index();
+                        let constant = self.get_constant(constant_index)?;
+                        write!(
+                            write,
+                            " c{} (length: {} bytes)",
+                            constant_index.index(),
+                            constant.data.len()
+                        )?;
+                    }
+                    _ => {
+                        write_operand(write, instruction.operand_b())?;
+                        write_operand(write, instruction.operand_c())?;
+                    }
+                }
                 writeln!(write)?;
             }
         }
