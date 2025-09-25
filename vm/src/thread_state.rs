@@ -54,6 +54,14 @@ impl ThreadState {
         let slot_index = operand.slot().index() as usize + self.slot_offset;
         self.stack[slot_index]
     }
+
+    pub fn set_slot_offset(&mut self, slot_offset: usize) {
+        self.slot_offset = slot_offset;
+    }
+
+    pub fn slot_offset(&self) -> usize {
+        self.slot_offset
+    }
 }
 
 #[derive(Debug, Default)]

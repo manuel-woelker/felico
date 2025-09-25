@@ -1,5 +1,6 @@
+use crate::native_function::NativeFunctionTrait;
 use crate::thread_state::{Frame, ThreadState};
-use crate::vm_function::VmFunction;
+use crate::vm_function::{VmFunction, VmFunctionKind};
 use felico_base::result::FelicoResult;
 use felico_base::{bail, err};
 use felico_bytecode::instruction::Instruction;
@@ -33,13 +34,25 @@ impl VM {
         }
     }
 
+    pub fn register_native_function(
+        &mut self,
+        name: &str,
+        function: impl NativeFunctionTrait + 'static,
+    ) {
+        let function = VmFunction::from_native(function);
+        let function_index = self.vm_functions.len();
+        self.vm_functions.push(function);
+        self.function_name_map
+            .insert(name.to_string(), function_index);
+    }
+
     pub fn load_module(&mut self, module: Module) -> FelicoResult<()> {
         let mut instruction_offset = self.instructions.len();
         // TODO: constant pool offset
         // let constant_pool_offset = self.constant_pool.len();
         let vm_functions = &mut self.vm_functions;
         for function in &module.functions {
-            let vm_function = VmFunction::new(instruction_offset);
+            let vm_function = VmFunction::from_instruction(instruction_offset);
             self.instructions.extend(function.instructions());
             instruction_offset += function.instructions().len();
             let function_name = module
@@ -71,8 +84,11 @@ impl VM {
             .vm_functions
             .get(main_function_index)
             .ok_or_else(|| err!("Main function not present"))?;
+        let VmFunctionKind::Instruction(instruction_start) = &main_function.kind() else {
+            bail!("Main function is not an instruction function");
+        };
         self.thread_state
-            .set_instruction_pointer(main_function.instruction_start());
+            .set_instruction_pointer(*instruction_start);
         self.thread_state
             .push_frame(Frame::new(main_function_index));
         self.thread_state.stack_mut().resize(100, 0);
@@ -80,6 +96,19 @@ impl VM {
     }
 
     fn execute(&mut self) -> FelicoResult<()> {
+        let mut native_functions = Vec::new();
+        for function in self.vm_functions.iter_mut() {
+            match function.kind() {
+                VmFunctionKind::Native(_native_function) => {
+                    let native_function =
+                        std::mem::replace(function, VmFunction::from_instruction(0));
+                    native_functions.push(Some(native_function));
+                }
+                _ => {
+                    native_functions.push(None);
+                }
+            }
+        }
         loop {
             let pc = self.thread_state.instruction_pointer();
             let instruction = self.instructions[pc];
@@ -108,7 +137,35 @@ impl VM {
                     // TODO StoreFunction implement
                 }
                 OpCode::Call => {
-                    // TODO Call implement
+                    let function_slot = instruction.operand_a();
+                    let argument_slot = instruction.operand_b();
+                    self.thread_state.set_slot_offset(
+                        self.thread_state.slot_offset() + argument_slot.slot().index() as usize,
+                    );
+                    let function_index = self.thread_state.get_slot(function_slot);
+                    let function =
+                        self.vm_functions
+                            .get(function_index as usize)
+                            .ok_or_else(|| {
+                                err!("Function index out of bounds: {:?}", function_index)
+                            })?;
+                    self.thread_state
+                        .push_frame(Frame::new(function_index as usize));
+
+                    if let Some(Some(native_function)) =
+                        native_functions.get(function_index as usize)
+                    {
+                        let VmFunctionKind::Native(native_function) = native_function.kind() else {
+                            bail!("Native function expected");
+                        };
+                        native_function.call(self)?;
+                    } else {
+                        let VmFunctionKind::Instruction(instruction_start) = function.kind() else {
+                            bail!("Native function expected");
+                        };
+                        self.thread_state
+                            .set_instruction_pointer(*instruction_start);
+                    }
                 }
                 OpCode::Return => {
                     return Ok(());
@@ -123,8 +180,11 @@ impl VM {
 #[cfg(test)]
 mod tests {
     use crate::vm::VM;
+    use felico_base::err;
     use felico_base::result::FelicoResult;
+    use felico_base::test_print::TestPrint;
     use felico_bytecode::module_builder::ModuleBuilder;
+    use felico_bytecode::operand::Operand;
     use felico_bytecode::slot::Slot;
 
     #[test]
@@ -138,8 +198,22 @@ mod tests {
         fbuilder.ret()?;
         drop(fbuilder);
         let module = builder.build();
+        println!("Module: {}", module.test_print_to_string(0)?);
 
         let mut vm = VM::new();
+        vm.register_native_function("print", |vm: &mut VM| {
+            let string_ptr = vm.thread_state.get_slot(Operand::from(Slot::from(0)));
+            let string_length = vm.thread_state.get_slot(Operand::from(Slot::from(1)));
+            let constant = vm
+                .constant_pool
+                .get(string_ptr as usize)
+                .ok_or_else(|| err!("String index out of bounds: {:?}", string_ptr))?;
+            let string = &constant.as_str()?[0..string_length as usize];
+            println!("PRINT! {string_ptr} {string_length}");
+            println!("{}", string);
+            //            println!("{}", string);
+            Ok(())
+        });
         vm.load_module(module)?;
         vm.run()?;
         println!("Stack: {:?}", &vm.thread_state.stack()[0..10]);
