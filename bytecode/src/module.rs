@@ -69,7 +69,7 @@ pub enum ConstantType {
 }
 
 pub struct FunctionEntry {
-    pub name_constant: ConstantIndex,
+    name_constant: ConstantIndex,
     instructions: Vec<Instruction>,
 }
 
@@ -79,6 +79,14 @@ impl FunctionEntry {
             name_constant,
             instructions,
         }
+    }
+
+    pub fn name_constant(&self) -> ConstantIndex {
+        self.name_constant
+    }
+
+    pub fn instructions(&self) -> &Vec<Instruction> {
+        &self.instructions
     }
 }
 

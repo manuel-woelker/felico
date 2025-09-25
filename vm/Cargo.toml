@@ -1,0 +1,8 @@
+[package]
+name = "felico-vm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+felico-base = { path = "../base" }
+felico-bytecode = { path = "../bytecode" }
