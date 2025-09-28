@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 
-members = [ "ast",
+members = ["arena", "ast",
     "base", "bytecode", "lexer", "parser", "source", "token", "vm",
 ]
 

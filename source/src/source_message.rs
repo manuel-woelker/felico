@@ -69,7 +69,7 @@ impl SourceMessage {
         renderer.render(&self.create_report())
     }
 
-    fn create_report(&self) -> Vec<Group> {
+    fn create_report(&self) -> Vec<Group<'_>> {
         let mut snippet: Snippet<Annotation> =
             Snippet::source(self.source_snippet.source_snippet())
                 .line_start(self.source_snippet.start_line())
