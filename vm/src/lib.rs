@@ -1,3 +1,4 @@
+pub mod function_arena;
 pub mod native_function;
 pub mod thread_state;
 pub mod vm;

@@ -1,7 +1,8 @@
 use crate::InstructionPointer;
+use crate::function_arena::FunctionHandle;
 use felico_bytecode::operand::Operand;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ThreadState {
     /// Program counter, points to current instruction
     pc: InstructionPointer,
@@ -64,17 +65,16 @@ impl ThreadState {
     }
 }
 
-#[derive(Debug, Default)]
 pub struct Frame {
-    function_index: usize,
+    function_handle: FunctionHandle,
 }
 
 impl Frame {
-    pub fn new(function_index: usize) -> Self {
-        Self { function_index }
+    pub fn new(function_handle: FunctionHandle) -> Self {
+        Self { function_handle }
     }
 
-    pub fn function_index(&self) -> usize {
-        self.function_index
+    pub fn function_handle(&self) -> FunctionHandle {
+        self.function_handle
     }
 }

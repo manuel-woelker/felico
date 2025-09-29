@@ -1,6 +1,7 @@
 use felico_base::bail;
 use felico_base::result::FelicoResult;
 use rand::random;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 pub struct TypedArena<T> {
@@ -26,12 +27,45 @@ pub struct TypedArenaHandle<T> {
     key: u64,
 }
 
+impl<T> Debug for TypedArenaHandle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypedArenaHandle")
+            .field("key", &self.key)
+            .finish()
+    }
+}
+
+impl<T> From<u64> for TypedArenaHandle<T> {
+    fn from(key: u64) -> Self {
+        TypedArenaHandle {
+            phantom_data: PhantomData,
+            key,
+        }
+    }
+}
+
+impl<T> From<TypedArenaHandle<T>> for u64 {
+    fn from(handle: TypedArenaHandle<T>) -> Self {
+        handle.key
+    }
+}
+
+impl<T> Clone for TypedArenaHandle<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TypedArenaHandle<T> {}
+
 impl<T> TypedArena<T> {
     pub fn new() -> Self {
+        let cookie = (random::<u8>() as u64) << 56;
         Self {
             data: Vec::new(),
             next_free: u32::MAX,
-            cookie: (random::<u8>() as u64) << 56,
+            cookie,
+            //            cookie: 0,
         }
     }
 
@@ -48,7 +82,7 @@ impl<T> TypedArena<T> {
         })
     }
 
-    pub fn get(&self, handle: &TypedArenaHandle<T>) -> FelicoResult<&T> {
+    pub fn get(&self, handle: TypedArenaHandle<T>) -> FelicoResult<&T> {
         let (index_generation, index) = self.check_and_extract_index(handle)?;
         let entry = &self.data[index as usize];
         match entry {
@@ -66,7 +100,7 @@ impl<T> TypedArena<T> {
         }
     }
 
-    fn check_and_extract_index(&self, index: &TypedArenaHandle<T>) -> FelicoResult<(u8, u64)> {
+    fn check_and_extract_index(&self, index: TypedArenaHandle<T>) -> FelicoResult<(u8, u64)> {
         let cookie = index.key & 0xFF00_0000_0000_0000;
         if cookie != self.cookie {
             bail!("Wrong cookie used to access arena");
@@ -79,7 +113,7 @@ impl<T> TypedArena<T> {
         Ok((index_generation, index))
     }
 
-    pub fn remove(&mut self, handle: &TypedArenaHandle<T>) -> FelicoResult<()> {
+    pub fn remove(&mut self, handle: TypedArenaHandle<T>) -> FelicoResult<()> {
         let (index_generation, index) = self.check_and_extract_index(handle)?;
         let entry = &mut self.data[index as usize];
         match entry {
@@ -112,7 +146,7 @@ mod tests {
     fn basic_add() -> FelicoResult<()> {
         let mut arena = TypedArena::new();
         let index = arena.add("foo")?;
-        assert_eq!(arena.get(&index)?, &"foo");
+        assert_eq!(arena.get(index)?, &"foo");
         Ok(())
     }
 
@@ -120,8 +154,8 @@ mod tests {
     fn basic_remove() -> FelicoResult<()> {
         let mut arena = TypedArena::new();
         let index = arena.add("foo")?;
-        arena.remove(&index)?;
-        let error = arena.get(&index).expect_err("Expected error");
+        arena.remove(index)?;
+        let error = arena.get(index).expect_err("Expected error");
         assert_eq!(
             &error.to_test_string(),
             &"Error: Arena is free at index 0\n"

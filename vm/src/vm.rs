@@ -1,19 +1,20 @@
+use crate::function_arena::{FunctionArena, FunctionHandle};
 use crate::native_function::NativeFunctionTrait;
 use crate::thread_state::{Frame, ThreadState};
 use crate::vm_function::{VmFunction, VmFunctionKind};
 use felico_base::result::FelicoResult;
 use felico_base::{bail, err};
 use felico_bytecode::instruction::Instruction;
-use felico_bytecode::module::{ConstantPoolEntry, Module};
+use felico_bytecode::module::{ConstantPoolEntry, ConstantType, Module};
 use felico_bytecode::op_code::OpCode;
 use std::collections::HashMap;
 
 pub struct VM {
+    function_arena: FunctionArena,
     constant_pool: Vec<ConstantPoolEntry>,
     instructions: Vec<Instruction>,
-    vm_functions: Vec<VmFunction>,
-    function_name_map: HashMap<String, usize>,
-    // TODO: arena
+    // map from function import constant index to function handle
+    function_handle_map: HashMap<u32, FunctionHandle>,
     thread_state: ThreadState,
 }
 
@@ -26,11 +27,11 @@ impl Default for VM {
 impl VM {
     pub fn new() -> Self {
         Self {
+            function_arena: FunctionArena::new(),
             thread_state: ThreadState::default(),
             instructions: Vec::new(),
             constant_pool: Vec::new(),
-            vm_functions: Vec::new(),
-            function_name_map: HashMap::new(),
+            function_handle_map: HashMap::new(),
         }
     }
 
@@ -38,30 +39,23 @@ impl VM {
         &mut self,
         name: &str,
         function: impl NativeFunctionTrait + 'static,
-    ) {
-        let function = VmFunction::from_native(function);
-        let function_index = self.vm_functions.len();
-        self.vm_functions.push(function);
-        self.function_name_map
-            .insert(name.to_string(), function_index);
+    ) -> FelicoResult<FunctionHandle> {
+        let function = VmFunction::from_native(name, function);
+        self.function_arena.add_function(function)
     }
 
     pub fn load_module(&mut self, module: Module) -> FelicoResult<()> {
-        let mut instruction_offset = self.instructions.len();
         // TODO: constant pool offset
         // let constant_pool_offset = self.constant_pool.len();
-        let vm_functions = &mut self.vm_functions;
         for function in &module.functions {
-            let vm_function = VmFunction::from_instruction(instruction_offset);
+            let instruction_offset = self.instructions.len();
             self.instructions.extend(function.instructions());
-            instruction_offset += function.instructions().len();
             let function_name = module
                 .get_constant(function.name_constant())?
                 .as_str()?
                 .to_string();
-            self.function_name_map
-                .insert(function_name, vm_functions.len());
-            vm_functions.push(vm_function);
+            let vm_function = VmFunction::from_instruction(function_name, instruction_offset);
+            self.function_arena.add_function(vm_function)?;
         }
         self.constant_pool.extend(module.constant_pool);
         //        self.modules.push(module);
@@ -75,40 +69,31 @@ impl VM {
     }
 
     fn prepare_run(&mut self) -> FelicoResult<()> {
+        for (index, constant) in self.constant_pool.iter().enumerate() {
+            if constant.constant_type() == ConstantType::FunctionImport {
+                // Lookup function name
+                let function_name = constant.as_function_import()?;
+                let function_handle = self.function_arena.get_function_handle(function_name)?;
+                self.function_handle_map
+                    .insert(index as u32, function_handle);
+            }
+        }
         // find main function
-        let main_function_index = *self
-            .function_name_map
-            .get("main")
-            .ok_or_else(|| err!("Main function not found"))?;
-        let main_function = self
-            .vm_functions
-            .get(main_function_index)
-            .ok_or_else(|| err!("Main function not present"))?;
+        let main_function_handle = self.function_arena.get_function_handle("main")?;
+        let main_function = self.function_arena.get_function(main_function_handle)?;
         let VmFunctionKind::Instruction(instruction_start) = &main_function.kind() else {
             bail!("Main function is not an instruction function");
         };
         self.thread_state
             .set_instruction_pointer(*instruction_start);
         self.thread_state
-            .push_frame(Frame::new(main_function_index));
+            .push_frame(Frame::new(main_function_handle));
         self.thread_state.stack_mut().resize(100, 0);
         Ok(())
     }
 
     fn execute(&mut self) -> FelicoResult<()> {
-        let mut native_functions = Vec::new();
-        for function in self.vm_functions.iter_mut() {
-            match function.kind() {
-                VmFunctionKind::Native(_native_function) => {
-                    let native_function =
-                        std::mem::replace(function, VmFunction::from_instruction(0));
-                    native_functions.push(Some(native_function));
-                }
-                _ => {
-                    native_functions.push(None);
-                }
-            }
-        }
+        let function_arena = std::mem::take(&mut self.function_arena);
         loop {
             let pc = self.thread_state.instruction_pointer();
             let instruction = self.instructions[pc];
@@ -128,43 +113,40 @@ impl VM {
                         .ok_or_else(|| {
                             err!("Constant index out of bounds: {:?}", constant_index)
                         })?;
-                    dbg!(&constant.data.len());
-                    dbg!(target_slot);
                     self.thread_state
                         .set_slot(target_slot, constant.data.len() as u64);
                 }
                 OpCode::StoreFunction => {
-                    // TODO StoreFunction implement
+                    let target_slot = instruction.operand_a();
+                    let constant_index = instruction.operand_constant_index();
+                    let function_handle = self
+                        .function_handle_map
+                        .get(&(constant_index.index() as u32))
+                        .ok_or_else(|| {
+                            err!("Constant index out of bounds: {:?}", constant_index)
+                        })?;
+                    self.thread_state
+                        .set_slot(target_slot, (*function_handle).into());
                 }
                 OpCode::Call => {
                     let function_slot = instruction.operand_a();
+                    let function_index = self.thread_state.get_slot(function_slot);
+                    let function_handle = FunctionHandle::from(function_index);
                     let argument_slot = instruction.operand_b();
                     self.thread_state.set_slot_offset(
                         self.thread_state.slot_offset() + argument_slot.slot().index() as usize,
                     );
-                    let function_index = self.thread_state.get_slot(function_slot);
-                    let function =
-                        self.vm_functions
-                            .get(function_index as usize)
-                            .ok_or_else(|| {
-                                err!("Function index out of bounds: {:?}", function_index)
-                            })?;
-                    self.thread_state
-                        .push_frame(Frame::new(function_index as usize));
+                    self.thread_state.push_frame(Frame::new(function_handle));
 
-                    if let Some(Some(native_function)) =
-                        native_functions.get(function_index as usize)
-                    {
-                        let VmFunctionKind::Native(native_function) = native_function.kind() else {
-                            bail!("Native function expected");
-                        };
-                        native_function.call(self)?;
-                    } else {
-                        let VmFunctionKind::Instruction(instruction_start) = function.kind() else {
-                            bail!("Native function expected");
-                        };
-                        self.thread_state
-                            .set_instruction_pointer(*instruction_start);
+                    let function = function_arena.get_function(function_handle)?;
+                    match function.kind() {
+                        VmFunctionKind::Native(native_function) => {
+                            native_function.call(self)?;
+                        }
+                        VmFunctionKind::Instruction(instruction_start) => {
+                            self.thread_state
+                                .set_instruction_pointer(*instruction_start);
+                        }
                     }
                 }
                 OpCode::Return => {
@@ -213,7 +195,7 @@ mod tests {
             println!("{}", string);
             //            println!("{}", string);
             Ok(())
-        });
+        })?;
         vm.load_module(module)?;
         vm.run()?;
         println!("Stack: {:?}", &vm.thread_state.stack()[0..10]);

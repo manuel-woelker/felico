@@ -166,6 +166,7 @@ dependencies = [
 name = "felico-vm"
 version = "0.1.0"
 dependencies = [
+ "felico-arena",
  "felico-base",
  "felico-bytecode",
 ]
